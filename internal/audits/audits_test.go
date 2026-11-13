@@ -46,6 +46,27 @@ func TestConfigHelpersParsePersistedJSON(t *testing.T) {
 	}
 }
 
+func TestSanitizeErrorCode(t *testing.T) {
+	if got := sanitizeErrorCode("model call failed: timeout"); got != "MODELCALLFAILEDTIMEOUT" {
+		t.Fatalf("sanitizeErrorCode = %q", got)
+	}
+	if got := sanitizeErrorCode("  "); got != "MODEL_EXECUTION_FAILED" {
+		t.Fatalf("empty error code = %q", got)
+	}
+	if got := sanitizeErrorCode("PROVIDER_UNCONFIGURED"); got != "PROVIDER_UNCONFIGURED" {
+		t.Fatalf("valid error code = %q", got)
+	}
+}
+
+func TestDecodeHashRejectsInvalidInput(t *testing.T) {
+	if _, err := decodeHash("not-a-hash"); err == nil {
+		t.Fatal("invalid hash must be rejected")
+	}
+	if _, err := decodeHash(""); err == nil {
+		t.Fatal("empty hash must be rejected")
+	}
+}
+
 func TestHashRequestStableAndScoped(t *testing.T) {
 	first := hex.EncodeToString(hashRequest("project-1", "protocol-1"))
 	if first != hex.EncodeToString(hashRequest("project-1", "protocol-1")) {

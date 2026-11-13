@@ -5,6 +5,7 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 ## 目录
 
 - `cmd/api`、`internal`：Go API 与基础设施代码
+- `cmd/model-worker`：审计采样执行 Worker，调用 Model Gateway 并持久化请求/响应
 - `apps/web`：React + Vite + Tailwind CSS 管理端（未使用 Ant Design）
 - `apps/crawler-worker`：TypeScript 抓取与内容解析 Worker
 - `apps/judge-worker`：Python Answer Judge 服务
@@ -21,7 +22,7 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 
 网站抓取已实现受控多页 P0 纵切：Go API 创建并调度 Crawl Run，TypeScript Worker 通过受限内部接口认领任务，逐跳执行 DNS/IP SSRF 检查，获取和解析 HTML，并将页面内容版本、哈希和抓取结果写回 MySQL。发现链接按同站范围、最大页数和最大深度进入队列，单页失败不终止整个 Run；Worker 崩溃后过期租约会自动重新入队。抓取前按目标 User-Agent 获取并缓存 `robots.txt`，被禁止的 URL 标记为 blocked 且不计入失败；每轮首次抓取还会解析 robots 声明的 Sitemap 或 `/sitemap.xml`，支持 Sitemap Index、嵌套与 gzip，证据写入 `robots_snapshots` 和 `crawl_sitemaps`，管理端抓取证据弹窗可查看 robots 分组规则、原始内容与 Sitemap 文档状态。
 
-审计编排已实现引擎配置、问题集不可变版本发布、测量协议创建与冻结、审计成本估算、幂等创建、确定性采样展开和取消。协议发布会冻结问题集版本、引擎配置和品牌知识快照，后续配置变更不影响已创建审计。模型执行 Worker、Judge 和指标尚未接入，审计当前停留在 queued 状态。
+审计编排已实现引擎配置、问题集不可变版本发布、测量协议创建与冻结、审计成本估算、幂等创建、确定性采样展开、样本执行和取消。`cmd/model-worker` 以 2 分钟租约领取样本，调用 Model Gateway，并把 `ai_requests`、`ai_responses`、Usage、成本、延迟和哈希写回 MySQL；失败按一次重试后标记失败，审计按样本结果收敛为 succeeded/partial_success/failed。协议发布会冻结问题集版本、引擎配置和品牌知识快照，后续配置变更不影响已创建审计。Judge 与指标尚未接入，`eligible_count` 仍为 0。
 
 Crawl Run 支持暂停、继续和取消。状态变更使用数据库锁串行化，迟到的 Worker 完成或失败回调不会覆盖取消状态；暂停期间已领取的短任务可在安全点结束，继续时从持久状态恢复。
 
@@ -50,7 +51,7 @@ Push-Location apps/judge-worker; uv sync; Pop-Location
 go run ./cmd/migrate up
 ```
 
-也可以使用零第三方依赖的 Python 管理脚本完成迁移并统一启停四个服务：
+也可以使用零第三方依赖的 Python 管理脚本完成迁移并统一启停五个服务：
 
 ```powershell
 python scripts/dev.py start --install
@@ -60,16 +61,17 @@ python scripts/dev.py stop
 
 脚本读取根目录 `.env`，运行状态和日志保存在 `.run/`。后续启动可省略 `--install`；如需保留当前数据库版本，可增加 `--skip-migrate`。
 
-分别打开四个终端启动服务：
+分别打开五个终端启动服务：
 
 ```powershell
 go run ./cmd/api
+go run ./cmd/model-worker
 pnpm dev:web
 pnpm dev:crawler
 Set-Location apps/judge-worker; uv run uvicorn geo_judge.app:app --reload --port 8081
 ```
 
-启动后：Web `http://localhost:5174`，API `http://localhost:8080`，Judge `http://localhost:8081`，Crawler 健康检查 `http://localhost:8082/healthz`。
+启动后：Web `http://localhost:5174`，API `http://localhost:8080`，Judge `http://localhost:8081`，Crawler 健康检查 `http://localhost:8082/healthz`，Model Worker 健康检查 `http://localhost:8083/healthz`。未配置任何供应商密钥时 Worker 保持健康但不会领取样本。
 
 ## 质量检查
 

@@ -191,7 +191,7 @@ func (s *Store) CancelAudit(ctx context.Context, tenantID, auditID string) (Audi
 	if _, err = tx.ExecContext(ctx, `UPDATE audits SET status='cancelled',finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, auditID); err != nil {
 		return Audit{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE audit_samples SET status='cancelled' WHERE audit_id=UUID_TO_BIN(?) AND status='queued'`, auditID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE audit_samples SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL WHERE audit_id=UUID_TO_BIN(?) AND status IN ('queued','running')`, auditID); err != nil {
 		return Audit{}, err
 	}
 	if err := tx.Commit(); err != nil {

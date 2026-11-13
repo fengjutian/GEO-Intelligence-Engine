@@ -21,6 +21,7 @@ var (
 	ErrArchived       = errors.New("project is archived")
 	ErrPlanTooLarge   = errors.New("audit plan exceeds the expansion limit")
 	ErrBudgetExceeded = errors.New("estimated audit cost exceeds the protocol budget")
+	ErrNoWork         = errors.New("no audit sample available")
 )
 
 const MaxExpandedSamples = 5000
@@ -257,7 +258,7 @@ func createKnowledgeSnapshot(ctx context.Context, tx *sql.Tx, tenantID, projectI
 	}
 	id, _ := uuid.NewV7()
 	objectKey := fmt.Sprintf("db://knowledge/%s/%d", projectID, nextVersion)
-	_, err = tx.ExecContext(ctx, `INSERT INTO knowledge_snapshots (id,tenant_id,project_id,version,content_hash,snapshot_object_key,published_at) VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,UTC_TIMESTAMP(6))`, id.String(), tenantID, projectID, nextVersion, hash[:], objectKey)
+	_, err = tx.ExecContext(ctx, `INSERT INTO knowledge_snapshots (id,tenant_id,project_id,version,content_hash,snapshot_object_key,content_json,published_at) VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,CAST(? AS JSON),UTC_TIMESTAMP(6))`, id.String(), tenantID, projectID, nextVersion, hash[:], objectKey, content)
 	if err != nil {
 		return "", 0, err
 	}

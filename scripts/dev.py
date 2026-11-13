@@ -21,6 +21,7 @@ RUN_DIR = ROOT / ".run"
 LOG_DIR = RUN_DIR / "logs"
 STATE_FILE = RUN_DIR / "dev-processes.json"
 API_BINARY = RUN_DIR / "bin" / ("geo-api.exe" if os.name == "nt" else "geo-api")
+MODEL_WORKER_BINARY = RUN_DIR / "bin" / ("geo-model-worker.exe" if os.name == "nt" else "geo-model-worker")
 
 SERVICES = {
     "api": {
@@ -37,6 +38,11 @@ SERVICES = {
         "command": ["pnpm", "dev:crawler"],
         "cwd": ROOT,
         "health": "http://127.0.0.1:8082/healthz",
+    },
+    "model-worker": {
+        "command": [str(MODEL_WORKER_BINARY)],
+        "cwd": ROOT,
+        "health": "http://127.0.0.1:8083/healthz",
     },
     "judge": {
         "command": [
@@ -195,6 +201,7 @@ def start(args: argparse.Namespace, environment: dict[str, str]) -> int:
         run_checked(["uv", "sync"], ROOT / "apps" / "judge-worker", environment)
     API_BINARY.parent.mkdir(parents=True, exist_ok=True)
     run_checked(["go", "build", "-o", str(API_BINARY), "./cmd/api"], ROOT, environment)
+    run_checked(["go", "build", "-o", str(MODEL_WORKER_BINARY), "./cmd/model-worker"], ROOT, environment)
     if not args.skip_migrate:
         run_checked(["go", "run", "./cmd/migrate", "up"], ROOT, environment)
         run_checked(["go", "run", "./cmd/devseed"], ROOT, environment)
