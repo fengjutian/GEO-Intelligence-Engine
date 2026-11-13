@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
@@ -77,6 +78,19 @@ func New(deps Dependencies) http.Handler {
 	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/questions", questionHandler.list)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", questionHandler.create)
+	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("GET /api/v1/engine-configs", auditHandler.listEngineConfigs)
+	mux.HandleFunc("POST /api/v1/engine-configs", auditHandler.createEngineConfig)
+	mux.HandleFunc("POST /api/v1/question-sets/{questionSetId}/versions", auditHandler.publishQuestionSet)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-sets", auditHandler.listQuestionSets)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/measurement-protocols", auditHandler.listProtocols)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/measurement-protocols", auditHandler.createProtocol)
+	mux.HandleFunc("POST /api/v1/measurement-protocols/{protocolAction}", auditHandler.publishProtocol)
+	mux.HandleFunc("POST /api/v1/audits:estimate", auditHandler.estimateAudit)
+	mux.HandleFunc("POST /api/v1/audits", auditHandler.createAudit)
+	mux.HandleFunc("GET /api/v1/audits/{auditId}", auditHandler.getAudit)
+	mux.HandleFunc("GET /api/v1/audits/{auditId}/samples", auditHandler.listSamples)
+	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

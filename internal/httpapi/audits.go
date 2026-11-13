@@ -1,0 +1,265 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
+	"github.com/google/uuid"
+)
+
+type auditStore interface {
+	CreateEngineConfig(ctx context.Context, tenantID string, input audits.EngineConfigInput) (audits.EngineConfig, error)
+	ListEngineConfigs(ctx context.Context, tenantID string) ([]audits.EngineConfig, error)
+	PublishQuestionSet(ctx context.Context, tenantID, questionSetID string) (map[string]any, error)
+	ListQuestionSets(ctx context.Context, tenantID, projectID string) ([]audits.QuestionSet, error)
+	CreateProtocol(ctx context.Context, tenantID, projectID string, input audits.ProtocolInput) (audits.Protocol, error)
+	PublishProtocol(ctx context.Context, tenantID, protocolID string) (audits.Protocol, error)
+	GetProtocol(ctx context.Context, tenantID, protocolID string) (audits.Protocol, error)
+	ListProtocols(ctx context.Context, tenantID, projectID string) ([]audits.Protocol, error)
+	EstimateAudit(ctx context.Context, tenantID, protocolID string) (audits.Estimate, error)
+	CreateAudit(ctx context.Context, tenantID, projectID, protocolID, idempotencyKey string) (audits.Audit, error)
+	GetAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
+	CancelAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
+	ListSamples(ctx context.Context, tenantID, auditID string) ([]audits.Sample, error)
+}
+
+type auditHandler struct {
+	store       auditStore
+	devTenantID string
+	logger      *slog.Logger
+}
+
+func newAuditHandler(store auditStore, devTenantID string, logger *slog.Logger) *auditHandler {
+	return &auditHandler{store: store, devTenantID: devTenantID, logger: logger}
+}
+
+func (h *auditHandler) tenant(r *http.Request) string {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		return h.devTenantID
+	}
+	return tenantID
+}
+
+func (h *auditHandler) createEngineConfig(w http.ResponseWriter, r *http.Request) {
+	var input audits.EngineConfigInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	item, err := h.store.CreateEngineConfig(r.Context(), h.tenant(r), input)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *auditHandler) listEngineConfigs(w http.ResponseWriter, r *http.Request) {
+	items, err := h.store.ListEngineConfigs(r.Context(), h.tenant(r))
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *auditHandler) publishQuestionSet(w http.ResponseWriter, r *http.Request) {
+	questionSetID := r.PathValue("questionSetId")
+	if _, err := uuid.Parse(questionSetID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_QUESTION_SET_ID", "Question set ID is invalid", traceID(r))
+		return
+	}
+	result, err := h.store.PublishQuestionSet(r.Context(), h.tenant(r), questionSetID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (h *auditHandler) listQuestionSets(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.ListQuestionSets(r.Context(), h.tenant(r), projectID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *auditHandler) createProtocol(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	var input audits.ProtocolInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	protocol, err := h.store.CreateProtocol(r.Context(), h.tenant(r), projectID, input)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, protocol)
+}
+
+func (h *auditHandler) listProtocols(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.ListProtocols(r.Context(), h.tenant(r), projectID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *auditHandler) publishProtocol(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("protocolAction")
+	separator := strings.LastIndexByte(raw, ':')
+	if separator < 1 || raw[separator+1:] != "publish" {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	protocolID := raw[:separator]
+	if _, err := uuid.Parse(protocolID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROTOCOL_ID", "Protocol ID is invalid", traceID(r))
+		return
+	}
+	protocol, err := h.store.PublishProtocol(r.Context(), h.tenant(r), protocolID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol)
+}
+
+func (h *auditHandler) estimateAudit(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ProjectID  string `json:"projectId"`
+		ProtocolID string `json:"protocolId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if _, err := uuid.Parse(input.ProtocolID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROTOCOL_ID", "Protocol ID is invalid", traceID(r))
+		return
+	}
+	estimate, err := h.store.EstimateAudit(r.Context(), h.tenant(r), input.ProtocolID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, estimate)
+}
+
+func (h *auditHandler) createAudit(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		writeProblem(w, http.StatusBadRequest, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header is required", traceID(r))
+		return
+	}
+	var input struct {
+		ProjectID  string `json:"projectId"`
+		ProtocolID string `json:"protocolId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if _, err := uuid.Parse(input.ProjectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(input.ProtocolID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROTOCOL_ID", "Protocol ID is invalid", traceID(r))
+		return
+	}
+	audit, err := h.store.CreateAudit(r.Context(), h.tenant(r), input.ProjectID, input.ProtocolID, idempotencyKey)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, audit)
+}
+
+func (h *auditHandler) getAudit(w http.ResponseWriter, r *http.Request) {
+	auditID := r.PathValue("auditId")
+	if _, err := uuid.Parse(auditID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_AUDIT_ID", "Audit ID is invalid", traceID(r))
+		return
+	}
+	audit, err := h.store.GetAudit(r.Context(), h.tenant(r), auditID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, audit)
+}
+
+func (h *auditHandler) cancelAudit(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("auditAction")
+	separator := strings.LastIndexByte(raw, ':')
+	if separator < 1 || raw[separator+1:] != "cancel" {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	auditID := raw[:separator]
+	if _, err := uuid.Parse(auditID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_AUDIT_ID", "Audit ID is invalid", traceID(r))
+		return
+	}
+	audit, err := h.store.CancelAudit(r.Context(), h.tenant(r), auditID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, audit)
+}
+
+func (h *auditHandler) listSamples(w http.ResponseWriter, r *http.Request) {
+	auditID := r.PathValue("auditId")
+	if _, err := uuid.Parse(auditID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_AUDIT_ID", "Audit ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.ListSamples(r.Context(), h.tenant(r), auditID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *auditHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, audits.ErrNotFound):
+		writeProblem(w, http.StatusNotFound, "AUDIT_RESOURCE_NOT_FOUND", "Audit resource was not found", traceID(r))
+	case errors.Is(err, audits.ErrConflict):
+		writeProblem(w, http.StatusConflict, "AUDIT_CONFLICT", "Request conflicts with existing audit state", traceID(r))
+	case errors.Is(err, audits.ErrArchived):
+		writeProblem(w, http.StatusConflict, "PROJECT_ARCHIVED", "Archived project cannot start an audit", traceID(r))
+	case errors.Is(err, audits.ErrPlanTooLarge):
+		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_PLAN_TOO_LARGE", "Audit plan exceeds the supported sample count", traceID(r))
+	case errors.Is(err, audits.ErrBudgetExceeded):
+		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_BUDGET_EXCEEDED", "Estimated cost exceeds the protocol budget", traceID(r))
+	case errors.Is(err, audits.ErrInvalidInput):
+		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_INPUT_INVALID", "Audit input is invalid", traceID(r))
+	default:
+		h.logger.Error("audit operation failed", "error", err, "trace_id", traceID(r))
+		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
+	}
+}

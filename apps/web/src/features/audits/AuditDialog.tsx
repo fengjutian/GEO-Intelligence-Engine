@@ -1,0 +1,143 @@
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
+type EngineConfig = { id: string; provider: string; channel: string; status: string }
+type QuestionSet = { id: string; draftVersionId: string; draftVersion: number; versions: Array<{ id: string; version: number; questionCount: number }> }
+type Protocol = { id: string; semanticVersion: string; status: string }
+type Audit = { id: string; status: string; plannedCount: number; completedCount: number; eligibleCount: number; budgetMicrounits: number; currency: string }
+
+type Props = { projectId: string; projectName: string; onClose: () => void }
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init)
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({})) as { title?: string }
+    throw new Error(problem.title ?? `请求失败 (${response.status})`)
+  }
+  return response.json() as Promise<T>
+}
+
+export function AuditDialog({ projectId, projectName, onClose }: Props) {
+  const queryClient = useQueryClient()
+  const questionSets = useQuery({ queryKey: ['question-sets', projectId], queryFn: () => request<{ items: QuestionSet[] }>(`/api/v1/projects/${projectId}/question-sets`) })
+  const protocols = useQuery({ queryKey: ['protocols', projectId], queryFn: () => request<{ items: Protocol[] }>(`/api/v1/projects/${projectId}/measurement-protocols`) })
+  const engines = useQuery({ queryKey: ['engine-configs'], queryFn: () => request<{ items: EngineConfig[] }>('/api/v1/engine-configs') })
+  const [samples, setSamples] = useState(1)
+  const [budget, setBudget] = useState(100000)
+  const [costPerSample, setCostPerSample] = useState(1000)
+  const [audit, setAudit] = useState<Audit | null>(null)
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function ensureEngines(): Promise<EngineConfig[]> {
+    const existing = engines.data?.items.filter((engine) => engine.status === 'active') ?? []
+    if (existing.length >= 1) return existing
+    const created: EngineConfig[] = []
+    for (const provider of ['deepseek', 'minimax']) {
+      created.push(await request<EngineConfig>('/api/v1/engine-configs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider, channel: 'model_api', credentialRef: `secret://env/${provider.toUpperCase()}_API_KEY`, region: 'CN' }),
+      }))
+    }
+    await queryClient.invalidateQueries({ queryKey: ['engine-configs'] })
+    return created
+  }
+
+  async function startAudit() {
+    setBusy(true)
+    setMessage('')
+    try {
+      const set = questionSets.data?.items[0]
+      if (!set) throw new Error('请先在项目问题空间中添加问题')
+      let questionVersionId = set.versions[0]?.id
+      if (!questionVersionId) {
+        const published = await request<{ id: string }>(`/api/v1/question-sets/${set.id}/versions`, { method: 'POST' })
+        questionVersionId = published.id
+        await queryClient.invalidateQueries({ queryKey: ['question-sets', projectId] })
+      }
+      const activeEngines = await ensureEngines()
+      const protocol = await request<Protocol>(`/api/v1/projects/${projectId}/measurement-protocols`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          questionVersionId,
+          engines: activeEngines.map((engine) => ({ engineConfigId: engine.id, modelSelector: engine.provider === 'deepseek' ? 'deepseek-flash' : 'MiniMax-M2.5', channel: engine.channel, parameters: { temperature: 0.2 } })),
+          region: 'CN',
+          language: 'zh-CN',
+          samplesPerQuestion: samples,
+          budgetMicrounits: budget,
+          currency: 'CNY',
+          judgeVersion: 'judge-v1',
+          metricVersion: 'metrics-v1',
+          promptTemplateVersion: 'prompt-v1',
+          estimatedCostPerSample: costPerSample,
+        }),
+      })
+      await request(`/api/v1/measurement-protocols/${protocol.id}:publish`, { method: 'POST' })
+      const estimate = await request<{ plannedSamples: number }>('/api/v1/audits:estimate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectId, protocolId: protocol.id }),
+      })
+      const created = await request<Audit>('/api/v1/audits', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': `${projectId}-${Date.now()}` },
+        body: JSON.stringify({ projectId, protocolId: protocol.id }),
+      })
+      setAudit(created)
+      setMessage(`协议 ${protocol.semanticVersion} 已发布，预计 ${estimate.plannedSamples} 个样本`)
+      await queryClient.invalidateQueries({ queryKey: ['protocols', projectId] })
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '发起审计失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function cancelAudit() {
+    if (!audit) return
+    setBusy(true)
+    try {
+      const cancelled = await request<Audit>(`/api/v1/audits/${audit.id}:cancel`, { method: 'POST' })
+      setAudit(cancelled)
+      setMessage('审计已取消，已排队样本标记为 cancelled')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '取消失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="audit-dialog" aria-labelledby="audit-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="profile-header">
+        <div><p className="eyebrow">GEO AUDIT</p><h2 id="audit-title">{projectName} · 发起审计</h2><p>冻结问题集与品牌知识，展开确定性采样并排队。</p></div>
+        <button type="button" aria-label="关闭" onClick={onClose}>×</button>
+      </div>
+      <div className="audit-summary">
+        <div><small>已发布协议</small><strong>{protocols.data?.items.filter((protocol) => protocol.status === 'published').length ?? 0}</strong></div>
+        <div><small>可用引擎</small><strong>{engines.data?.items.length ?? 0}</strong></div>
+        <div><small>问题集版本</small><strong>{questionSets.data?.items[0]?.versions.length ?? 0}</strong></div>
+      </div>
+      <div className="audit-form">
+        <label>每问题采样次数<input type="number" min="1" max="10" value={samples} onChange={(event) => setSamples(Number(event.target.value))} /></label>
+        <label>预算（微单位）<input type="number" min="0" value={budget} onChange={(event) => setBudget(Number(event.target.value))} /></label>
+        <label>单样本估算成本<input type="number" min="0" value={costPerSample} onChange={(event) => setCostPerSample(Number(event.target.value))} /></label>
+      </div>
+      <p className="audit-note">使用当前项目最新的已发布问题集；若只有草稿，会先发布为不可变版本。没有可用引擎配置时会按环境密钥引用自动创建 DeepSeek 与 MiniMax 配置。</p>
+      <div className="dialog-actions">
+        <button type="button" onClick={onClose}>关闭</button>
+        <button className="primary-button" type="button" disabled={busy} onClick={() => void startAudit()}>{busy ? '处理中…' : '创建协议并发起审计'}</button>
+      </div>
+      {message && <p className="audit-message" role="status">{message}</p>}
+      {audit && <article className="audit-result">
+        <header><strong>{audit.id}</strong><span data-status={audit.status}>{audit.status}</span></header>
+        <div><small>计划样本</small><strong>{audit.plannedCount}</strong></div>
+        <div><small>完成 / 有效</small><strong>{audit.completedCount} / {audit.eligibleCount}</strong></div>
+        <div><small>预算</small><strong>{audit.budgetMicrounits} {audit.currency}</strong></div>
+        {['queued', 'running'].includes(audit.status) && <button type="button" onClick={() => void cancelAudit()} disabled={busy}>取消审计</button>}
+      </article>}
+    </section>
+  </div>
+}
