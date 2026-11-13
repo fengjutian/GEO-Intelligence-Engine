@@ -3,6 +3,7 @@ package audits
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -43,6 +44,20 @@ func TestConfigHelpersParsePersistedJSON(t *testing.T) {
 	engines := configEngines(config)
 	if len(engines) != 1 || configString(engines[0], "engineConfigId") != "engine-1" {
 		t.Fatalf("unexpected engines: %+v", engines)
+	}
+}
+
+func TestWilsonInterval(t *testing.T) {
+	low, high := wilson(5, 10)
+	if math.Abs(low-0.2366) > 0.001 || math.Abs(high-0.7634) > 0.001 {
+		t.Fatalf("wilson(5,10) = [%.4f, %.4f]", low, high)
+	}
+	low, high = wilson(0, 10)
+	if low != 0 || math.Abs(high-0.2775) > 0.001 {
+		t.Fatalf("wilson(0,10) = [%.4f, %.4f]", low, high)
+	}
+	if low, high := wilson(0, 0); low != 0 || high != 0 {
+		t.Fatalf("wilson(0,0) = [%.4f, %.4f]", low, high)
 	}
 }
 

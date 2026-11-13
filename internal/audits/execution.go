@@ -208,7 +208,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'succeed
 	if err := settleSampleCost(ctx, tx, tenantID, result.AuditID, result.CostMicrounits); err != nil {
 		return err
 	}
-	completed, err := finalizeAudit(ctx, tx, result.AuditID)
+	completed, err := finalizeAudit(ctx, tx, tenantID, result.AuditID)
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, failure.SampleID,
 	if _, err := tx.ExecContext(ctx, `UPDATE audit_samples SET status='failed',attempt_count=?,last_error_code=?,lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?)`, attempts, code, failure.SampleID); err != nil {
 		return err
 	}
-	completed, err := finalizeAudit(ctx, tx, failure.AuditID)
+	completed, err := finalizeAudit(ctx, tx, tenantID, failure.AuditID)
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, failure.SampleID,
 	return tx.Commit()
 }
 
-func finalizeAudit(ctx context.Context, tx *sql.Tx, auditID string) (bool, error) {
+func finalizeAudit(ctx context.Context, tx *sql.Tx, tenantID, auditID string) (bool, error) {
 	var remaining int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_samples WHERE audit_id=UUID_TO_BIN(?) AND status IN ('queued','running')`, auditID).Scan(&remaining); err != nil {
 		return false, err
@@ -292,7 +292,13 @@ func finalizeAudit(ctx context.Context, tx *sql.Tx, auditID string) (bool, error
 		status = "partial_success"
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE audits SET status=?,finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, status, auditID)
-	return true, err
+	if err != nil {
+		return false, err
+	}
+	if err := generateMetrics(ctx, tx, tenantID, auditID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func decodeHash(value string) ([]byte, error) {

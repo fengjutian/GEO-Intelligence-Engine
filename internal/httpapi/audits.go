@@ -25,6 +25,7 @@ type auditStore interface {
 	GetAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
 	CancelAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
 	ListSamples(ctx context.Context, tenantID, auditID string) ([]audits.Sample, error)
+	GetMetrics(ctx context.Context, tenantID, auditID, aggregationMethod, channel string) ([]audits.MetricValue, error)
 }
 
 type auditHandler struct {
@@ -228,6 +229,25 @@ func (h *auditHandler) cancelAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, audit)
+}
+
+func (h *auditHandler) getMetrics(w http.ResponseWriter, r *http.Request) {
+	auditID := r.PathValue("auditId")
+	if _, err := uuid.Parse(auditID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_AUDIT_ID", "Audit ID is invalid", traceID(r))
+		return
+	}
+	aggregationMethod := strings.TrimSpace(r.URL.Query().Get("aggregationMethod"))
+	if aggregationMethod == "" {
+		aggregationMethod = "answer_equal"
+	}
+	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
+	items, err := h.store.GetMetrics(r.Context(), h.tenant(r), auditID, aggregationMethod, channel)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 func (h *auditHandler) listSamples(w http.ResponseWriter, r *http.Request) {

@@ -90,6 +90,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/audits", auditHandler.createAudit)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}", auditHandler.getAudit)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/samples", auditHandler.listSamples)
+	mux.HandleFunc("GET /api/v1/audits/{auditId}/metrics", auditHandler.getMetrics)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
