@@ -6,6 +6,8 @@
 
 统一工程选型见 [技术栈与工程选型](../technology-stack.md)。
 
+面向开发和验收的逐功能拆分见 [P0 功能规格集](../features/README.md)。
+
 | 编号 | 文档 | 主要评审人 |
 |---|---|---|
 | SPEC-01 | [GEO 测量协议与指标口径](./01-measurement-protocol.md) | 产品、算法、数据 |
