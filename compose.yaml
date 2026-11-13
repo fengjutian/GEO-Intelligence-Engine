@@ -40,7 +40,7 @@ services:
     ports: ["8081:8081"]
   crawler-worker:
     build: {context: ., dockerfile: apps/crawler-worker/Dockerfile}
-    environment: {PORT: "8082"}
+    environment: {PORT: "8082", GEO_API_BASE_URL: "http://api:8080", GEO_INTERNAL_WORKER_TOKEN: "local-worker-token-change-me"}
     ports: ["8082:8082"]
   web:
     build: {context: ., dockerfile: apps/web/Dockerfile}
