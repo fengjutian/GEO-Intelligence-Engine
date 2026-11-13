@@ -1,0 +1,6 @@
+packages:
+  - apps/web
+  - apps/crawler-worker
+  - packages/*
+allowBuilds:
+  esbuild: true

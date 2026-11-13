@@ -1,0 +1,9 @@
+{
+  "name": "@geo/crawler-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {"build":"tsc -p tsconfig.json","test":"vitest run","typecheck":"tsc --noEmit -p tsconfig.json"},
+  "dependencies": {"cheerio":"^1.1.2","playwright":"^1.56.0","undici":"^7.16.0","zod":"^4.1.0"},
+  "devDependencies": {"@types/node":"^24.10.0","typescript":"^5.9.0","vitest":"^4.0.0"}
+}

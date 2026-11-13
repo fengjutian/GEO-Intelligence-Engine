@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8.4.7
+    environment:
+      MYSQL_DATABASE: geo
+      MYSQL_USER: geo
+      MYSQL_PASSWORD: geo_local_only
+      MYSQL_ROOT_PASSWORD: root_local_only
+    ports: ["3306:3306"]
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck: {test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_local_only"], interval: 5s, timeout: 3s, retries: 20}
+  redis:
+    image: redis:8.6-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports: ["6379:6379"]
+    volumes: [redis-data:/data]
+  minio:
+    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+    command: server /data --console-address :9001
+    environment: {MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: minio_local_only}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio-data:/data]
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: start-dev
+    environment: {KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: admin_local_only}
+    ports: ["8088:8080"]
+  migrate:
+    image: migrate/migrate:v4.20.1
+    volumes: ["./db/migrations:/migrations:ro"]
+    command: ["-path=/migrations", "-database=mysql://geo:geo_local_only@tcp(mysql:3306)/geo", "up"]
+    depends_on: {mysql: {condition: service_healthy}}
+  api:
+    build: {context: ., dockerfile: apps/api/Dockerfile}
+    environment: {GEO_DATABASE_DSN: "geo:geo_local_only@tcp(mysql:3306)/geo?parseTime=true&charset=utf8mb4", GEO_HTTP_ADDRESS: ":8080"}
+    ports: ["8080:8080"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  judge-worker:
+    build: {context: ., dockerfile: apps/judge-worker/Dockerfile}
+    ports: ["8081:8081"]
+volumes: {mysql-data: {}, redis-data: {}, minio-data: {}}

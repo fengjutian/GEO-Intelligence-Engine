@@ -1,0 +1,11 @@
+{
+  "name": "geo-intelligence-engine",
+  "private": true,
+  "packageManager": "pnpm@11.13.1",
+  "scripts": {
+    "dev:web": "pnpm --filter @geo/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
