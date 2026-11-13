@@ -16,6 +16,7 @@ import (
 var ErrNotFound = errors.New("crawl resource not found")
 var ErrNoWork = errors.New("no crawl work available")
 var ErrProjectArchived = errors.New("project is archived")
+var ErrInvalidState = errors.New("crawl run state does not allow this action")
 
 type Store struct{ db *sql.DB }
 
@@ -143,13 +144,17 @@ func (s *Store) Complete(ctx context.Context, completion Completion) error {
 	pageID, _ := uuid.NewV7()
 	contentID, _ := uuid.NewV7()
 	attemptID, _ := uuid.NewV7()
+	canonicalURL := completion.CanonicalURL
+	if canonicalURL == nil {
+		canonicalURL = &completion.FinalURL
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin crawl completion: %w", err)
 	}
 	defer tx.Rollback()
 	var tenantID, websiteID string
-	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?) AND status='running' FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID)
+	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?) AND status IN ('running','paused') FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -157,7 +162,7 @@ func (s *Store) Complete(ctx context.Context, completion Completion) error {
 		return fmt.Errorf("load running crawl: %w", err)
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO website_pages (id,tenant_id,website_id,canonical_url,normalized_url_hash,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE canonical_url=VALUES(canonical_url)`, pageID.String(), tenantID, websiteID, completion.FinalURL, urlHash[:])
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE canonical_url=VALUES(canonical_url)`, pageID.String(), tenantID, websiteID, canonicalURL, urlHash[:])
 	if err != nil {
 		return fmt.Errorf("upsert website page: %w", err)
 	}
@@ -174,6 +179,21 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,
 	if err != nil {
 		return fmt.Errorf("set latest page content: %w", err)
 	}
+	for index, link := range completion.Links {
+		if index >= 100 {
+			break
+		}
+		if strings.TrimSpace(link) == "" {
+			continue
+		}
+		linkID, _ := uuid.NewV7()
+		linkHash := sha256.Sum256([]byte(link))
+		_, err = tx.ExecContext(ctx, `INSERT INTO page_links (id,tenant_id,source_content_id,target_url,target_url_hash)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?)`, linkID.String(), tenantID, contentID.String(), link, linkHash[:])
+		if err != nil {
+			return fmt.Errorf("insert page link: %w", err)
+		}
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='succeeded',lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?)`, completion.CrawlURLID, completion.RunID)
 	if err != nil {
 		return fmt.Errorf("complete crawl URL: %w", err)
@@ -183,7 +203,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),1,'succeeded',?,JSON_OBJECT
 	if err != nil {
 		return fmt.Errorf("insert fetch attempt: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='succeeded',fetched_count=fetched_count+1,finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, completion.RunID)
+	_, err = tx.ExecContext(ctx, `UPDATE crawl_runs
+SET status=IF(status='paused','paused','succeeded'),fetched_count=fetched_count+1,
+    finished_at=IF(status='paused',NULL,UTC_TIMESTAMP(6)) WHERE id=UUID_TO_BIN(?)`, completion.RunID)
 	if err != nil {
 		return fmt.Errorf("complete crawl run: %w", err)
 	}
@@ -199,9 +221,119 @@ func (s *Store) Fail(ctx context.Context, failure Failure) error {
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE crawl_urls u JOIN crawl_runs r ON r.id=u.crawl_run_id
 SET u.state='failed',u.lease_owner=NULL,u.lease_expires_at=NULL,r.status='failed',r.failed_count=r.failed_count+1,r.finished_at=UTC_TIMESTAMP(6)
-WHERE u.id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?)`, failure.CrawlURLID, failure.RunID)
+	WHERE u.id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?) AND r.status IN ('queued','running')`, failure.CrawlURLID, failure.RunID)
 	if err != nil {
 		return fmt.Errorf("fail crawl run: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) Control(ctx context.Context, tenantID, runID, action string) (Run, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Run{}, fmt.Errorf("begin crawl control: %w", err)
+	}
+	defer tx.Rollback()
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, runID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Run{}, ErrNotFound
+	}
+	if err != nil {
+		return Run{}, fmt.Errorf("read crawl state: %w", err)
+	}
+	switch action {
+	case "pause":
+		if status != "queued" && status != "running" {
+			return Run{}, ErrInvalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='paused' WHERE id=UUID_TO_BIN(?)`, runID)
+	case "resume":
+		if status != "paused" {
+			return Run{}, ErrInvalidState
+		}
+		var remaining int
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM crawl_urls WHERE crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, runID).Scan(&remaining); err == nil {
+			if remaining > 0 {
+				_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='queued' WHERE id=UUID_TO_BIN(?)`, runID)
+			} else {
+				_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='succeeded',finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, runID)
+			}
+		}
+	case "cancel":
+		if status != "queued" && status != "running" && status != "paused" {
+			return Run{}, ErrInvalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='cancelled',finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, runID)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='cancelled',lease_owner=NULL,lease_expires_at=NULL WHERE crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, runID)
+		}
+	default:
+		return Run{}, ErrInvalidState
+	}
+	if err != nil {
+		return Run{}, fmt.Errorf("apply crawl action: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Run{}, fmt.Errorf("commit crawl action: %w", err)
+	}
+	return s.Get(ctx, tenantID, runID)
+}
+
+func (s *Store) ListPages(ctx context.Context, tenantID, runID string) ([]PageSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT BIN_TO_UUID(p.id),BIN_TO_UUID(c.id),p.canonical_url,c.final_url,c.http_status,c.title,c.language,
+       LOWER(HEX(c.content_hash)),c.parser_version,c.created_at
+FROM page_contents c
+JOIN website_pages p ON p.id=c.page_id
+JOIN crawl_runs r ON r.id=c.crawl_run_id AND r.tenant_id=c.tenant_id
+WHERE c.tenant_id=UUID_TO_BIN(?) AND c.crawl_run_id=UUID_TO_BIN(?)
+ORDER BY c.created_at,p.id`, tenantID, runID)
+	if err != nil {
+		return nil, fmt.Errorf("query crawl pages: %w", err)
+	}
+	defer rows.Close()
+	pages := []PageSummary{}
+	for rows.Next() {
+		var page PageSummary
+		if err := rows.Scan(&page.PageID, &page.ContentID, &page.CanonicalURL, &page.FinalURL, &page.HTTPStatus, &page.Title, &page.Language, &page.ContentHash, &page.ParserVersion, &page.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan crawl page: %w", err)
+		}
+		pages = append(pages, page)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate crawl pages: %w", err)
+	}
+	return pages, nil
+}
+
+func (s *Store) GetPageContent(ctx context.Context, tenantID, contentID string) (PageDetail, error) {
+	var detail PageDetail
+	err := s.db.QueryRowContext(ctx, `
+SELECT BIN_TO_UUID(p.id),BIN_TO_UUID(c.id),p.canonical_url,c.final_url,c.http_status,c.title,c.language,
+       LOWER(HEX(c.content_hash)),c.parser_version,c.created_at
+FROM page_contents c JOIN website_pages p ON p.id=c.page_id
+WHERE c.tenant_id=UUID_TO_BIN(?) AND c.id=UUID_TO_BIN(?)`, tenantID, contentID).Scan(
+		&detail.PageID, &detail.ContentID, &detail.CanonicalURL, &detail.FinalURL, &detail.HTTPStatus,
+		&detail.Title, &detail.Language, &detail.ContentHash, &detail.ParserVersion, &detail.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PageDetail{}, ErrNotFound
+	}
+	if err != nil {
+		return PageDetail{}, fmt.Errorf("read page content: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT target_url FROM page_links WHERE source_content_id=UUID_TO_BIN(?) ORDER BY id`, contentID)
+	if err != nil {
+		return PageDetail{}, fmt.Errorf("query page links: %w", err)
+	}
+	defer rows.Close()
+	detail.Links = []string{}
+	for rows.Next() {
+		var link string
+		if err := rows.Scan(&link); err != nil {
+			return PageDetail{}, fmt.Errorf("scan page link: %w", err)
+		}
+		detail.Links = append(detail.Links, link)
+	}
+	return detail, rows.Err()
 }

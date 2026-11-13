@@ -21,6 +21,8 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 
 网站抓取已实现单页 P0 纵切：Go API 创建并调度 Crawl Run，TypeScript Worker 通过受限内部接口认领任务，逐跳执行 DNS/IP SSRF 检查，获取和解析 HTML，并将页面内容版本、哈希和抓取结果写回 MySQL。
 
+Crawl Run 支持暂停、继续和取消。状态变更使用数据库锁串行化，迟到的 Worker 完成或失败回调不会覆盖取消状态；暂停期间已领取的短任务可在安全点结束，继续时从持久状态恢复。
+
 ## 本地开发（默认方式，不使用 Docker）
 
 前置环境：Go 1.26+、Node.js 24、pnpm 11、Python 3.13（可由 uv 自动安装）及 MySQL 8.4。当前可执行基线只强依赖 MySQL；Redis、MinIO 与 Keycloak 将在相应业务模块接入时启用。

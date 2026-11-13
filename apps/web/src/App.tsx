@@ -22,6 +22,8 @@ type Product = { id: string; name: string; description: string | null; verificat
 type Competitor = { id: string; name: string; domain: string | null; status: string }
 type BrandProfile = { projectId: string; brandId: string; canonicalName: string; officialDomain: string; aliases: BrandAlias[]; products: Product[]; competitors: Competitor[] }
 type CrawlRun = { id: string; projectId: string; websiteId: string; status: string; counts: { discovered: number; fetched: number; failed: number } }
+type PageSummary = { pageId: string; contentId: string; canonicalUrl: string | null; finalUrl: string; httpStatus: number; title: string; language: string | null; contentHash: string; parserVersion: string; createdAt: string }
+type PageDetail = PageSummary & { links: string[] }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -114,6 +116,24 @@ async function fetchCrawl(runId: string): Promise<CrawlRun> {
   return response.json() as Promise<CrawlRun>
 }
 
+async function controlCrawl(runId: string, action: 'pause' | 'resume' | 'cancel'): Promise<CrawlRun> {
+  const response = await fetch(`/api/v1/crawl-runs/${runId}:${action}`, { method: 'POST' })
+  if (!response.ok) throw new Error(response.status === 409 ? '当前状态不允许该操作' : '抓取控制失败')
+  return response.json() as Promise<CrawlRun>
+}
+
+async function fetchCrawlPages(runId: string): Promise<{ items: PageSummary[] }> {
+  const response = await fetch(`/api/v1/crawl-runs/${runId}/pages`)
+  if (!response.ok) throw new Error('页面列表加载失败')
+  return response.json() as Promise<{ items: PageSummary[] }>
+}
+
+async function fetchPageDetail(contentId: string): Promise<PageDetail> {
+  const response = await fetch(`/api/v1/page-contents/${contentId}`)
+  if (!response.ok) throw new Error('页面详情加载失败')
+  return response.json() as Promise<PageDetail>
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -130,8 +150,12 @@ export function App() {
   const [published, setPublished] = useState<ConfigVersion | null>(null)
   const [profileProject, setProfileProject] = useState<Project | null>(null)
   const [activeCrawlId, setActiveCrawlId] = useState<string | null>(null)
+  const [pagesOpen, setPagesOpen] = useState(false)
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null)
   const profile = useQuery({ queryKey: ['brand-profile', profileProject?.id], queryFn: () => fetchBrandProfile(profileProject!.id), enabled: profileProject !== null })
   const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
+  const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
+  const pageDetail = useQuery({ queryKey: ['page-content', selectedContentId], queryFn: () => fetchPageDetail(selectedContentId!), enabled: selectedContentId !== null })
   const create = useMutation({
     mutationFn: createProject,
     onSuccess: async () => {
@@ -156,6 +180,7 @@ export function App() {
   const productCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; description: string } }) => addProduct(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const competitorCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; domain: string } }) => addCompetitor(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: (run) => setActiveCrawlId(run.id) })
+  const crawlControl = useMutation({ mutationFn: ({ runId, action }: { runId: string; action: 'pause' | 'resume' | 'cancel' }) => controlCrawl(runId, action), onSuccess: async (run) => { await queryClient.setQueryData(['crawl-run', run.id], run); await queryClient.invalidateQueries({ queryKey: ['crawl-run', run.id] }) } })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -264,7 +289,9 @@ export function App() {
         {publish.error && <p className="error" role="alert">{publish.error.message}</p>}
         {published && <div className="publish-toast" role="status">配置 V{published.version} 已发布 · {published.contentHash.slice(0, 12)}…</div>}
         {crawlCreate.error && <p className="error" role="alert">{crawlCreate.error.message}</p>}
-        {crawlStatus.data && <div className="crawl-toast" role="status"><strong>官网抓取：{crawlStatus.data.status}</strong><span>发现 {crawlStatus.data.counts.discovered} · 成功 {crawlStatus.data.counts.fetched} · 失败 {crawlStatus.data.counts.failed}</span></div>}
+        {crawlStatus.data && <div className="crawl-toast" role="status"><strong>官网抓取：{crawlStatus.data.status}</strong><span>发现 {crawlStatus.data.counts.discovered} · 成功 {crawlStatus.data.counts.fetched} · 失败 {crawlStatus.data.counts.failed}</span><div className="crawl-actions">{['queued', 'running'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'pause' })}>暂停</button>}{crawlStatus.data.status === 'paused' && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'resume' })}>继续</button>}{['queued', 'running', 'paused'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'cancel' })}>取消</button>}{crawlStatus.data.counts.fetched > 0 && <button onClick={() => setPagesOpen(true)}>查看页面</button>}</div></div>}
+        {crawlControl.error && <p className="error" role="alert">{crawlControl.error.message}</p>}
+        {pagesOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { setPagesOpen(false); setSelectedContentId(null) }}><section className="pages-dialog" aria-labelledby="pages-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL EVIDENCE</p><h2 id="pages-title">抓取页面</h2></div><button onClick={() => setPagesOpen(false)} aria-label="关闭">×</button></div>{crawlPages.isLoading && <p>正在加载…</p>}<div className="pages-layout"><div className="page-list">{crawlPages.data?.items.map((page) => <button key={page.contentId} onClick={() => setSelectedContentId(page.contentId)} data-active={selectedContentId === page.contentId}><span>{page.httpStatus}</span><strong>{page.title || '无标题页面'}</strong><small>{page.finalUrl}</small></button>)}</div><div className="page-evidence">{!selectedContentId && <p>选择页面查看不可变版本证据。</p>}{pageDetail.isLoading && <p>正在加载详情…</p>}{pageDetail.data && <><h3>{pageDetail.data.title || '无标题页面'}</h3><dl><div><dt>最终 URL</dt><dd>{pageDetail.data.finalUrl}</dd></div><div><dt>Canonical</dt><dd>{pageDetail.data.canonicalUrl ?? '未声明'}</dd></div><div><dt>内容哈希</dt><dd className="hash">{pageDetail.data.contentHash}</dd></div><div><dt>解析器</dt><dd>{pageDetail.data.parserVersion}</dd></div></dl><h4>出站链接（{pageDetail.data.links.length}）</h4><ul>{pageDetail.data.links.slice(0, 20).map((link) => <li key={link}>{link}</li>)}</ul></>}</div></div></section></div>}
       </section>
     </div>
   </main>

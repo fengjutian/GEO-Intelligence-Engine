@@ -19,6 +19,9 @@ type crawlStore interface {
 	Claim(ctx context.Context, workerID string) (crawls.Claim, error)
 	Complete(ctx context.Context, completion crawls.Completion) error
 	Fail(ctx context.Context, failure crawls.Failure) error
+	Control(ctx context.Context, tenantID, runID, action string) (crawls.Run, error)
+	ListPages(ctx context.Context, tenantID, runID string) ([]crawls.PageSummary, error)
+	GetPageContent(ctx context.Context, tenantID, contentID string) (crawls.PageDetail, error)
 }
 
 type crawlHandler struct {
@@ -105,6 +108,66 @@ func (h *crawlHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
+func (h *crawlHandler) controlAction(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("runAction")
+	separator := strings.LastIndexByte(raw, ':')
+	if separator < 1 || separator == len(raw)-1 {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	runID, action := raw[:separator], raw[separator+1:]
+	if _, err := uuid.Parse(runID); err != nil || (action != "pause" && action != "resume" && action != "cancel") {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_ACTION", "Crawl action is invalid", traceID(r))
+		return
+	}
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	run, err := h.store.Control(r.Context(), tenantID, runID, action)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, run)
+}
+
+func (h *crawlHandler) listPages(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	runID := r.PathValue("crawlRunId")
+	if _, err := uuid.Parse(runID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_RUN_ID", "Crawl run ID is invalid", traceID(r))
+		return
+	}
+	pages, err := h.store.ListPages(r.Context(), tenantID, runID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": pages})
+}
+
+func (h *crawlHandler) getPageContent(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	contentID := r.PathValue("contentId")
+	if _, err := uuid.Parse(contentID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CONTENT_ID", "Page content ID is invalid", traceID(r))
+		return
+	}
+	detail, err := h.store.GetPageContent(r.Context(), tenantID, contentID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
 func (h *crawlHandler) claim(w http.ResponseWriter, r *http.Request) {
 	if !h.authorizeWorker(w, r) {
 		return
@@ -172,6 +235,8 @@ func (h *crawlHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, http.StatusNotFound, "CRAWL_RESOURCE_NOT_FOUND", "Crawl resource was not found", traceID(r))
 	case errors.Is(err, crawls.ErrProjectArchived):
 		writeProblem(w, http.StatusConflict, "PROJECT_ARCHIVED", "Archived project cannot be crawled", traceID(r))
+	case errors.Is(err, crawls.ErrInvalidState):
+		writeProblem(w, http.StatusConflict, "INVALID_CRAWL_STATE", "Crawl action is not allowed in the current state", traceID(r))
 	default:
 		h.logger.Error("crawl operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))

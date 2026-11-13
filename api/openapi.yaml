@@ -165,6 +165,21 @@ paths:
       responses:
         '202': {description: Action accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CrawlRun'}}}}
         '409': {$ref: '#/components/responses/Conflict'}
+  /crawl-runs/{crawlRunId}/pages:
+    get:
+      tags: [Crawls]
+      operationId: listCrawlPages
+      parameters: [{$ref: '#/components/parameters/CrawlRunId'}]
+      responses:
+        '200': {description: Crawled pages, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/PageSummary'}}}}}}}
+  /page-contents/{contentId}:
+    get:
+      tags: [Crawls]
+      operationId: getPageContent
+      parameters: [{name: contentId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: Immutable page content metadata and links, content: {application/json: {schema: {$ref: '#/components/schemas/PageDetail'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /projects/{projectId}/questions:
     get:
       tags: [Questions]
@@ -364,6 +379,8 @@ components:
     BrandProfile: {type: object, required: [projectId, brandId, canonicalName, officialDomain, aliases, products, competitors], properties: {projectId: {$ref: '#/components/schemas/Id'}, brandId: {$ref: '#/components/schemas/Id'}, canonicalName: {type: string}, officialDomain: {type: string}, aliases: {type: array, items: {$ref: '#/components/schemas/BrandAlias'}}, products: {type: array, items: {$ref: '#/components/schemas/Product'}}, competitors: {type: array, items: {$ref: '#/components/schemas/Competitor'}}}}
     CrawlRunCreate: {type: object, required: [limits], properties: {websiteId: {$ref: '#/components/schemas/Id'}, startUrls: {type: array, items: {type: string, format: uri}}, limits: {type: object, required: [maxPages, maxDepth], properties: {maxPages: {type: integer, minimum: 1, maximum: 10000}, maxDepth: {type: integer, minimum: 0, maximum: 20}, concurrency: {type: integer, minimum: 1, maximum: 20}}}}}
     CrawlRun: {type: object, required: [id, projectId, status, counts], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [draft, queued, running, paused, partial_success, succeeded, failed, cancelled]}, counts: {type: object, additionalProperties: {type: integer}}}}
+    PageSummary: {type: object, required: [pageId, contentId, finalUrl, httpStatus, title, contentHash, parserVersion, createdAt], properties: {pageId: {$ref: '#/components/schemas/Id'}, contentId: {$ref: '#/components/schemas/Id'}, canonicalUrl: {type: [string, 'null'], format: uri}, finalUrl: {type: string, format: uri}, httpStatus: {type: integer}, title: {type: string}, language: {type: [string, 'null']}, contentHash: {type: string, pattern: '^[0-9a-f]{64}$'}, parserVersion: {type: string}, createdAt: {type: string, format: date-time}}}
+    PageDetail: {allOf: [{$ref: '#/components/schemas/PageSummary'}, {type: object, required: [links], properties: {links: {type: array, maxItems: 100, items: {type: string, format: uri}}}}]}
     QuestionCreate: {type: object, required: [text, language, questionType], properties: {text: {type: string, maxLength: 2000}, language: {type: string}, questionType: {type: string, enum: [brand, category, comparison, scenario, decision]}, intent: {type: string}, weight: {type: number, minimum: 0}}}
     Question: {allOf: [{$ref: '#/components/schemas/QuestionCreate'}, {type: object, required: [id, status], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [draft, reviewed, benchmark, monitoring, retired]}}}]}
     QuestionPage: {type: object, required: [items, page], properties: {items: {type: array, items: {$ref: '#/components/schemas/Question'}}, page: {$ref: '#/components/schemas/PageMeta'}}}

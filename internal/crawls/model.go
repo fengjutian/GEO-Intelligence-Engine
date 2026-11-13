@@ -39,18 +39,38 @@ type Claim struct {
 }
 
 type Completion struct {
-	RunID         string  `json:"runId"`
-	CrawlURLID    string  `json:"crawlUrlId"`
-	FinalURL      string  `json:"finalUrl"`
-	HTTPStatus    int     `json:"httpStatus"`
-	Title         string  `json:"title"`
-	Language      *string `json:"language"`
-	ContentHash   string  `json:"contentHash"`
-	ParserVersion string  `json:"parserVersion"`
+	RunID         string   `json:"runId"`
+	CrawlURLID    string   `json:"crawlUrlId"`
+	FinalURL      string   `json:"finalUrl"`
+	HTTPStatus    int      `json:"httpStatus"`
+	Title         string   `json:"title"`
+	Language      *string  `json:"language"`
+	ContentHash   string   `json:"contentHash"`
+	ParserVersion string   `json:"parserVersion"`
+	CanonicalURL  *string  `json:"canonicalUrl"`
+	Links         []string `json:"links"`
 }
 
 type Failure struct {
 	RunID      string `json:"runId"`
 	CrawlURLID string `json:"crawlUrlId"`
 	ErrorCode  string `json:"errorCode"`
+}
+
+type PageSummary struct {
+	PageID        string    `json:"pageId"`
+	ContentID     string    `json:"contentId"`
+	CanonicalURL  *string   `json:"canonicalUrl"`
+	FinalURL      string    `json:"finalUrl"`
+	HTTPStatus    uint16    `json:"httpStatus"`
+	Title         string    `json:"title"`
+	Language      *string   `json:"language"`
+	ContentHash   string    `json:"contentHash"`
+	ParserVersion string    `json:"parserVersion"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type PageDetail struct {
+	PageSummary
+	Links []string `json:"links"`
 }
