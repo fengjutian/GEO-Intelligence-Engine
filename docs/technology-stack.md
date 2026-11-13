@@ -1,7 +1,7 @@
 # GEO Intelligence 技术栈与工程选型
 
 > 版本：V1.0  
-> 状态：技术评审稿  
+> 状态：已批准（V1.0 基线）  
 > 日期：2026-11-13  
 > 适用范围：P0 GEO Audit 及后续演进  
 > 关联文档：[PRD](./product-requirements.md)｜[技术原理](./technical-principles.md)｜[P0 设计规范集](./specs/README.md)

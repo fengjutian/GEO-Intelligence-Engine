@@ -1,6 +1,6 @@
 # SPEC-02：P0 系统架构设计
 
-> 版本：V1.0｜状态：研发评审稿｜架构形态：模块化单体 + 独立 Worker
+> 版本：V1.0｜状态：已批准｜架构形态：模块化单体 + 独立 Worker
 
 ## 1. 架构目标
 
@@ -26,7 +26,7 @@ API/BFF（Go）
        ┌─────────┼──────────┐
        │         │          │
  Crawler Worker  Model Worker  Judge Worker
- Playwright       Gateway       Python/Go
+ TypeScript       Go Gateway    Python Judge
        │         │          │
   Public Web   Model APIs    Metrics Builder
 ```

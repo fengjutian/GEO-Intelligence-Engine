@@ -1,6 +1,6 @@
 # SPEC-05：Model Gateway 接口规范
 
-> 版本：V1.0｜状态：研发评审稿｜协议前缀：`/internal/model-gateway/v1`
+> 版本：V1.0｜状态：已批准｜协议前缀：`/internal/model-gateway/v1`
 
 ## 1. 职责边界
 

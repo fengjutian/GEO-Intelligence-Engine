@@ -1,6 +1,6 @@
 # FEAT-12：优化任务管理
 
-> 功能版本：V1.0｜产品版本：P0 V1.0｜状态：研发评审稿  
+> 功能版本：V1.0｜产品版本：P0 V1.0｜状态：已批准  
 > 需求：TSK-001～TSK-002｜对齐：SPEC-03、07、08 V1.0
 
 ## 1. 功能目标
@@ -30,13 +30,13 @@
 
 ```text
 todo → in_progress → in_review → done
-  │         │             ├→ rejected → in_progress
+  │         │             ├→ changes_requested → in_progress
   │         └→ cancelled  └→ in_progress（要求修改）
   └→ cancelled
 ```
 
 - done 只能由具有审核权限的用户从 in_review 转换。
-- rejected 必须填写原因，可重新进入 in_progress。
+- changes_requested 必须填写原因，可重新进入 in_progress。
 - cancelled 需要原因，默认终态；恢复需 ProjectAdmin 创建显式事件。
 - 非法转换返回 409，不修改任务。
 

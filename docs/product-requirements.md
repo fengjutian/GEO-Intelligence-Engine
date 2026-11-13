@@ -1,7 +1,7 @@
 # GEO Intelligence 详细产品需求文档（PRD）
 
 > 版本：V1.0  
-> 状态：研发评审稿  
+> 状态：已批准（V1.0 基线）  
 > 日期：2026-11-13  
 > 来源：《GEO Intelligence 技术方法体系与产品研发规划》V1.0  
 > 首期范围：P0 / GEO Audit 可用闭环
@@ -207,7 +207,7 @@ GEO Intelligence 是企业的品牌知识与 AI 搜索智能基础设施，形�
 | RPT-003 | P0 Must | 导出报告 | 支持 PDF/CSV；导出包含生成时间、数据范围、口径、版本和限制声明 |
 | RPT-004 | P0 Must | 问题优先级 | 严重度由影响范围、置信度、修复成本和业务重要性组成，构成透明可编辑 |
 | TSK-001 | P0 Must | 从发现创建优化任务 | 自动关联问题、证据、建议、负责人、截止日和验收条件 |
-| TSK-002 | P0 Must | 任务状态机 | `待处理→进行中→待审核→已完成/已拒绝/已取消`；非法转换被拒绝并记日志 |
+| TSK-002 | P0 Must | 任务状态机 | `待处理→进行中→待审核→已完成/要求修改/已取消`；非法转换被拒绝并记日志 |
 | TSK-003 | P1 Should | 通知与订阅 | 审计完成、失败、异常、任务指派和报告生成可站内/邮件通知 |
 
 ### 6.10 Optimization Agent（P2/P3）
@@ -254,7 +254,7 @@ GEO Intelligence 是企业的品牌知识与 AI 搜索智能基础设施，形�
 - 审计：draft、queued、running、partial_success、succeeded、failed、cancelled。
 - 抓取：discovered、queued、fetched、rendered、parsed、blocked、failed。
 - 评估：pending、machine_evaluated、needs_review、human_verified、superseded。
-- 优化任务：todo、in_progress、in_review、done、rejected、cancelled。
+- 优化任务：todo、in_progress、in_review、changes_requested、done、cancelled。
 - Agent 执行：planned、awaiting_approval、running、succeeded、failed、rolled_back、cancelled。
 
 ### 7.4 保留与删除
