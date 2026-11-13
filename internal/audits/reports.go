@@ -144,7 +144,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 }
 
 func loadMetricValues(ctx context.Context, tx *sql.Tx, tenantID, snapshotID string) ([]map[string]any, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT metric_code,aggregation_method,dimensions_json,numerator,denominator,value_decimal,ci_low,ci_high,interval_method
+	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),metric_code,aggregation_method,dimensions_json,numerator,denominator,value_decimal,ci_low,ci_high,interval_method
 FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?) ORDER BY metric_code,dimensions_json`, tenantID, snapshotID)
 	if err != nil {
 		return nil, err
@@ -152,16 +152,16 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var code, method, interval string
+		var id, code, method, interval string
 		var dimensions []byte
 		var numerator, denominator, value, ciLow, ciHigh sql.NullFloat64
-		if err := rows.Scan(&code, &method, &dimensions, &numerator, &denominator, &value, &ciLow, &ciHigh, &interval); err != nil {
+		if err := rows.Scan(&id, &code, &method, &dimensions, &numerator, &denominator, &value, &ciLow, &ciHigh, &interval); err != nil {
 			return nil, err
 		}
 		var dimensionsValue map[string]any
 		_ = json.Unmarshal(dimensions, &dimensionsValue)
 		items = append(items, map[string]any{
-			"metricCode": code, "aggregationMethod": method, "dimensions": dimensionsValue,
+			"id": id, "metricCode": code, "aggregationMethod": method, "dimensions": dimensionsValue,
 			"numerator": nullFloat(numerator), "denominator": nullFloat(denominator),
 			"value": nullFloat(value), "ciLow": nullFloat(ciLow), "ciHigh": nullFloat(ciHigh), "intervalMethod": interval,
 		})

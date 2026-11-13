@@ -16,7 +16,7 @@ const MetricVersion = "metrics-v1"
 
 // MetricValue is one aggregated rate with its numerator, denominator and interval.
 type MetricValue struct {
-	ID                string         `json:"-"`
+	ID                string         `json:"id"`
 	MetricCode        string         `json:"metricCode"`
 	AggregationMethod string         `json:"aggregationMethod"`
 	Dimensions        map[string]any `json:"dimensions"`
@@ -204,7 +204,7 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 	return nil
 }
 
-func insertMetricValue(ctx context.Context, tx *sql.Tx, tenantID, snapshotID, code string, dimensions map[string]any, numerator, denominator int) error {
+func insertMetricValue(ctx context.Context, tx *sql.Tx, tenantID, snapshotID, code string, dimensions map[string]any, numerator, denominator int) (string, error) {
 	id, _ := uuid.NewV7()
 	dimensionsJSON, _ := json.Marshal(dimensions)
 	hash := sha256.Sum256(dimensionsJSON)
@@ -219,19 +219,19 @@ func insertMetricValue(ctx context.Context, tx *sql.Tx, tenantID, snapshotID, co
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,'answer_equal',?,CAST(? AS JSON),?,?,?,?,?,'wilson',JSON_OBJECT('confidence',0.95),UTC_TIMESTAMP(6))`,
 		id.String(), tenantID, snapshotID, code, hash[:], dimensionsJSON, numeratorValue, denominatorValue, value, ciLow, ciHigh)
 	if err != nil {
-		return fmt.Errorf("insert metric value: %w", err)
+		return "", fmt.Errorf("insert metric value: %w", err)
 	}
 	if denominator > 0 && denominator < 30 {
 		flagID, _ := uuid.NewV7()
 		if _, err := tx.ExecContext(ctx, `INSERT INTO metric_quality_flags (id,tenant_id,metric_value_id,flag_code,details_json) VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'small_sample',JSON_OBJECT('denominator',?))
 ON DUPLICATE KEY UPDATE flag_code=flag_code`, flagID.String(), tenantID, id.String(), denominator); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return id.String(), nil
 }
 
-func insertMetricFrequency(ctx context.Context, tx *sql.Tx, tenantID, snapshotID string, dimensions map[string]any, numerator, denominator int, value float64) error {
+func insertMetricFrequency(ctx context.Context, tx *sql.Tx, tenantID, snapshotID string, dimensions map[string]any, numerator, denominator int, value float64) (string, error) {
 	id, _ := uuid.NewV7()
 	dimensionsJSON, _ := json.Marshal(dimensions)
 	hash := sha256.Sum256(dimensionsJSON)
@@ -239,9 +239,51 @@ func insertMetricFrequency(ctx context.Context, tx *sql.Tx, tenantID, snapshotID
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'mention_frequency','answer_equal',?,CAST(? AS JSON),?,?,?,'none',JSON_OBJECT(),UTC_TIMESTAMP(6))`,
 		id.String(), tenantID, snapshotID, hash[:], dimensionsJSON, numerator, denominator, value)
 	if err != nil {
-		return fmt.Errorf("insert mention frequency: %w", err)
+		return "", fmt.Errorf("insert mention frequency: %w", err)
+	}
+	return id.String(), nil
+}
+
+// insertMetricEvidence stores the eligible answers behind one metric value.
+func insertMetricEvidence(ctx context.Context, tx *sql.Tx, tenantID, metricValueID string, members []map[string]any) error {
+	stored := members
+	truncated := false
+	if len(stored) > 1000 {
+		stored = stored[:1000]
+		truncated = true
+	}
+	content, err := json.Marshal(map[string]any{"members": stored, "truncated": truncated, "memberCount": len(members)})
+	if err != nil {
+		return err
+	}
+	queryHash := sha256.Sum256([]byte(metricValueID))
+	evidenceID, _ := uuid.NewV7()
+	_, err = tx.ExecContext(ctx, `INSERT INTO metric_evidence_sets (id,tenant_id,metric_value_id,query_hash,member_count,members_object_key,content_json)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,CAST(? AS JSON))`,
+		evidenceID.String(), tenantID, metricValueID, queryHash[:], len(members), fmt.Sprintf("db://metric-evidence/%s", metricValueID), content)
+	if err != nil {
+		return fmt.Errorf("insert metric evidence: %w", err)
 	}
 	return nil
+}
+
+// GetMetricEvidence returns the answers and judge labels behind one metric value.
+func (s *Store) GetMetricEvidence(ctx context.Context, tenantID, metricValueID string) (map[string]any, error) {
+	var content []byte
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(me.content_json,JSON_OBJECT())
+FROM metric_evidence_sets me JOIN metric_values mv ON mv.id=me.metric_value_id
+WHERE me.tenant_id=UUID_TO_BIN(?) AND mv.tenant_id=UUID_TO_BIN(?) AND me.metric_value_id=UUID_TO_BIN(?)`, tenantID, tenantID, metricValueID).Scan(&content)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]any{}
+	if err := json.Unmarshal(content, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func wilson(numerator, denominator int) (float64, float64) {

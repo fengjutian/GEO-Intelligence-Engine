@@ -359,6 +359,14 @@ paths:
         - {name: channel, in: query, schema: {type: string, enum: [model_api, search_api, consumer_app_capture]}}
       responses:
         '200': {description: Metrics, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MetricValue'}}}}}
+  /metric-values/{metricValueId}/evidence:
+    get:
+      tags: [Metrics]
+      operationId: getMetricEvidence
+      parameters: [{name: metricValueId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: Member answers and Judge labels behind a metric value, content: {application/json: {schema: {type: object, required: [members, memberCount], properties: {members: {type: array, items: {type: object, additionalProperties: true}}, memberCount: {type: integer}, truncated: {type: boolean}}}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /audits/{auditId}/reports:
     post:
       tags: [Reports]
@@ -548,7 +556,7 @@ components:
         sentiment: {type: [string, 'null'], enum: [positive, neutral, negative, mixed, unknown, null]}
     HumanAnnotationCreate: {type: object, required: [labels, reason], properties: {labels: {type: object, additionalProperties: true}, reason: {type: string, minLength: 1}}}
     HumanAnnotation: {allOf: [{$ref: '#/components/schemas/HumanAnnotationCreate'}, {type: object, required: [id, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, createdAt: {type: string, format: date-time}}}]}
-    MetricValue: {type: object, required: [metricCode, aggregationMethod, dimensions, numerator, denominator, intervalMethod], properties: {metricCode: {type: string}, aggregationMethod: {type: string, enum: [answer_equal, question_equal, business_weighted]}, dimensions: {type: object, additionalProperties: true}, numerator: {type: [number, 'null']}, denominator: {type: [number, 'null']}, value: {type: [number, 'null']}, ciLow: {type: [number, 'null']}, ciHigh: {type: [number, 'null']}, intervalMethod: {type: string, enum: [wilson, cluster_bootstrap, weighted_cluster_bootstrap]}}}
+    MetricValue: {type: object, required: [metricCode, aggregationMethod, dimensions, numerator, denominator, intervalMethod], properties: {id: {$ref: '#/components/schemas/Id'}, metricCode: {type: string}, aggregationMethod: {type: string, enum: [answer_equal, question_equal, business_weighted]}, dimensions: {type: object, additionalProperties: true}, numerator: {type: [number, 'null']}, denominator: {type: [number, 'null']}, value: {type: [number, 'null']}, ciLow: {type: [number, 'null']}, ciHigh: {type: [number, 'null']}, intervalMethod: {type: string, enum: [wilson, cluster_bootstrap, weighted_cluster_bootstrap, none]}}}
     ReportCreate: {type: object, required: [metricSnapshotId, templateVersion], properties: {metricSnapshotId: {$ref: '#/components/schemas/Id'}, templateVersion: {type: string}}}
     Report: {type: object, required: [id, auditId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string, enum: [draft, generating, ready, published, failed, superseded]}, templateVersion: {type: string}, dependencyVersions: {type: object, additionalProperties: true}, sections: {type: array, items: {$ref: '#/components/schemas/ReportSection'}}, artifacts: {type: array, items: {$ref: '#/components/schemas/ReportArtifact'}}, createdAt: {type: string, format: date-time}, publishedAt: {type: [string, 'null'], format: date-time}}}
     ReportSection: {type: object, required: [code, content], properties: {code: {type: string}, content: {type: object, additionalProperties: true}}}

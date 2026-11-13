@@ -7,6 +7,7 @@ type Protocol = { id: string; semanticVersion: string; status: string }
 type Audit = { id: string; status: string; plannedCount: number; completedCount: number; eligibleCount: number; budgetMicrounits: number; currency: string }
 type Report = { id: string; version: number; status: string; sections: Array<{ code: string; content: Record<string, unknown> }> }
 type MetricValue = {
+  id: string
   metricCode: string
   aggregationMethod: string
   dimensions: Record<string, unknown>
@@ -63,6 +64,8 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [report, setReport] = useState<Report | null>(null)
   const [reportBusy, setReportBusy] = useState(false)
+  const [evidence, setEvidence] = useState<{ members: Array<Record<string, unknown>>; memberCount: number; truncated?: boolean } | null>(null)
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
   const audit = useQuery({
     queryKey: ['audit', auditId],
     queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
@@ -197,6 +200,18 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     }
   }
 
+  async function loadEvidence(metric: MetricValue) {
+    setEvidenceLoading(true)
+    try {
+      const result = await request<{ members: Array<Record<string, unknown>>; memberCount: number; truncated?: boolean }>(`/api/v1/metric-values/${metric.id}/evidence`)
+      setEvidence(result)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '指标证据加载失败')
+    } finally {
+      setEvidenceLoading(false)
+    }
+  }
+
   const current = audit.data
   const channelMetrics = (metrics.data ?? []).filter((metric) => !('engineConfigId' in metric.dimensions))
   const engineMetrics = (metrics.data ?? []).filter((metric) => 'engineConfigId' in metric.dimensions)
@@ -237,7 +252,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       {channelMetrics.length > 0 && <section className="audit-metrics">
         <h3>核心指标</h3>
         <div className="metric-cards">
-          {channelMetrics.map((metric) => <article key={`${metric.metricCode}-${String(metric.dimensions.channel)}`}>
+          {channelMetrics.map((metric) => <article key={`${metric.metricCode}-${String(metric.dimensions.channel)}`} role="button" tabIndex={0} title="查看构成证据" onClick={() => void loadEvidence(metric)} onKeyDown={(event) => { if (event.key === 'Enter') void loadEvidence(metric) }}>
             <small>{METRIC_LABELS[metric.metricCode] ?? metric.metricCode}</small>
             <strong>{formatPercent(metric.value)}</strong>
             <span>{metric.numerator ?? '—'} / {metric.denominator ?? '—'}</span>
@@ -256,6 +271,20 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{String(metric.dimensions.channel)}</span>
             <span>{formatPercent(metric.value)}（{metric.numerator ?? '—'}/{metric.denominator ?? '—'}）</span>
             <span>{formatInterval(metric) || '—'}</span>
+          </div>)}
+        </div>
+      </section>}
+      {evidenceLoading && <p className="audit-note">正在加载指标证据…</p>}
+      {evidence && <section className="audit-metrics evidence-panel">
+        <h3>指标证据 · {evidence.memberCount} 条{evidence.truncated ? '（已截断）' : ''} <button type="button" className="evidence-close" onClick={() => setEvidence(null)}>关闭</button></h3>
+        <div className="metric-table">
+          <div className="metric-row evidence-row metric-head"><span>问题</span><span>回答结果</span><span>推荐</span><span>情感</span><span>提及数</span></div>
+          {evidence.members.map((member, index) => <div className="metric-row evidence-row" key={index}>
+            <span title={String(member.questionId)}>{String(member.questionId)}</span>
+            <span>{String(member.answerOutcome)}</span>
+            <span>{String(member.recommendationLabel)}</span>
+            <span>{String(member.sentiment)}</span>
+            <span>{String(member.mentionCount)}</span>
           </div>)}
         </div>
       </section>}

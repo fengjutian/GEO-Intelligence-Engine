@@ -27,6 +27,7 @@ type auditStore interface {
 	CancelAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
 	ListSamples(ctx context.Context, tenantID, auditID string) ([]audits.Sample, error)
 	GetMetrics(ctx context.Context, tenantID, auditID, aggregationMethod, channel string) ([]audits.MetricValue, error)
+	GetMetricEvidence(ctx context.Context, tenantID, metricValueID string) (map[string]any, error)
 	CreateReport(ctx context.Context, tenantID, auditID, metricSnapshotID, templateVersion string) (audits.Report, error)
 	GetReport(ctx context.Context, tenantID, reportID string) (audits.Report, error)
 	PublishReport(ctx context.Context, tenantID, reportID string) (audits.Report, error)
@@ -258,6 +259,20 @@ func (h *auditHandler) getMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *auditHandler) getMetricEvidence(w http.ResponseWriter, r *http.Request) {
+	metricValueID := r.PathValue("metricValueId")
+	if _, err := uuid.Parse(metricValueID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_METRIC_VALUE_ID", "Metric value ID is invalid", traceID(r))
+		return
+	}
+	evidence, err := h.store.GetMetricEvidence(r.Context(), h.tenant(r), metricValueID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, evidence)
 }
 
 func (h *auditHandler) createReport(w http.ResponseWriter, r *http.Request) {

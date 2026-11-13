@@ -92,6 +92,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}", auditHandler.getAudit)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/samples", auditHandler.listSamples)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/metrics", auditHandler.getMetrics)
+	mux.HandleFunc("GET /api/v1/metric-values/{metricValueId}/evidence", auditHandler.getMetricEvidence)
 	mux.HandleFunc("POST /api/v1/audits/{auditId}/reports", auditHandler.createReport)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}", auditHandler.getReport)
 	mux.HandleFunc("POST /api/v1/reports/{reportAction}", auditHandler.publishReport)
