@@ -1,4 +1,4 @@
-import { Activity, Database, Radar, ShieldCheck } from 'lucide-react'
+import { BarChart3, Bot, ChevronRight, FolderKanban, Gauge, Globe2, Settings, ShieldCheck } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FormEvent, useState } from 'react'
 
@@ -160,13 +160,6 @@ async function checkModelProvider(provider: ModelProvider['provider']): Promise<
   return provider
 }
 
-const modules = [
-  { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
-  { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
-  { title: 'Measurement', text: '多模型测量与可信指标', icon: Activity },
-  { title: 'Governance', text: '租户隔离、审批与审计', icon: ShieldCheck },
-]
-
 export function App() {
   const version = useQuery({ queryKey: ['version'], queryFn: fetchVersion })
   const projects = useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
@@ -257,20 +250,44 @@ export function App() {
     competitorCreate.mutate({ projectId: profileProject.id, input: { name: String(data.get('name')), domain: String(data.get('domain')) } }, { onSuccess: () => form.reset() })
   }
 
-  return <main className="min-h-screen px-6 py-10 sm:px-10">
-    <div className="mx-auto max-w-6xl">
-      <header className="flex flex-col gap-5 border-b border-line pb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="eyebrow">AI Search Intelligence</p><h1>GEO Intelligence</h1><p className="mt-3 max-w-2xl text-muted">以可追溯证据、版本化评估和受控实验构建可信的 GEO 优化闭环。</p></div>
-        <div className="status" data-state={version.isSuccess ? 'ready' : 'loading'}><span />{version.isSuccess ? `${version.data.baseline} · API ${version.data.apiVersion}` : version.isError ? 'API unavailable' : 'Connecting'}</div>
+  const activeProjects = projects.data?.items.filter((project) => project.status !== 'archived').length ?? 0
+  const configuredProviders = modelProviders.data?.items.filter((provider) => provider.configured).length ?? 0
+
+  return <main className="app-shell">
+    <aside className="app-sidebar">
+      <div className="brand-mark"><span>G</span><div><strong>GEO</strong><small>Intelligence</small></div></div>
+      <nav aria-label="主导航">
+        <a className="active" href="#overview"><Gauge />概览</a>
+        <a href="#projects"><FolderKanban />项目空间</a>
+        <a href="#projects"><Globe2 />网站审计</a>
+        <a href="#measurement"><BarChart3 />模型测量</a>
+        <a href="#providers"><Bot />模型服务</a>
+      </nav>
+      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{version.data?.baseline ?? 'V1.0'}</small></div>
+    </aside>
+    <div className="app-page">
+      <header className="app-topbar">
+        <div><p>GEO Intelligence Engine</p><h1>工作台</h1></div>
+        <div className="status" data-state={version.isSuccess ? 'ready' : 'loading'}><span />{version.isSuccess ? `服务正常 · API ${version.data.apiVersion}` : version.isError ? 'API 连接异常' : '正在连接'}</div>
       </header>
-      <section className="grid gap-4 py-10 sm:grid-cols-2 lg:grid-cols-4" aria-label="核心模块">
-        {modules.map(({ title, text, icon: Icon }) => <article className="card" key={title}><Icon aria-hidden="true"/><h2>{title}</h2><p>{text}</p></article>)}
-      </section>
-      <section className="panel"><div><p className="eyebrow">P0 DELIVERY</p><h2>GEO Audit</h2></div><p>项目配置 → 网站抓取 → 问题空间 → 多模型采样 → Answer Judge → 指标与报告</p></section>
-      <section className="provider-section" aria-labelledby="providers-title"><div className="section-heading"><div><p className="eyebrow">MODEL GATEWAY</p><h2 id="providers-title">模型供应商</h2></div></div><div className="provider-grid">{modelProviders.data?.items.map((provider) => <article key={provider.provider}><div><span data-configured={provider.configured}>{provider.configured ? '已配置' : '未配置'}</span><h3>{provider.provider === 'deepseek' ? 'DeepSeek' : 'MiniMax 国内站'}</h3><p>{provider.defaultModel}</p><small>{provider.baseUrl}</small></div><button onClick={() => providerHealth.mutate(provider.provider)} disabled={!provider.configured || providerHealth.isPending}>健康检查</button></article>)}</div>{providerHealth.data && <p className="provider-message">{providerHealth.data} 连接正常</p>}{providerHealth.error && <p className="error" role="alert">{providerHealth.error.message}</p>}</section>
-      <section className="workspace" aria-labelledby="projects-title">
+      <div className="app-content">
+        <section className="dashboard-intro" id="overview">
+          <div><p className="eyebrow">OVERVIEW</p><h2>早上好，开始今天的 GEO 分析</h2><p>集中管理品牌资产、网站抓取、模型测量与证据报告。</p></div>
+          <button className="primary-button" type="button" onClick={() => setFormOpen(true)}>创建项目</button>
+        </section>
+        <section className="metric-grid" aria-label="工作台概览">
+          <article><FolderKanban /><div><strong>{activeProjects}</strong><span>活跃项目</span></div></article>
+          <article><Globe2 /><div><strong>{projects.data?.items.length ?? 0}</strong><span>已接入网站</span></div></article>
+          <article><Bot /><div><strong>{configuredProviders}/2</strong><span>模型服务</span></div></article>
+          <article><ShieldCheck /><div><strong>P0</strong><span>当前基线</span></div></article>
+        </section>
+        <section className="operations-grid">
+          <div className="pipeline-card" id="measurement"><div className="section-title"><div><p className="eyebrow">DELIVERY PIPELINE</p><h2>GEO Audit 工作流</h2></div><span>6 个阶段</span></div><div className="pipeline-steps">{['项目配置', '网站抓取', '问题空间', '模型采样', 'Answer Judge', '指标报告'].map((step, index) => <div key={step}><span>{index + 1}</span><strong>{step}</strong>{index < 5 && <ChevronRight />}</div>)}</div></div>
+          <section className="provider-panel" id="providers" aria-labelledby="providers-title"><div className="section-title"><div><p className="eyebrow">MODEL GATEWAY</p><h2 id="providers-title">模型服务</h2></div><span>{configuredProviders}/2 可用</span></div><div className="provider-list">{modelProviders.data?.items.map((provider) => <article key={provider.provider}><span className="provider-dot" data-configured={provider.configured} /><div><strong>{provider.provider === 'deepseek' ? 'DeepSeek' : 'MiniMax 国内站'}</strong><small>{provider.defaultModel}</small></div><button onClick={() => providerHealth.mutate(provider.provider)} disabled={!provider.configured || providerHealth.isPending}>{provider.configured ? '检查' : '未配置'}</button></article>)}</div>{providerHealth.data && <p className="provider-message">{providerHealth.data} 连接正常</p>}{providerHealth.error && <p className="error" role="alert">{providerHealth.error.message}</p>}</section>
+        </section>
+      <section className="workspace" id="projects" aria-labelledby="projects-title">
         <div className="section-heading">
-          <div><p className="eyebrow">WORKSPACE</p><h2 id="projects-title">项目与品牌</h2></div>
+          <div><p className="eyebrow">PROJECTS</p><h2 id="projects-title">项目空间</h2><p>管理品牌基础资料、抓取任务和配置版本。</p></div>
           <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>
         </div>
         {formOpen && <form className="project-form" onSubmit={submitProject}>
@@ -326,6 +343,7 @@ export function App() {
         {crawlControl.error && <p className="error" role="alert">{crawlControl.error.message}</p>}
         {pagesOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { setPagesOpen(false); setSelectedContentId(null) }}><section className="pages-dialog" aria-labelledby="pages-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL EVIDENCE</p><h2 id="pages-title">抓取页面</h2></div><button onClick={() => setPagesOpen(false)} aria-label="关闭">×</button></div>{crawlPages.isLoading && <p>正在加载…</p>}<div className="finding-strip">{findings.data?.items.length === 0 && <p>未发现首批技术规则问题。</p>}{findings.data?.items.map((finding) => <article key={finding.id} data-severity={finding.severity}><span>{finding.severity}</span><strong>{finding.ruleCode}</strong><p>{finding.summary}</p></article>)}</div><div className="pages-layout"><div className="page-list">{crawlPages.data?.items.map((page) => <button key={page.contentId} onClick={() => setSelectedContentId(page.contentId)} data-active={selectedContentId === page.contentId}><span>{page.httpStatus}</span><strong>{page.title || '无标题页面'}</strong><small>{page.finalUrl}</small></button>)}</div><div className="page-evidence">{!selectedContentId && <p>选择页面查看不可变版本证据。</p>}{pageDetail.isLoading && <p>正在加载详情…</p>}{pageDetail.data && <><h3>{pageDetail.data.title || '无标题页面'}</h3><dl><div><dt>最终 URL</dt><dd>{pageDetail.data.finalUrl}</dd></div><div><dt>Canonical</dt><dd>{pageDetail.data.canonicalUrl ?? '未声明'}</dd></div><div><dt>内容哈希</dt><dd className="hash">{pageDetail.data.contentHash}</dd></div><div><dt>解析器</dt><dd>{pageDetail.data.parserVersion}</dd></div></dl><h4>出站链接（{pageDetail.data.links.length}）</h4><ul>{pageDetail.data.links.slice(0, 20).map((link) => <li key={link}>{link}</li>)}</ul></>}</div></div></section></div>}
       </section>
+      </div>
     </div>
   </main>
 }
