@@ -51,7 +51,7 @@ pnpm dev:crawler
 Set-Location apps/judge-worker; uv run uvicorn geo_judge.app:app --reload --port 8081
 ```
 
-启动后：Web `http://localhost:5173`，API `http://localhost:8080`，Judge `http://localhost:8081`，Crawler 健康检查 `http://localhost:8082/healthz`。
+启动后：Web `http://localhost:5174`，API `http://localhost:8080`，Judge `http://localhost:8081`，Crawler 健康检查 `http://localhost:8082/healthz`。
 
 ## 质量检查
 

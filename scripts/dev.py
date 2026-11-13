@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import shutil
@@ -19,17 +20,18 @@ ROOT = Path(__file__).resolve().parents[1]
 RUN_DIR = ROOT / ".run"
 LOG_DIR = RUN_DIR / "logs"
 STATE_FILE = RUN_DIR / "dev-processes.json"
+API_BINARY = RUN_DIR / "bin" / ("geo-api.exe" if os.name == "nt" else "geo-api")
 
 SERVICES = {
     "api": {
-        "command": ["go", "run", "./cmd/api"],
+        "command": [str(API_BINARY)],
         "cwd": ROOT,
         "health": "http://127.0.0.1:8080/healthz",
     },
     "web": {
         "command": ["pnpm", "dev:web"],
         "cwd": ROOT,
-        "health": "http://127.0.0.1:5173/",
+        "health": "http://127.0.0.1:5174/",
     },
     "crawler": {
         "command": ["pnpm", "dev:crawler"],
@@ -105,9 +107,23 @@ def write_state(state: dict[str, dict[str, Any]]) -> None:
 def process_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
+    except (OSError, ProcessLookupError, SystemError):
         return False
     return True
 
@@ -177,6 +193,8 @@ def start(args: argparse.Namespace, environment: dict[str, str]) -> int:
     if args.install:
         run_checked(["pnpm", "install"], ROOT, environment)
         run_checked(["uv", "sync"], ROOT / "apps" / "judge-worker", environment)
+    API_BINARY.parent.mkdir(parents=True, exist_ok=True)
+    run_checked(["go", "build", "-o", str(API_BINARY), "./cmd/api"], ROOT, environment)
     if not args.skip_migrate:
         run_checked(["go", "run", "./cmd/migrate", "up"], ROOT, environment)
 
