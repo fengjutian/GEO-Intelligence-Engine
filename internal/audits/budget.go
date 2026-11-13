@@ -61,17 +61,9 @@ FROM budget_reservations r WHERE r.tenant_id=UUID_TO_BIN(?) AND r.request_id=UUI
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE budget_accounts SET reserved_microunits=reserved_microunits-?,settled_microunits=settled_microunits+?
-WHERE id=UUID_TO_BIN(?) AND reserved_microunits>=?`, cost, cost, accountID, cost)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE budget_accounts SET reserved_microunits=IF(reserved_microunits>=?,reserved_microunits-?,0),settled_microunits=settled_microunits+?
+WHERE id=UUID_TO_BIN(?)`, cost, cost, cost, accountID); err != nil {
 		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return fmt.Errorf("budget reservation %s is smaller than settled cost", reservationID)
 	}
 	ledgerID, _ := uuid.NewV7()
 	pricingVersion := ""

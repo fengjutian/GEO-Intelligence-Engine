@@ -141,6 +141,9 @@ WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, result.SampleID, 
 		return nil
 	}
 	if auditStatus == "cancelled" {
+		if err := settleSampleCost(ctx, tx, tenantID, result.AuditID, result.CostMicrounits); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE audit_samples SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?)`, result.SampleID); err != nil {
 			return err
 		}
@@ -167,8 +170,17 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'succeed
 	if _, err = tx.ExecContext(ctx, `UPDATE audits SET completed_count=completed_count+1 WHERE id=UUID_TO_BIN(?)`, result.AuditID); err != nil {
 		return err
 	}
-	if err := finalizeAudit(ctx, tx, result.AuditID); err != nil {
+	if err := settleSampleCost(ctx, tx, tenantID, result.AuditID, result.CostMicrounits); err != nil {
 		return err
+	}
+	completed, err := finalizeAudit(ctx, tx, result.AuditID)
+	if err != nil {
+		return err
+	}
+	if completed {
+		if err := releaseAuditReservation(ctx, tx, tenantID, result.AuditID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -180,11 +192,11 @@ func (s *Store) FailSample(ctx context.Context, failure SampleFailure) error {
 		return err
 	}
 	defer tx.Rollback()
-	var auditStatus, sampleStatus string
+	var auditStatus, sampleStatus, tenantID string
 	var attempts int
-	err = tx.QueryRowContext(ctx, `SELECT a.status,s.status,s.attempt_count
+	err = tx.QueryRowContext(ctx, `SELECT a.status,s.status,s.attempt_count,BIN_TO_UUID(a.tenant_id)
 FROM audits a JOIN audit_samples s ON s.audit_id=a.id
-WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, failure.SampleID, failure.AuditID).Scan(&auditStatus, &sampleStatus, &attempts)
+WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, failure.SampleID, failure.AuditID).Scan(&auditStatus, &sampleStatus, &attempts, &tenantID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -210,24 +222,30 @@ WHERE s.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) FOR UPDATE`, failure.SampleID,
 	if _, err := tx.ExecContext(ctx, `UPDATE audit_samples SET status='failed',attempt_count=?,last_error_code=?,lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?)`, attempts, code, failure.SampleID); err != nil {
 		return err
 	}
-	if err := finalizeAudit(ctx, tx, failure.AuditID); err != nil {
+	completed, err := finalizeAudit(ctx, tx, failure.AuditID)
+	if err != nil {
 		return err
+	}
+	if completed {
+		if err := releaseAuditReservation(ctx, tx, tenantID, failure.AuditID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
 
-func finalizeAudit(ctx context.Context, tx *sql.Tx, auditID string) error {
+func finalizeAudit(ctx context.Context, tx *sql.Tx, auditID string) (bool, error) {
 	var remaining int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_samples WHERE audit_id=UUID_TO_BIN(?) AND status IN ('queued','running')`, auditID).Scan(&remaining); err != nil {
-		return err
+		return false, err
 	}
 	if remaining > 0 {
 		_, err := tx.ExecContext(ctx, `UPDATE audits SET status='running' WHERE id=UUID_TO_BIN(?) AND status='queued'`, auditID)
-		return err
+		return false, err
 	}
 	var total, failed int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(status='failed'),0) FROM audit_samples WHERE audit_id=UUID_TO_BIN(?)`, auditID).Scan(&total, &failed); err != nil {
-		return err
+		return false, err
 	}
 	status := "succeeded"
 	switch {
@@ -239,7 +257,7 @@ func finalizeAudit(ctx context.Context, tx *sql.Tx, auditID string) error {
 		status = "partial_success"
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE audits SET status=?,finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, status, auditID)
-	return err
+	return true, err
 }
 
 func decodeHash(value string) ([]byte, error) {

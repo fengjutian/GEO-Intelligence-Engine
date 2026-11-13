@@ -22,7 +22,7 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 
 网站抓取已实现受控多页 P0 纵切：Go API 创建并调度 Crawl Run，TypeScript Worker 通过受限内部接口认领任务，逐跳执行 DNS/IP SSRF 检查，获取和解析 HTML，并将页面内容版本、哈希和抓取结果写回 MySQL。发现链接按同站范围、最大页数和最大深度进入队列，单页失败不终止整个 Run；Worker 崩溃后过期租约会自动重新入队。抓取前按目标 User-Agent 获取并缓存 `robots.txt`，被禁止的 URL 标记为 blocked 且不计入失败；每轮首次抓取还会解析 robots 声明的 Sitemap 或 `/sitemap.xml`，支持 Sitemap Index、嵌套与 gzip，证据写入 `robots_snapshots` 和 `crawl_sitemaps`，管理端抓取证据弹窗可查看 robots 分组规则、原始内容与 Sitemap 文档状态。
 
-审计编排已实现引擎配置、问题集不可变版本发布、测量协议创建与冻结、审计成本估算、幂等创建、确定性采样展开、样本执行和取消。`cmd/model-worker` 以 2 分钟租约领取样本，调用 Model Gateway，并把 `ai_requests`、`ai_responses`、Usage、成本、延迟和哈希写回 MySQL；失败按一次重试后标记失败，审计按样本结果收敛为 succeeded/partial_success/failed。协议发布会冻结问题集版本、引擎配置和品牌知识快照，后续配置变更不影响已创建审计。Judge 与指标尚未接入，`eligible_count` 仍为 0。
+审计编排已实现引擎配置、问题集不可变版本发布、测量协议创建与冻结、审计成本估算、幂等创建、确定性采样展开、预算预留与结算、样本执行和取消。`cmd/model-worker` 以 2 分钟租约领取样本，调用 Model Gateway，并把 `ai_requests`、`ai_responses`、Usage、成本、延迟和哈希写回 MySQL；失败按一次重试后标记失败，审计按样本结果收敛为 succeeded/partial_success/failed。审计创建会在审计级预算账户中原子预留估算成本，超过硬上限返回 422；样本成功后按实际成本结算并写 `cost_ledger`，取消或失败会释放未使用预留。协议发布会冻结问题集版本、引擎配置和品牌知识快照，后续配置变更不影响已创建审计。Judge 与指标尚未接入，`eligible_count` 仍为 0。
 
 Crawl Run 支持暂停、继续和取消。状态变更使用数据库锁串行化，迟到的 Worker 完成或失败回调不会覆盖取消状态；暂停期间已领取的短任务可在安全点结束，继续时从持久状态恢复。
 
