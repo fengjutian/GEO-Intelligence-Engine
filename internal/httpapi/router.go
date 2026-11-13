@@ -9,6 +9,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
+	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 )
 
 type Dependencies struct {
@@ -68,6 +69,9 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/model-providers", modelHandler.listProviders)
 	mux.HandleFunc("POST /api/v1/model-providers/{provider}/health", modelHandler.health)
 	mux.HandleFunc("POST /api/v1/model-gateway/chat", modelHandler.chat)
+	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/questions", questionHandler.list)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", questionHandler.create)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

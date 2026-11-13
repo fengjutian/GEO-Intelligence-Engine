@@ -26,6 +26,7 @@ type PageSummary = { pageId: string; contentId: string; canonicalUrl: string | n
 type PageDetail = PageSummary & { links: string[] }
 type Finding = { id: string; ruleCode: string; severity: string; status: string; summary: string; evidence: Record<string, unknown> }
 type ModelProvider = { provider: 'deepseek' | 'minimax'; configured: boolean; baseUrl: string; defaultModel: string }
+type BuyerQuestion = { id: string; text: string; language: string; questionType: string; intent?: string; weight: number; status: string; createdAt: string }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -160,6 +161,18 @@ async function checkModelProvider(provider: ModelProvider['provider']): Promise<
   return provider
 }
 
+async function fetchQuestions(projectId: string): Promise<{ items: BuyerQuestion[] }> {
+  const response = await fetch(`/api/v1/projects/${projectId}/questions?limit=100`)
+  if (!response.ok) throw new Error('问题空间加载失败')
+  return response.json() as Promise<{ items: BuyerQuestion[] }>
+}
+
+async function createQuestion(projectId: string, input: { text: string; language: string; questionType: string; intent: string; weight: number }): Promise<BuyerQuestion> {
+  const response = await fetch(`/api/v1/projects/${projectId}/questions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+  if (!response.ok) { const problem = await response.json().catch(() => ({ title: '问题创建失败' })) as { title?: string }; throw new Error(problem.title ?? '问题创建失败') }
+  return response.json() as Promise<BuyerQuestion>
+}
+
 export function App() {
   const version = useQuery({ queryKey: ['version'], queryFn: fetchVersion })
   const projects = useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
@@ -172,12 +185,14 @@ export function App() {
   const [pagesOpen, setPagesOpen] = useState(false)
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null)
   const [historyProject, setHistoryProject] = useState<Project | null>(null)
+  const [questionProject, setQuestionProject] = useState<Project | null>(null)
   const profile = useQuery({ queryKey: ['brand-profile', profileProject?.id], queryFn: () => fetchBrandProfile(profileProject!.id), enabled: profileProject !== null })
   const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
   const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const pageDetail = useQuery({ queryKey: ['page-content', selectedContentId], queryFn: () => fetchPageDetail(selectedContentId!), enabled: selectedContentId !== null })
   const findings = useQuery({ queryKey: ['crawl-findings', activeCrawlId], queryFn: () => fetchFindings(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const modelProviders = useQuery({ queryKey: ['model-providers'], queryFn: fetchModelProviders })
+  const buyerQuestions = useQuery({ queryKey: ['questions', questionProject?.id], queryFn: () => fetchQuestions(questionProject!.id), enabled: questionProject !== null })
   const crawlHistory = useQuery({ queryKey: ['project-crawls', historyProject?.id], queryFn: () => fetchProjectCrawls(historyProject!.id), enabled: historyProject !== null, refetchInterval: (query) => query.state.data?.items.some((run) => ['queued', 'running'].includes(run.status)) ? 2000 : false })
   const create = useMutation({
     mutationFn: createProject,
@@ -205,6 +220,7 @@ export function App() {
   const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: async (run) => { setActiveCrawlId(run.id); await queryClient.invalidateQueries({ queryKey: ['project-crawls', run.projectId] }) } })
   const crawlControl = useMutation({ mutationFn: ({ runId, action }: { runId: string; action: 'pause' | 'resume' | 'cancel' }) => controlCrawl(runId, action), onSuccess: async (run) => { await queryClient.setQueryData(['crawl-run', run.id], run); await queryClient.invalidateQueries({ queryKey: ['crawl-run', run.id] }) } })
   const providerHealth = useMutation({ mutationFn: checkModelProvider })
+  const questionCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { text: string; language: string; questionType: string; intent: string; weight: number } }) => createQuestion(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['questions', questionProject?.id] }) })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -248,6 +264,14 @@ export function App() {
     const form = event.currentTarget
     const data = new FormData(form)
     competitorCreate.mutate({ projectId: profileProject.id, input: { name: String(data.get('name')), domain: String(data.get('domain')) } }, { onSuccess: () => form.reset() })
+  }
+
+  function submitQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!questionProject) return
+    const form = event.currentTarget
+    const data = new FormData(form)
+    questionCreate.mutate({ projectId: questionProject.id, input: { text: String(data.get('text')), language: String(data.get('language')), questionType: String(data.get('questionType')), intent: String(data.get('intent')), weight: Number(data.get('weight')) } }, { onSuccess: () => form.reset() })
   }
 
   const activeProjects = projects.data?.items.filter((project) => project.status !== 'archived').length ?? 0
@@ -306,7 +330,7 @@ export function App() {
           {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
             <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
             <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
-            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setHistoryProject(project)}>抓取记录</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
+            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setHistoryProject(project)}>抓取记录</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => setQuestionProject(project)}>问题空间</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
           </article>)}
         </div>
         {editing && <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditing(null)}><form className="edit-dialog" aria-labelledby="edit-title" onSubmit={submitEdit} onMouseDown={(event) => event.stopPropagation()}>
@@ -335,6 +359,7 @@ export function App() {
           {(aliasCreate.error || aliasToggle.error || productCreate.error || competitorCreate.error) && <p className="error" role="alert">{aliasCreate.error?.message ?? aliasToggle.error?.message ?? productCreate.error?.message ?? competitorCreate.error?.message}</p>}
         </section></div>}
         {historyProject && <div className="modal-backdrop" role="presentation" onMouseDown={() => setHistoryProject(null)}><section className="history-dialog" aria-labelledby="history-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL HISTORY</p><h2 id="history-title">{historyProject.name} · 抓取记录</h2></div><button onClick={() => setHistoryProject(null)} aria-label="关闭">×</button></div>{crawlHistory.isLoading && <p>正在加载…</p>}{crawlHistory.data?.items.length === 0 && <p className="empty-state">暂无抓取记录</p>}<div className="history-list">{crawlHistory.data?.items.map((run) => <article key={run.id}><span className="run-state" data-state={run.status}>{run.status}</span><div><strong>{new Date(run.createdAt ?? Date.now()).toLocaleString()}</strong><small>{run.id}</small></div><div className="run-counts"><span>发现 {run.counts.discovered}</span><span>成功 {run.counts.fetched}</span><span>失败 {run.counts.failed}</span></div><button onClick={() => { setActiveCrawlId(run.id); setHistoryProject(null); if (run.counts.fetched > 0) setPagesOpen(true) }}>打开</button></article>)}</div></section></div>}
+        {questionProject && <div className="modal-backdrop" role="presentation" onMouseDown={() => setQuestionProject(null)}><section className="question-dialog" aria-labelledby="questions-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">BUYER QUESTIONS</p><h2 id="questions-title">{questionProject.name} · 问题空间</h2><p>问题将进入默认草稿集，发布后形成不可变测量快照。</p></div><button onClick={() => setQuestionProject(null)} aria-label="关闭">×</button></div><form className="question-form" onSubmit={submitQuestion}><label className="question-text">买家问题<textarea name="text" required maxLength={2000} placeholder="例如：适合中国团队使用的 GEO 分析工具有哪些？" /></label><label>语言<input name="language" required defaultValue={questionProject.locale} /></label><label>类型<select name="questionType" defaultValue="category"><option value="brand">品牌理解</option><option value="category">类目发现</option><option value="comparison">比较决策</option><option value="scenario">场景问题</option><option value="decision">采购决策</option></select></label><label>意图<input name="intent" placeholder="discovery" /></label><label>权重<input name="weight" type="number" min="0" max="1000" step="0.1" defaultValue="1" /></label><button className="primary-button" disabled={questionCreate.isPending}>{questionCreate.isPending ? '添加中…' : '添加问题'}</button></form>{questionCreate.error && <p className="error" role="alert">{questionCreate.error.message}</p>}{buyerQuestions.isLoading && <p>正在加载…</p>}<div className="question-list">{buyerQuestions.data?.items.length === 0 && <p className="empty-state">暂无问题，先添加一个买家问题。</p>}{buyerQuestions.data?.items.map((question) => <article key={question.id}><span data-type={question.questionType}>{question.questionType}</span><div><strong>{question.text}</strong><small>{question.language} · {question.intent || '未分类意图'} · 权重 {question.weight}</small></div><em>{question.status}</em></article>)}</div></section></div>}
         {archive.error && <p className="error" role="alert">{archive.error.message}</p>}
         {publish.error && <p className="error" role="alert">{publish.error.message}</p>}
         {published && <div className="publish-toast" role="status">配置 V{published.version} 已发布 · {published.contentHash.slice(0, 12)}…</div>}
