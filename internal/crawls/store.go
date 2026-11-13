@@ -97,6 +97,30 @@ FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID,
 	return run, nil
 }
 
+func (s *Store) ListByProject(ctx context.Context, tenantID, projectID string, limit int) ([]Run, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),BIN_TO_UUID(website_id),status,discovered_count,fetched_count,failed_count,started_at,finished_at,created_at
+FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?)
+ORDER BY created_at DESC,id DESC LIMIT ?`, tenantID, projectID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query project crawl runs: %w", err)
+	}
+	defer rows.Close()
+	runs := []Run{}
+	for rows.Next() {
+		var run Run
+		if err := rows.Scan(&run.ID, &run.ProjectID, &run.WebsiteID, &run.Status, &run.DiscoveredCount, &run.FetchedCount, &run.FailedCount, &run.StartedAt, &run.FinishedAt, &run.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan project crawl run: %w", err)
+		}
+		run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate project crawl runs: %w", err)
+	}
+	return runs, nil
+}
+
 func (s *Store) Claim(ctx context.Context, workerID string) (Claim, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {

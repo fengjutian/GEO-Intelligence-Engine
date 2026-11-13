@@ -136,6 +136,12 @@ paths:
         '201': {description: Competitor created, content: {application/json: {schema: {$ref: '#/components/schemas/Competitor'}}}}
         '409': {$ref: '#/components/responses/Conflict'}
   /projects/{projectId}/crawl-runs:
+    get:
+      tags: [Crawls]
+      operationId: listProjectCrawlRuns
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      responses:
+        '200': {description: Recent crawl runs, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/CrawlRun'}}}}}}}
     post:
       tags: [Crawls]
       operationId: createCrawlRun

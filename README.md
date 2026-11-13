@@ -25,6 +25,10 @@ Crawl Run 支持暂停、继续和取消。状态变更使用数据库锁串行�
 
 抓取结果支持页面级下钻：页面列表和不可变内容版本包含 HTTP 状态、最终 URL、canonical、语言、标题、SHA-256、解析器版本及最多 100 条出站链接证据。
 
+技术审计首批规则自动生成版本化 Finding，覆盖非 2xx、缺失 canonical、robots noindex、缺失 HTML 语言和正文过薄；每条 Finding 关联不可变页面版本并保存结构化证据。
+
+项目级抓取历史持久化展示最近 50 次 Crawl Run。页面刷新或服务重启后仍可恢复状态、计数，并重新进入任意历史 Run 的页面和 Finding 证据。
+
 ## 本地开发（默认方式，不使用 Docker）
 
 前置环境：Go 1.26+、Node.js 24、pnpm 11、Python 3.13（可由 uv 自动安装）及 MySQL 8.4。当前可执行基线只强依赖 MySQL；Redis、MinIO 与 Keycloak 将在相应业务模块接入时启用。

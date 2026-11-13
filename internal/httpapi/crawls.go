@@ -16,6 +16,7 @@ type crawlStore interface {
 	PrimaryWebsiteID(ctx context.Context, tenantID, projectID string) (string, error)
 	Create(ctx context.Context, tenantID, projectID string, input crawls.CreateInput) (crawls.Run, error)
 	Get(ctx context.Context, tenantID, runID string) (crawls.Run, error)
+	ListByProject(ctx context.Context, tenantID, projectID string, limit int) ([]crawls.Run, error)
 	Claim(ctx context.Context, workerID string) (crawls.Claim, error)
 	Complete(ctx context.Context, completion crawls.Completion) error
 	Fail(ctx context.Context, failure crawls.Failure) error
@@ -107,6 +108,24 @@ func (h *crawlHandler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+func (h *crawlHandler) listProjectRuns(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	runs, err := h.store.ListByProject(r.Context(), tenantID, projectID, 50)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": runs})
 }
 
 func (h *crawlHandler) controlAction(w http.ResponseWriter, r *http.Request) {

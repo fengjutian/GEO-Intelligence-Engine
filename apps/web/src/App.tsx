@@ -21,7 +21,7 @@ type BrandAlias = { id: string; alias: string; aliasType: string; locale: string
 type Product = { id: string; name: string; description: string | null; verificationStatus: string }
 type Competitor = { id: string; name: string; domain: string | null; status: string }
 type BrandProfile = { projectId: string; brandId: string; canonicalName: string; officialDomain: string; aliases: BrandAlias[]; products: Product[]; competitors: Competitor[] }
-type CrawlRun = { id: string; projectId: string; websiteId: string; status: string; counts: { discovered: number; fetched: number; failed: number } }
+type CrawlRun = { id: string; projectId: string; websiteId: string; status: string; counts: { discovered: number; fetched: number; failed: number }; startedAt: string | null; finishedAt: string | null; createdAt: string }
 type PageSummary = { pageId: string; contentId: string; canonicalUrl: string | null; finalUrl: string; httpStatus: number; title: string; language: string | null; contentHash: string; parserVersion: string; createdAt: string }
 type PageDetail = PageSummary & { links: string[] }
 type Finding = { id: string; ruleCode: string; severity: string; status: string; summary: string; evidence: Record<string, unknown> }
@@ -117,6 +117,12 @@ async function fetchCrawl(runId: string): Promise<CrawlRun> {
   return response.json() as Promise<CrawlRun>
 }
 
+async function fetchProjectCrawls(projectId: string): Promise<{ items: CrawlRun[] }> {
+  const response = await fetch(`/api/v1/projects/${projectId}/crawl-runs`)
+  if (!response.ok) throw new Error('抓取记录加载失败')
+  return response.json() as Promise<{ items: CrawlRun[] }>
+}
+
 async function controlCrawl(runId: string, action: 'pause' | 'resume' | 'cancel'): Promise<CrawlRun> {
   const response = await fetch(`/api/v1/crawl-runs/${runId}:${action}`, { method: 'POST' })
   if (!response.ok) throw new Error(response.status === 409 ? '当前状态不允许该操作' : '抓取控制失败')
@@ -159,11 +165,13 @@ export function App() {
   const [activeCrawlId, setActiveCrawlId] = useState<string | null>(null)
   const [pagesOpen, setPagesOpen] = useState(false)
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null)
+  const [historyProject, setHistoryProject] = useState<Project | null>(null)
   const profile = useQuery({ queryKey: ['brand-profile', profileProject?.id], queryFn: () => fetchBrandProfile(profileProject!.id), enabled: profileProject !== null })
   const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
   const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const pageDetail = useQuery({ queryKey: ['page-content', selectedContentId], queryFn: () => fetchPageDetail(selectedContentId!), enabled: selectedContentId !== null })
   const findings = useQuery({ queryKey: ['crawl-findings', activeCrawlId], queryFn: () => fetchFindings(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
+  const crawlHistory = useQuery({ queryKey: ['project-crawls', historyProject?.id], queryFn: () => fetchProjectCrawls(historyProject!.id), enabled: historyProject !== null, refetchInterval: (query) => query.state.data?.items.some((run) => ['queued', 'running'].includes(run.status)) ? 2000 : false })
   const create = useMutation({
     mutationFn: createProject,
     onSuccess: async () => {
@@ -187,7 +195,7 @@ export function App() {
   const aliasToggle = useMutation({ mutationFn: ({ projectId, alias }: { projectId: string; alias: BrandAlias }) => setAliasEnabled(projectId, alias), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const productCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; description: string } }) => addProduct(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const competitorCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; domain: string } }) => addCompetitor(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
-  const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: (run) => setActiveCrawlId(run.id) })
+  const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: async (run) => { setActiveCrawlId(run.id); await queryClient.invalidateQueries({ queryKey: ['project-crawls', run.projectId] }) } })
   const crawlControl = useMutation({ mutationFn: ({ runId, action }: { runId: string; action: 'pause' | 'resume' | 'cancel' }) => controlCrawl(runId, action), onSuccess: async (run) => { await queryClient.setQueryData(['crawl-run', run.id], run); await queryClient.invalidateQueries({ queryKey: ['crawl-run', run.id] }) } })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
@@ -265,7 +273,7 @@ export function App() {
           {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
             <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
             <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
-            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
+            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setHistoryProject(project)}>抓取记录</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
           </article>)}
         </div>
         {editing && <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditing(null)}><form className="edit-dialog" aria-labelledby="edit-title" onSubmit={submitEdit} onMouseDown={(event) => event.stopPropagation()}>
@@ -293,6 +301,7 @@ export function App() {
           </div>}
           {(aliasCreate.error || aliasToggle.error || productCreate.error || competitorCreate.error) && <p className="error" role="alert">{aliasCreate.error?.message ?? aliasToggle.error?.message ?? productCreate.error?.message ?? competitorCreate.error?.message}</p>}
         </section></div>}
+        {historyProject && <div className="modal-backdrop" role="presentation" onMouseDown={() => setHistoryProject(null)}><section className="history-dialog" aria-labelledby="history-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL HISTORY</p><h2 id="history-title">{historyProject.name} · 抓取记录</h2></div><button onClick={() => setHistoryProject(null)} aria-label="关闭">×</button></div>{crawlHistory.isLoading && <p>正在加载…</p>}{crawlHistory.data?.items.length === 0 && <p className="empty-state">暂无抓取记录</p>}<div className="history-list">{crawlHistory.data?.items.map((run) => <article key={run.id}><span className="run-state" data-state={run.status}>{run.status}</span><div><strong>{new Date(run.createdAt ?? Date.now()).toLocaleString()}</strong><small>{run.id}</small></div><div className="run-counts"><span>发现 {run.counts.discovered}</span><span>成功 {run.counts.fetched}</span><span>失败 {run.counts.failed}</span></div><button onClick={() => { setActiveCrawlId(run.id); setHistoryProject(null); if (run.counts.fetched > 0) setPagesOpen(true) }}>打开</button></article>)}</div></section></div>}
         {archive.error && <p className="error" role="alert">{archive.error.message}</p>}
         {publish.error && <p className="error" role="alert">{publish.error.message}</p>}
         {published && <div className="publish-toast" role="status">配置 V{published.version} 已发布 · {published.contentHash.slice(0, 12)}…</div>}
