@@ -1,0 +1,6 @@
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS task_attachments,task_comments,task_assignments,task_evidence_links,finding_priorities,report_access_events,report_sections;
+DROP TABLE IF EXISTS metric_quality_flags,metric_evidence_sets,adjudications,human_annotations,review_queue_items,provider_health_events,provider_attempts;
+DROP TABLE IF EXISTS model_alias_versions,model_catalog,question_generation_runs,question_relations,entity_merge_events,entity_candidates,entity_extraction_runs;
+DROP TABLE IF EXISTS evidence_references,content_blocks,competitor_products,competitor_aliases;
+SET FOREIGN_KEY_CHECKS=1;
