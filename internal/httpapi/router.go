@@ -11,6 +11,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
+	"github.com/fengjutian/geo-intelligence-engine/internal/tasks"
 )
 
 type Dependencies struct {
@@ -98,6 +99,11 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/reports/{reportAction}", auditHandler.publishReport)
 	mux.HandleFunc("POST /api/v1/reports/{reportId}/exports", auditHandler.createReportExport)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}/artifacts/{artifactId}", auditHandler.downloadReportArtifact)
+	taskHandler := newTaskHandler(tasks.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/findings/{findingId}/optimization-tasks", taskHandler.createFromFinding)
+	mux.HandleFunc("GET /api/v1/optimization-tasks", taskHandler.list)
+	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}", taskHandler.get)
+	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskAction}", taskHandler.transition)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))

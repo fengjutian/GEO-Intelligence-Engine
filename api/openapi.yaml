@@ -418,6 +418,23 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTaskCreate'}}}}
       responses:
         '201': {description: Task created, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
+  /optimization-tasks:
+    get:
+      tags: [Tasks]
+      operationId: listOptimizationTasks
+      parameters:
+        - {name: projectId, in: query, schema: {$ref: '#/components/schemas/Id'}}
+        - {name: status, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Tasks, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/OptimizationTask'}}}}}}}
+  /optimization-tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      operationId: getOptimizationTask
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200': {description: Task with acceptance items and events, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /optimization-tasks/{taskId}:transition:
     post:
       tags: [Tasks]
@@ -563,6 +580,6 @@ components:
     ReportArtifact: {type: object, required: [id, type, sizeBytes, sha256, downloadUrl], properties: {id: {$ref: '#/components/schemas/Id'}, type: {type: string, enum: [csv, pdf]}, sizeBytes: {type: integer, format: int64}, sha256: {type: string}, downloadUrl: {type: string}, createdAt: {type: string, format: date-time}}}
     ExportCreate: {type: object, required: [format], properties: {format: {type: string, enum: [pdf, csv]}}}
     OptimizationTaskCreate: {type: object, required: [title, acceptanceItems], properties: {title: {type: string, maxLength: 500}, description: {type: string}, assigneeId: {$ref: '#/components/schemas/Id'}, dueAt: {type: string, format: date-time}, acceptanceItems: {type: array, minItems: 1, items: {type: string}}}}
-    OptimizationTask: {allOf: [{$ref: '#/components/schemas/OptimizationTaskCreate'}, {type: object, required: [id, status, version], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [todo, in_progress, in_review, changes_requested, done, cancelled]}, version: {type: integer}}}]}
+    OptimizationTask: {allOf: [{$ref: '#/components/schemas/OptimizationTaskCreate'}, {type: object, required: [id, status, version], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, findingId: {$ref: '#/components/schemas/Id'}, priority: {type: string, enum: [P0, P1, P2, P3]}, status: {type: string, enum: [todo, in_progress, in_review, changes_requested, done, cancelled]}, version: {type: integer}, acceptanceItems: {type: array, items: {type: object, additionalProperties: true}}, events: {type: array, items: {type: object, additionalProperties: true}}}}]}
     TaskTransition: {type: object, required: [targetState], properties: {targetState: {type: string, enum: [in_progress, in_review, changes_requested, done, cancelled]}, reason: {type: string}}}
     JobRef: {type: object, required: [jobId, status], properties: {jobId: {$ref: '#/components/schemas/Id'}, status: {type: string}}}

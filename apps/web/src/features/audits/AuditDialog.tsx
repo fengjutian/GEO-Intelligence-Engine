@@ -68,6 +68,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const [reportBusy, setReportBusy] = useState(false)
   const [evidence, setEvidence] = useState<{ members: Array<Record<string, unknown>>; memberCount: number; truncated?: boolean } | null>(null)
   const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [taskStates, setTaskStates] = useState<Record<string, string>>({})
   const audit = useQuery({
     queryKey: ['audit', auditId],
     queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
@@ -228,9 +229,24 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     }
   }
 
+  async function createTask(findingId: string, ruleCode: string) {
+    try {
+      const task = await request<{ id: string; status: string }>(`/api/v1/findings/${findingId}/optimization-tasks`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': `task-${findingId}-${Date.now()}` },
+        body: JSON.stringify({ title: `修复 ${ruleCode}`, description: '由审计报告优先级建议创建', acceptanceItems: ['确认问题已修复', '重新审计验证'] }),
+      })
+      setTaskStates((current) => ({ ...current, [findingId]: task.status }))
+      setMessage(`任务 ${task.id} 已创建`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '任务创建失败')
+    }
+  }
+
   const current = audit.data
   const priorityItems = report?.sections.find((section) => section.code === 'priorities')?.content.items
-  const priorityCount = Array.isArray(priorityItems) ? priorityItems.length : 0
+  const priorityList = Array.isArray(priorityItems) ? priorityItems as Array<Record<string, unknown>> : []
+  const priorityCount = priorityList.length
   const channelMetrics = (metrics.data ?? []).filter((metric) => !('engineConfigId' in metric.dimensions))
   const engineMetrics = (metrics.data ?? []).filter((metric) => 'engineConfigId' in metric.dimensions)
 
@@ -308,8 +324,23 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           </div>)}
         </div>
       </section>}
-      {current && ['succeeded', 'partial_success'].includes(current.status) && <section className="audit-report">
-        <h3>报告</h3>
+      {priorityList.length > 0 && <section className="audit-metrics">
+        <h3>优先级建议</h3>
+        <div className="metric-table">
+          <div className="metric-row priority-row metric-head"><span>优先级</span><span>规则</span><span>分数</span><span>任务</span></div>
+          {priorityList.map((item) => {
+            const findingId = String(item.findingId)
+            const taskStatus = taskStates[findingId]
+            return <div className="metric-row priority-row" key={findingId}>
+              <span><strong>{String(item.priority)}</strong> · {String(item.severity)}</span>
+              <span title={findingId}>{String(item.ruleCode)}</span>
+              <span>{Number(item.score ?? 0).toFixed(2)}</span>
+              <span>{taskStatus ? taskStatus : <button type="button" onClick={() => void createTask(findingId, String(item.ruleCode))}>创建任务</button>}</span>
+            </div>
+          })}
+        </div>
+      </section>}
+      {current && ['succeeded', 'partial_success'].includes(current.status) && <section className="audit-report">        <h3>报告</h3>
         {!report && <div className="report-create">
           <p>把指标、技术发现、范围与限制固化为版本化报告；可继续导出 CSV。</p>
           <button className="primary-button" type="button" disabled={reportBusy} onClick={() => void generateReport()}>{reportBusy ? '生成中…' : '生成报告'}</button>
