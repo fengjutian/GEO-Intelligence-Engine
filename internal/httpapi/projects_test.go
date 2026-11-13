@@ -59,6 +59,10 @@ func (f *fakeProjectStore) CreateProduct(_ context.Context, _, _ string, input p
 	return projects.Product{ID: "019a7f64-7c2c-7000-8000-000000000006", Name: input.Name}, nil
 }
 
+func (f *fakeProjectStore) CreateCompetitor(_ context.Context, _, _ string, input projects.CompetitorCreateInput) (projects.Competitor, error) {
+	return projects.Competitor{ID: "019a7f64-7c2c-7000-8000-000000000007", Name: input.Name}, nil
+}
+
 func TestCreateProjectValidatesAndNormalizesInput(t *testing.T) {
 	store := &fakeProjectStore{}
 	handler := newProjectHandler(store, testTenantID, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))

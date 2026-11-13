@@ -68,6 +68,20 @@ type BrandProfile struct {
 	OfficialDomain string       `json:"officialDomain"`
 	Aliases        []BrandAlias `json:"aliases"`
 	Products       []Product    `json:"products"`
+	Competitors    []Competitor `json:"competitors"`
+}
+
+type Competitor struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Domain    *string   `json:"domain"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type CompetitorCreateInput struct {
+	Name   string  `json:"name"`
+	Domain *string `json:"domain"`
 }
 
 type Project struct {

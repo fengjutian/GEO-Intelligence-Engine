@@ -48,6 +48,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/brand-aliases", projectHandler.createAlias)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}/brand-aliases/{aliasId}", projectHandler.setAliasEnabled)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/products", projectHandler.createProduct)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/competitors", projectHandler.createCompetitor)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

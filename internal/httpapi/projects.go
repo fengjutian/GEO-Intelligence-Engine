@@ -29,6 +29,7 @@ type projectStore interface {
 	CreateAlias(ctx context.Context, tenantID, projectID string, input projects.AliasCreateInput) (projects.BrandAlias, error)
 	SetAliasEnabled(ctx context.Context, tenantID, projectID, aliasID string, enabled bool) (projects.BrandAlias, error)
 	CreateProduct(ctx context.Context, tenantID, projectID string, input projects.ProductCreateInput) (projects.Product, error)
+	CreateCompetitor(ctx context.Context, tenantID, projectID string, input projects.CompetitorCreateInput) (projects.Competitor, error)
 }
 
 type projectHandler struct {
@@ -307,6 +308,40 @@ func (h *projectHandler) createProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, product)
+}
+
+func (h *projectHandler) createCompetitor(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, ok := h.projectContext(w, r)
+	if !ok {
+		return
+	}
+	var input projects.CompetitorCreateInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Domain != nil {
+		value := strings.ToLower(strings.TrimSpace(*input.Domain))
+		input.Domain = &value
+		if value == "" || value == "localhost" || net.ParseIP(value) != nil || strings.ContainsAny(value, "/: ") {
+			writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", "Competitor domain must be a public hostname", traceID(r))
+			return
+		}
+	}
+	if input.Name == "" || len([]rune(input.Name)) > 300 {
+		writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", "Competitor name is required and must not exceed 300 characters", traceID(r))
+		return
+	}
+	competitor, err := h.store.CreateCompetitor(r.Context(), tenantID, projectID, input)
+	var mysqlErr *mysql.MySQLError
+	if errors.Is(err, projects.ErrAliasConflict) || (errors.As(err, &mysqlErr) && mysqlErr.Number == 1062) {
+		writeProblem(w, http.StatusConflict, "COMPETITOR_NAME_CONFLICT", "Competitor conflicts with the primary brand or an existing competitor", traceID(r))
+		return
+	}
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, competitor)
 }
 
 func (h *projectHandler) projectContext(w http.ResponseWriter, r *http.Request) (string, string, bool) {

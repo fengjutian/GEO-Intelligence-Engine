@@ -19,7 +19,8 @@ type ProjectInput = Omit<Project, 'id' | 'status' | 'version'>
 type ConfigVersion = { id: string; projectId: string; version: number; contentHash: string; publishedAt: string }
 type BrandAlias = { id: string; alias: string; aliasType: string; locale: string | null; enabled: boolean }
 type Product = { id: string; name: string; description: string | null; verificationStatus: string }
-type BrandProfile = { projectId: string; brandId: string; canonicalName: string; officialDomain: string; aliases: BrandAlias[]; products: Product[] }
+type Competitor = { id: string; name: string; domain: string | null; status: string }
+type BrandProfile = { projectId: string; brandId: string; canonicalName: string; officialDomain: string; aliases: BrandAlias[]; products: Product[]; competitors: Competitor[] }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -94,6 +95,12 @@ async function addProduct(projectId: string, input: { name: string; description:
   return response.json() as Promise<Product>
 }
 
+async function addCompetitor(projectId: string, input: { name: string; domain: string }): Promise<Competitor> {
+  const response = await fetch(`/api/v1/projects/${projectId}/competitors`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+  if (!response.ok) throw new Error(response.status === 409 ? '竞品名称与主品牌或已有竞品冲突' : '竞品添加失败')
+  return response.json() as Promise<Competitor>
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -132,6 +139,7 @@ export function App() {
   const aliasCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { alias: string; aliasType: string; locale: string } }) => addAlias(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const aliasToggle = useMutation({ mutationFn: ({ projectId, alias }: { projectId: string; alias: BrandAlias }) => setAliasEnabled(projectId, alias), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const productCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; description: string } }) => addProduct(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
+  const competitorCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; domain: string } }) => addCompetitor(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -167,6 +175,14 @@ export function App() {
     const form = event.currentTarget
     const data = new FormData(form)
     productCreate.mutate({ projectId: profileProject.id, input: { name: String(data.get('name')), description: String(data.get('description')) } }, { onSuccess: () => form.reset() })
+  }
+
+  function submitCompetitor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!profileProject) return
+    const form = event.currentTarget
+    const data = new FormData(form)
+    competitorCreate.mutate({ projectId: profileProject.id, input: { name: String(data.get('name')), domain: String(data.get('domain')) } }, { onSuccess: () => form.reset() })
   }
 
   return <main className="min-h-screen px-6 py-10 sm:px-10">
@@ -222,8 +238,11 @@ export function App() {
             <div><h3>产品</h3><form className="compact-form" onSubmit={submitProduct}><input name="name" required placeholder="产品名称" /><input name="description" placeholder="产品说明（可选）" /><button className="primary-button">添加</button></form>
               <div className="profile-list">{profile.data.products.length === 0 && <p>暂无产品</p>}{profile.data.products.map((product) => <div key={product.id}><span><strong>{product.name}</strong><small>{product.description || '无说明'}</small></span><em>{product.verificationStatus}</em></div>)}</div>
             </div>
+            <div><h3>竞品</h3><form className="compact-form" onSubmit={submitCompetitor}><input name="name" required placeholder="竞品名称" /><input name="domain" placeholder="官网域名（可选）" /><button className="primary-button">添加</button></form>
+              <div className="profile-list">{profile.data.competitors.length === 0 && <p>暂无竞品</p>}{profile.data.competitors.map((competitor) => <div key={competitor.id}><span><strong>{competitor.name}</strong><small>{competitor.domain || '未配置域名'}</small></span><em>{competitor.status}</em></div>)}</div>
+            </div>
           </div>}
-          {(aliasCreate.error || aliasToggle.error || productCreate.error) && <p className="error" role="alert">{aliasCreate.error?.message ?? aliasToggle.error?.message ?? productCreate.error?.message}</p>}
+          {(aliasCreate.error || aliasToggle.error || productCreate.error || competitorCreate.error) && <p className="error" role="alert">{aliasCreate.error?.message ?? aliasToggle.error?.message ?? productCreate.error?.message ?? competitorCreate.error?.message}</p>}
         </section></div>}
         {archive.error && <p className="error" role="alert">{archive.error.message}</p>}
         {publish.error && <p className="error" role="alert">{publish.error.message}</p>}

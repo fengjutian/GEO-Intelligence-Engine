@@ -62,13 +62,71 @@ FROM products WHERE tenant_id=UUID_TO_BIN(?) AND brand_id=UUID_TO_BIN(?) ORDER B
 	if err := productRows.Err(); err != nil {
 		return BrandProfile{}, fmt.Errorf("iterate products: %w", err)
 	}
+	competitorRows, err := s.db.QueryContext(ctx, `
+SELECT BIN_TO_UUID(id),name,domain,status,created_at FROM competitors
+WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY created_at,id`, tenantID, projectID)
+	if err != nil {
+		return BrandProfile{}, fmt.Errorf("query competitors: %w", err)
+	}
+	defer competitorRows.Close()
+	for competitorRows.Next() {
+		var competitor Competitor
+		if err := competitorRows.Scan(&competitor.ID, &competitor.Name, &competitor.Domain, &competitor.Status, &competitor.CreatedAt); err != nil {
+			return BrandProfile{}, fmt.Errorf("scan competitor: %w", err)
+		}
+		profile.Competitors = append(profile.Competitors, competitor)
+	}
+	if err := competitorRows.Err(); err != nil {
+		return BrandProfile{}, fmt.Errorf("iterate competitors: %w", err)
+	}
 	if profile.Aliases == nil {
 		profile.Aliases = []BrandAlias{}
 	}
 	if profile.Products == nil {
 		profile.Products = []Product{}
 	}
+	if profile.Competitors == nil {
+		profile.Competitors = []Competitor{}
+	}
 	return profile, nil
+}
+
+func (s *Store) CreateCompetitor(ctx context.Context, tenantID, projectID string, input CompetitorCreateInput) (Competitor, error) {
+	var projectStatus, canonicalName string
+	err := s.db.QueryRowContext(ctx, `
+SELECT p.status,b.canonical_name FROM projects p JOIN brands b ON b.tenant_id=p.tenant_id AND b.project_id=p.id
+WHERE p.tenant_id=UUID_TO_BIN(?) AND p.id=UUID_TO_BIN(?) ORDER BY b.created_at,b.id LIMIT 1`, tenantID, projectID).Scan(&projectStatus, &canonicalName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Competitor{}, ErrNotFound
+	}
+	if err != nil {
+		return Competitor{}, fmt.Errorf("load competitor context: %w", err)
+	}
+	if projectStatus == "archived" {
+		return Competitor{}, ErrArchived
+	}
+	normalized := NormalizeEntityName(input.Name)
+	if normalized == NormalizeEntityName(canonicalName) {
+		return Competitor{}, ErrAliasConflict
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return Competitor{}, fmt.Errorf("create competitor id: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `
+INSERT INTO competitors (id,tenant_id,project_id,name,name_normalized,domain,status,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'active',UTC_TIMESTAMP(6))`,
+		id.String(), tenantID, projectID, input.Name, normalized, input.Domain)
+	if err != nil {
+		return Competitor{}, fmt.Errorf("insert competitor: %w", err)
+	}
+	var competitor Competitor
+	err = s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),name,domain,status,created_at FROM competitors WHERE id=UUID_TO_BIN(?)`, id.String()).
+		Scan(&competitor.ID, &competitor.Name, &competitor.Domain, &competitor.Status, &competitor.CreatedAt)
+	if err != nil {
+		return Competitor{}, fmt.Errorf("read competitor: %w", err)
+	}
+	return competitor, nil
 }
 
 func (s *Store) CreateAlias(ctx context.Context, tenantID, projectID string, input AliasCreateInput) (BrandAlias, error) {

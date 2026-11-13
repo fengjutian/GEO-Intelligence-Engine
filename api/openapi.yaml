@@ -126,6 +126,15 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProductCreate'}}}}
       responses:
         '201': {description: Product created, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}
+  /projects/{projectId}/competitors:
+    post:
+      tags: [Projects]
+      operationId: createCompetitor
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CompetitorCreate'}}}}
+      responses:
+        '201': {description: Competitor created, content: {application/json: {schema: {$ref: '#/components/schemas/Competitor'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
   /projects/{projectId}/crawl-runs:
     post:
       tags: [Crawls]
@@ -350,7 +359,9 @@ components:
     BrandAlias: {allOf: [{$ref: '#/components/schemas/BrandAliasCreate'}, {type: object, required: [id, enabled, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, enabled: {type: boolean}, createdAt: {type: string, format: date-time}}}]}
     ProductCreate: {type: object, required: [name], properties: {name: {type: string, maxLength: 300}, description: {type: [string, 'null']}}}
     Product: {allOf: [{$ref: '#/components/schemas/ProductCreate'}, {type: object, required: [id, verificationStatus, sourceType, createdAt, updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, verificationStatus: {type: string, enum: [machine_suggested, human_verified, rejected]}, sourceType: {type: string}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
-    BrandProfile: {type: object, required: [projectId, brandId, canonicalName, officialDomain, aliases, products], properties: {projectId: {$ref: '#/components/schemas/Id'}, brandId: {$ref: '#/components/schemas/Id'}, canonicalName: {type: string}, officialDomain: {type: string}, aliases: {type: array, items: {$ref: '#/components/schemas/BrandAlias'}}, products: {type: array, items: {$ref: '#/components/schemas/Product'}}}}
+    CompetitorCreate: {type: object, required: [name], properties: {name: {type: string, maxLength: 300}, domain: {type: [string, 'null'], maxLength: 253}}}
+    Competitor: {allOf: [{$ref: '#/components/schemas/CompetitorCreate'}, {type: object, required: [id, status, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [active, disabled]}, createdAt: {type: string, format: date-time}}}]}
+    BrandProfile: {type: object, required: [projectId, brandId, canonicalName, officialDomain, aliases, products, competitors], properties: {projectId: {$ref: '#/components/schemas/Id'}, brandId: {$ref: '#/components/schemas/Id'}, canonicalName: {type: string}, officialDomain: {type: string}, aliases: {type: array, items: {$ref: '#/components/schemas/BrandAlias'}}, products: {type: array, items: {$ref: '#/components/schemas/Product'}}, competitors: {type: array, items: {$ref: '#/components/schemas/Competitor'}}}}
     CrawlRunCreate: {type: object, required: [websiteId, limits], properties: {websiteId: {$ref: '#/components/schemas/Id'}, startUrls: {type: array, items: {type: string, format: uri}}, limits: {type: object, required: [maxPages, maxDepth], properties: {maxPages: {type: integer, minimum: 1, maximum: 10000}, maxDepth: {type: integer, minimum: 0, maximum: 20}, concurrency: {type: integer, minimum: 1, maximum: 20}}}}}
     CrawlRun: {type: object, required: [id, projectId, status, counts], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [draft, queued, running, paused, partial_success, succeeded, failed, cancelled]}, counts: {type: object, additionalProperties: {type: integer}}}}
     QuestionCreate: {type: object, required: [text, language, questionType], properties: {text: {type: string, maxLength: 2000}, language: {type: string}, questionType: {type: string, enum: [brand, category, comparison, scenario, decision]}, intent: {type: string}, weight: {type: number, minimum: 0}}}
