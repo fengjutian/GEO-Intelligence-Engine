@@ -13,6 +13,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/config"
 	"github.com/fengjutian/geo-intelligence-engine/internal/database"
 	"github.com/fengjutian/geo-intelligence-engine/internal/httpapi"
+	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 )
 
 func main() {
@@ -31,10 +32,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	gateway := modelgateway.New(
+		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens"},
+		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens"},
+	)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

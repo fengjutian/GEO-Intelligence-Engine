@@ -90,4 +90,19 @@ Docker 不是开发或运行前提，只保留为隔离环境、CI 验证或快�
 docker compose up --build
 ```
 
+## AI 模型供应商
+
+P0 首批支持 DeepSeek 与 MiniMax。MiniMax 默认使用国内站 API，模型密钥只配置在 API 服务端，不写入 Web 前端：
+
+```dotenv
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
+MINIMAX_API_KEY=
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+MINIMAX_MODEL=MiniMax-M2.5
+```
+
+复制 `.env.example` 为 `.env` 后填写至少一个供应商密钥，再用 `python scripts/dev.py restart --skip-migrate` 重启。可通过 `GET /api/v1/model-providers` 查看配置状态，通过管理界面的“模型供应商”区域执行健康检查。
+
 该方式下 Web 地址为 `http://localhost:3000`，其余服务端口与原生运行一致。

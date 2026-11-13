@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
+	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 )
 
 type Dependencies struct {
-	DB          *sql.DB
-	Logger      *slog.Logger
-	DevTenantID string
-	DevActorID  string
-	WorkerToken string
+	DB           *sql.DB
+	Logger       *slog.Logger
+	DevTenantID  string
+	DevActorID   string
+	WorkerToken  string
+	ModelGateway *modelgateway.Gateway
 }
 
 func New(deps Dependencies) http.Handler {
@@ -62,6 +64,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /internal/crawler/v1/claim", crawlHandler.claim)
 	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/complete", crawlHandler.complete)
 	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/fail", crawlHandler.fail)
+	modelHandler := newModelHandler(deps.ModelGateway, deps.Logger)
+	mux.HandleFunc("GET /api/v1/model-providers", modelHandler.listProviders)
+	mux.HandleFunc("POST /api/v1/model-providers/{provider}/health", modelHandler.health)
+	mux.HandleFunc("POST /api/v1/model-gateway/chat", modelHandler.chat)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

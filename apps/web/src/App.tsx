@@ -25,6 +25,7 @@ type CrawlRun = { id: string; projectId: string; websiteId: string; status: stri
 type PageSummary = { pageId: string; contentId: string; canonicalUrl: string | null; finalUrl: string; httpStatus: number; title: string; language: string | null; contentHash: string; parserVersion: string; createdAt: string }
 type PageDetail = PageSummary & { links: string[] }
 type Finding = { id: string; ruleCode: string; severity: string; status: string; summary: string; evidence: Record<string, unknown> }
+type ModelProvider = { provider: 'deepseek' | 'minimax'; configured: boolean; baseUrl: string; defaultModel: string }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -147,6 +148,18 @@ async function fetchFindings(runId: string): Promise<{ items: Finding[] }> {
   return response.json() as Promise<{ items: Finding[] }>
 }
 
+async function fetchModelProviders(): Promise<{ items: ModelProvider[] }> {
+  const response = await fetch('/api/v1/model-providers')
+  if (!response.ok) throw new Error('模型供应商状态加载失败')
+  return response.json() as Promise<{ items: ModelProvider[] }>
+}
+
+async function checkModelProvider(provider: ModelProvider['provider']): Promise<string> {
+  const response = await fetch(`/api/v1/model-providers/${provider}/health`, { method: 'POST' })
+  if (!response.ok) throw new Error(response.status === 409 ? '请先在服务端配置 API Key' : '供应商健康检查失败')
+  return provider
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -171,6 +184,7 @@ export function App() {
   const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const pageDetail = useQuery({ queryKey: ['page-content', selectedContentId], queryFn: () => fetchPageDetail(selectedContentId!), enabled: selectedContentId !== null })
   const findings = useQuery({ queryKey: ['crawl-findings', activeCrawlId], queryFn: () => fetchFindings(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
+  const modelProviders = useQuery({ queryKey: ['model-providers'], queryFn: fetchModelProviders })
   const crawlHistory = useQuery({ queryKey: ['project-crawls', historyProject?.id], queryFn: () => fetchProjectCrawls(historyProject!.id), enabled: historyProject !== null, refetchInterval: (query) => query.state.data?.items.some((run) => ['queued', 'running'].includes(run.status)) ? 2000 : false })
   const create = useMutation({
     mutationFn: createProject,
@@ -197,6 +211,7 @@ export function App() {
   const competitorCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; domain: string } }) => addCompetitor(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: async (run) => { setActiveCrawlId(run.id); await queryClient.invalidateQueries({ queryKey: ['project-crawls', run.projectId] }) } })
   const crawlControl = useMutation({ mutationFn: ({ runId, action }: { runId: string; action: 'pause' | 'resume' | 'cancel' }) => controlCrawl(runId, action), onSuccess: async (run) => { await queryClient.setQueryData(['crawl-run', run.id], run); await queryClient.invalidateQueries({ queryKey: ['crawl-run', run.id] }) } })
+  const providerHealth = useMutation({ mutationFn: checkModelProvider })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -252,6 +267,7 @@ export function App() {
         {modules.map(({ title, text, icon: Icon }) => <article className="card" key={title}><Icon aria-hidden="true"/><h2>{title}</h2><p>{text}</p></article>)}
       </section>
       <section className="panel"><div><p className="eyebrow">P0 DELIVERY</p><h2>GEO Audit</h2></div><p>项目配置 → 网站抓取 → 问题空间 → 多模型采样 → Answer Judge → 指标与报告</p></section>
+      <section className="provider-section" aria-labelledby="providers-title"><div className="section-heading"><div><p className="eyebrow">MODEL GATEWAY</p><h2 id="providers-title">模型供应商</h2></div></div><div className="provider-grid">{modelProviders.data?.items.map((provider) => <article key={provider.provider}><div><span data-configured={provider.configured}>{provider.configured ? '已配置' : '未配置'}</span><h3>{provider.provider === 'deepseek' ? 'DeepSeek' : 'MiniMax 国内站'}</h3><p>{provider.defaultModel}</p><small>{provider.baseUrl}</small></div><button onClick={() => providerHealth.mutate(provider.provider)} disabled={!provider.configured || providerHealth.isPending}>健康检查</button></article>)}</div>{providerHealth.data && <p className="provider-message">{providerHealth.data} 连接正常</p>}{providerHealth.error && <p className="error" role="alert">{providerHealth.error.message}</p>}</section>
       <section className="workspace" aria-labelledby="projects-title">
         <div className="section-heading">
           <div><p className="eyebrow">WORKSPACE</p><h2 id="projects-title">项目与品牌</h2></div>
