@@ -13,6 +13,7 @@ type Dependencies struct {
 	DB          *sql.DB
 	Logger      *slog.Logger
 	DevTenantID string
+	DevActorID  string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -36,12 +37,17 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"apiVersion": "1.0.0", "baseline": "P0-V1.0"})
 	})
-	projectHandler := newProjectHandler(projects.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	projectHandler := newProjectHandler(projects.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects", projectHandler.list)
 	mux.HandleFunc("POST /api/v1/projects", projectHandler.create)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}", projectHandler.get)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", projectHandler.update)
 	mux.HandleFunc("POST /api/v1/projects/{projectAction}", projectHandler.archiveAction)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/config-versions", projectHandler.publishConfig)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/brand-profile", projectHandler.getBrandProfile)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/brand-aliases", projectHandler.createAlias)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectId}/brand-aliases/{aliasId}", projectHandler.setAliasEnabled)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/products", projectHandler.createProduct)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

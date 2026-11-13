@@ -23,6 +23,53 @@ type JobRef struct {
 	Status string `json:"status"`
 }
 
+type ConfigVersion struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"projectId"`
+	Version     uint32    `json:"version"`
+	ContentHash string    `json:"contentHash"`
+	PublishedAt time.Time `json:"publishedAt"`
+}
+
+type BrandAlias struct {
+	ID        string    `json:"id"`
+	Alias     string    `json:"alias"`
+	AliasType string    `json:"aliasType"`
+	Locale    *string   `json:"locale"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type AliasCreateInput struct {
+	Alias     string  `json:"alias"`
+	AliasType string  `json:"aliasType"`
+	Locale    *string `json:"locale"`
+}
+
+type Product struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Description        *string   `json:"description"`
+	VerificationStatus string    `json:"verificationStatus"`
+	SourceType         string    `json:"sourceType"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+type ProductCreateInput struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+}
+
+type BrandProfile struct {
+	ProjectID      string       `json:"projectId"`
+	BrandID        string       `json:"brandId"`
+	CanonicalName  string       `json:"canonicalName"`
+	OfficialDomain string       `json:"officialDomain"`
+	Aliases        []BrandAlias `json:"aliases"`
+	Products       []Product    `json:"products"`
+}
+
 type Project struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`

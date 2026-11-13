@@ -24,16 +24,22 @@ type projectStore interface {
 	List(ctx context.Context, tenantID string, limit int) (projects.Page, error)
 	Update(ctx context.Context, tenantID, projectID string, version uint64, input projects.PatchInput) (projects.Project, error)
 	Archive(ctx context.Context, tenantID, projectID string, version uint64) (projects.JobRef, error)
+	PublishConfig(ctx context.Context, tenantID, projectID, actorID string) (projects.ConfigVersion, error)
+	GetBrandProfile(ctx context.Context, tenantID, projectID string) (projects.BrandProfile, error)
+	CreateAlias(ctx context.Context, tenantID, projectID string, input projects.AliasCreateInput) (projects.BrandAlias, error)
+	SetAliasEnabled(ctx context.Context, tenantID, projectID, aliasID string, enabled bool) (projects.BrandAlias, error)
+	CreateProduct(ctx context.Context, tenantID, projectID string, input projects.ProductCreateInput) (projects.Product, error)
 }
 
 type projectHandler struct {
 	store       projectStore
 	devTenantID string
+	devActorID  string
 	logger      *slog.Logger
 }
 
-func newProjectHandler(store projectStore, devTenantID string, logger *slog.Logger) *projectHandler {
-	return &projectHandler{store: store, devTenantID: devTenantID, logger: logger}
+func newProjectHandler(store projectStore, devTenantID, devActorID string, logger *slog.Logger) *projectHandler {
+	return &projectHandler{store: store, devTenantID: devTenantID, devActorID: devActorID, logger: logger}
 }
 
 func (h *projectHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +186,151 @@ func (h *projectHandler) archiveAction(w http.ResponseWriter, r *http.Request) {
 	}
 	r.SetPathValue("projectId", projectID)
 	h.archive(w, r)
+}
+
+func (h *projectHandler) publishConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := h.tenantID(w, r)
+	if !ok {
+		return
+	}
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	actorID := strings.TrimSpace(r.Header.Get("X-Actor-ID"))
+	if actorID == "" {
+		actorID = h.devActorID
+	}
+	if _, err := uuid.Parse(actorID); err != nil {
+		writeProblem(w, http.StatusUnauthorized, "ACTOR_CONTEXT_REQUIRED", "Valid actor context is required", traceID(r))
+		return
+	}
+	version, err := h.store.PublishConfig(r.Context(), tenantID, projectID, actorID)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, version)
+}
+
+func (h *projectHandler) getBrandProfile(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, ok := h.projectContext(w, r)
+	if !ok {
+		return
+	}
+	profile, err := h.store.GetBrandProfile(r.Context(), tenantID, projectID)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, profile)
+}
+
+func (h *projectHandler) createAlias(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, ok := h.projectContext(w, r)
+	if !ok {
+		return
+	}
+	var input projects.AliasCreateInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	input.Alias = strings.TrimSpace(input.Alias)
+	input.AliasType = strings.TrimSpace(input.AliasType)
+	if input.Locale != nil {
+		value := strings.TrimSpace(*input.Locale)
+		input.Locale = &value
+	}
+	validTypes := map[string]bool{"alias": true, "old_name": true, "abbreviation": true, "product_short_name": true}
+	if input.Alias == "" || len([]rune(input.Alias)) > 300 || !validTypes[input.AliasType] {
+		writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", "Alias and a valid aliasType are required", traceID(r))
+		return
+	}
+	alias, err := h.store.CreateAlias(r.Context(), tenantID, projectID, input)
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+		writeProblem(w, http.StatusConflict, "ALIAS_CONFLICT", "Normalized brand alias already exists", traceID(r))
+		return
+	}
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, alias)
+}
+
+func (h *projectHandler) setAliasEnabled(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, ok := h.projectContext(w, r)
+	if !ok {
+		return
+	}
+	aliasID := r.PathValue("aliasId")
+	if _, err := uuid.Parse(aliasID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_ALIAS_ID", "Alias ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if input.Enabled == nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", "enabled is required", traceID(r))
+		return
+	}
+	alias, err := h.store.SetAliasEnabled(r.Context(), tenantID, projectID, aliasID, *input.Enabled)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, alias)
+}
+
+func (h *projectHandler) createProduct(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, ok := h.projectContext(w, r)
+	if !ok {
+		return
+	}
+	var input projects.ProductCreateInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Description != nil {
+		value := strings.TrimSpace(*input.Description)
+		input.Description = &value
+	}
+	if input.Name == "" || len([]rune(input.Name)) > 300 {
+		writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", "Product name is required and must not exceed 300 characters", traceID(r))
+		return
+	}
+	product, err := h.store.CreateProduct(r.Context(), tenantID, projectID, input)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, product)
+}
+
+func (h *projectHandler) projectContext(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	tenantID, ok := h.tenantID(w, r)
+	if !ok {
+		return "", "", false
+	}
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return "", "", false
+	}
+	return tenantID, projectID, true
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_JSON", "Request body is invalid", traceID(r))
+		return false
+	}
+	return true
 }
 
 func (h *projectHandler) mutationContext(w http.ResponseWriter, r *http.Request) (string, string, uint64, bool) {

@@ -48,4 +48,13 @@ h2 { margin:.8rem 0 .25rem; font-size:1.05rem; }
 .edit-dialog input { border:1px solid #cbd7d0; border-radius:.65rem; padding:.72rem .8rem; font:inherit; }
 .edit-grid { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:.6rem; }
+.publish-toast { position:fixed; right:1.2rem; bottom:1.2rem; z-index:30; padding:.85rem 1rem; border-radius:.75rem; color:white; background:#123b29; box-shadow:0 16px 45px rgb(0 0 0 / 20%); font-size:.82rem; }
+.profile-dialog { width:min(64rem,100%); max-height:88vh; overflow:auto; padding:1.5rem; border-radius:1rem; background:white; box-shadow:0 30px 80px rgb(0 0 0 / 24%); }
+.profile-header { display:flex; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--line); padding-bottom:1rem; }
+.profile-header h2 { margin:0; font-size:1.8rem; }.profile-header p { margin:.35rem 0 0; color:var(--muted); }.profile-header>button { align-self:start; border:0; background:transparent; font-size:1.7rem; cursor:pointer; }
+.profile-columns { display:grid; gap:1.5rem; padding-top:1.2rem; }.profile-columns h3 { margin:0 0 .8rem; }
+.compact-form { display:grid; gap:.55rem; padding:.8rem; border-radius:.8rem; background:#f3f6f4; }.compact-form input,.compact-form select { min-width:0; border:1px solid #cbd7d0; border-radius:.55rem; padding:.62rem; background:white; font:inherit; }
+.profile-list { display:grid; gap:.45rem; margin-top:.8rem; }.profile-list>p { color:var(--muted); }.profile-list>div { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.7rem .8rem; border:1px solid var(--line); border-radius:.65rem; }.profile-list span { display:grid; gap:.2rem; }.profile-list small { color:var(--muted); }.profile-list em { color:var(--accent); font-size:.7rem; font-style:normal; }
+.toggle { border:1px solid #ccd6d0; border-radius:1rem; padding:.35rem .55rem; color:var(--muted); background:white; font-size:.7rem; cursor:pointer; }.toggle.active { color:#09663a; border-color:#9fd2b6; background:#e6f6ed; }
+@media(min-width:850px){.profile-columns{grid-template-columns:1fr 1fr}.compact-form{grid-template-columns:1fr 8rem 6rem auto}.profile-columns>div:last-child .compact-form{grid-template-columns:1fr 1.5fr auto}}
 @media(min-width:720px){.project-form{grid-template-columns:repeat(3,minmax(0,1fr))}.project-card{flex-direction:row;align-items:center}.project-form .wide{grid-column:span 2}}

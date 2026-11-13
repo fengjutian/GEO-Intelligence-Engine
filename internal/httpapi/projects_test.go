@@ -39,9 +39,29 @@ func (f *fakeProjectStore) Archive(_ context.Context, _, _ string, _ uint64) (pr
 	return projects.JobRef{JobID: "019a7f64-7c2c-7000-8000-000000000003", Status: "succeeded"}, nil
 }
 
+func (f *fakeProjectStore) PublishConfig(_ context.Context, _, _, _ string) (projects.ConfigVersion, error) {
+	return projects.ConfigVersion{ID: "019a7f64-7c2c-7000-8000-000000000004", Version: 1}, nil
+}
+
+func (f *fakeProjectStore) GetBrandProfile(_ context.Context, _, _ string) (projects.BrandProfile, error) {
+	return projects.BrandProfile{Aliases: []projects.BrandAlias{}, Products: []projects.Product{}}, nil
+}
+
+func (f *fakeProjectStore) CreateAlias(_ context.Context, _, _ string, input projects.AliasCreateInput) (projects.BrandAlias, error) {
+	return projects.BrandAlias{ID: "019a7f64-7c2c-7000-8000-000000000005", Alias: input.Alias, AliasType: input.AliasType, Enabled: true}, nil
+}
+
+func (f *fakeProjectStore) SetAliasEnabled(_ context.Context, _, _, aliasID string, enabled bool) (projects.BrandAlias, error) {
+	return projects.BrandAlias{ID: aliasID, Enabled: enabled}, nil
+}
+
+func (f *fakeProjectStore) CreateProduct(_ context.Context, _, _ string, input projects.ProductCreateInput) (projects.Product, error) {
+	return projects.Product{ID: "019a7f64-7c2c-7000-8000-000000000006", Name: input.Name}, nil
+}
+
 func TestCreateProjectValidatesAndNormalizesInput(t *testing.T) {
 	store := &fakeProjectStore{}
-	handler := newProjectHandler(store, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newProjectHandler(store, testTenantID, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	body := `{"name":"  GEO Project ","brandName":" Acme ","officialUrl":"https://example.com/","locale":"zh-CN","region":"CN","timezone":"Asia/Shanghai"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(body))
 	response := httptest.NewRecorder()
@@ -61,7 +81,7 @@ func TestCreateProjectValidatesAndNormalizesInput(t *testing.T) {
 
 func TestCreateProjectRejectsPrivateOfficialURL(t *testing.T) {
 	store := &fakeProjectStore{}
-	handler := newProjectHandler(store, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newProjectHandler(store, testTenantID, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	body := `{"name":"Project","brandName":"Acme","officialUrl":"http://127.0.0.1/","locale":"zh-CN","region":"CN","timezone":"Asia/Shanghai"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(body))
 	response := httptest.NewRecorder()
@@ -74,7 +94,7 @@ func TestCreateProjectRejectsPrivateOfficialURL(t *testing.T) {
 }
 
 func TestListProjectsRejectsInvalidLimit(t *testing.T) {
-	handler := newProjectHandler(&fakeProjectStore{}, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newProjectHandler(&fakeProjectStore{}, testTenantID, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects?limit=101", nil)
 	response := httptest.NewRecorder()
 
@@ -86,7 +106,7 @@ func TestListProjectsRejectsInvalidLimit(t *testing.T) {
 }
 
 func TestUpdateProjectRequiresIfMatch(t *testing.T) {
-	handler := newProjectHandler(&fakeProjectStore{}, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newProjectHandler(&fakeProjectStore{}, testTenantID, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	request := httptest.NewRequest(http.MethodPatch, "/api/v1/projects/019a7f64-7c2c-7000-8000-000000000002", strings.NewReader(`{"name":"Updated"}`))
 	request.SetPathValue("projectId", "019a7f64-7c2c-7000-8000-000000000002")
 	response := httptest.NewRecorder()
