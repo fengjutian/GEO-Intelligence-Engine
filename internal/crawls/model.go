@@ -110,6 +110,30 @@ type BlockedURL struct {
 	Reason     string `json:"reason"`
 }
 
+// RobotsEvidence is the persisted robots.txt snapshot returned to the management UI.
+type RobotsEvidence struct {
+	Host          string          `json:"host"`
+	RequestedURL  string          `json:"requestedUrl"`
+	HTTPStatus    uint16          `json:"httpStatus"`
+	ContentHash   string          `json:"contentHash"`
+	ParserVersion string          `json:"parserVersion"`
+	Rules         json.RawMessage `json:"rules"`
+	Content       string          `json:"content"`
+	FetchedAt     time.Time       `json:"fetchedAt"`
+}
+
+// SitemapEvidence is one persisted sitemap document for a crawl run.
+type SitemapEvidence struct {
+	URL           string    `json:"url"`
+	ParentURL     string    `json:"parentUrl,omitempty"`
+	HTTPStatus    uint16    `json:"httpStatus"`
+	ContentHash   string    `json:"contentHash"`
+	URLCount      uint32    `json:"urlCount"`
+	ParserVersion string    `json:"parserVersion"`
+	ErrorCode     string    `json:"errorCode,omitempty"`
+	FetchedAt     time.Time `json:"fetchedAt"`
+}
+
 // SitemapDocument is one fetched sitemap (or sitemap index) and its parse outcome.
 type SitemapDocument struct {
 	URL           string `json:"url"`

@@ -27,6 +27,8 @@ type crawlStore interface {
 	ListPages(ctx context.Context, tenantID, runID string) ([]crawls.PageSummary, error)
 	GetPageContent(ctx context.Context, tenantID, contentID string) (crawls.PageDetail, error)
 	ListFindings(ctx context.Context, tenantID, runID string) ([]crawls.Finding, error)
+	GetRobotsEvidence(ctx context.Context, tenantID, runID string) ([]crawls.RobotsEvidence, error)
+	ListSitemapEvidence(ctx context.Context, tenantID, runID string) ([]crawls.SitemapEvidence, error)
 }
 
 type crawlHandler struct {
@@ -207,6 +209,42 @@ func (h *crawlHandler) listFindings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": findings})
+}
+
+func (h *crawlHandler) listRobotsEvidence(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	runID := r.PathValue("crawlRunId")
+	if _, err := uuid.Parse(runID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_RUN_ID", "Crawl run ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.GetRobotsEvidence(r.Context(), tenantID, runID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *crawlHandler) listSitemapEvidence(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	runID := r.PathValue("crawlRunId")
+	if _, err := uuid.Parse(runID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_RUN_ID", "Crawl run ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.ListSitemapEvidence(r.Context(), tenantID, runID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *crawlHandler) claim(w http.ResponseWriter, r *http.Request) {

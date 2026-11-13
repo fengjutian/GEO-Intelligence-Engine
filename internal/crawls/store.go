@@ -698,6 +698,52 @@ WHERE c.tenant_id=UUID_TO_BIN(?) AND c.id=UUID_TO_BIN(?)`, tenantID, contentID).
 	return detail, rows.Err()
 }
 
+// GetRobotsEvidence returns the robots.txt snapshots persisted for the run's website.
+func (s *Store) GetRobotsEvidence(ctx context.Context, tenantID, runID string) ([]RobotsEvidence, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT rs.host,rs.requested_url,rs.http_status,COALESCE(LOWER(HEX(rs.content_hash)),''),rs.parser_version,rs.rules_json,COALESCE(rs.content,''),rs.fetched_at
+FROM robots_snapshots rs JOIN crawl_runs r ON r.tenant_id=rs.tenant_id AND r.website_id=rs.website_id
+WHERE r.tenant_id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?)
+ORDER BY rs.fetched_at DESC,rs.host`, tenantID, runID)
+	if err != nil {
+		return nil, fmt.Errorf("query robots evidence: %w", err)
+	}
+	defer rows.Close()
+	items := []RobotsEvidence{}
+	for rows.Next() {
+		var item RobotsEvidence
+		var rules []byte
+		if err := rows.Scan(&item.Host, &item.RequestedURL, &item.HTTPStatus, &item.ContentHash, &item.ParserVersion, &rules, &item.Content, &item.FetchedAt); err != nil {
+			return nil, fmt.Errorf("scan robots evidence: %w", err)
+		}
+		item.Rules = json.RawMessage(rules)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// ListSitemapEvidence returns every sitemap document fetched for the run.
+func (s *Store) ListSitemapEvidence(ctx context.Context, tenantID, runID string) ([]SitemapEvidence, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT sm.url,COALESCE(sm.parent_url,''),sm.http_status,COALESCE(LOWER(HEX(sm.content_hash)),''),sm.url_count,sm.parser_version,COALESCE(sm.error_code,''),sm.fetched_at
+FROM crawl_sitemaps sm JOIN crawl_runs r ON r.tenant_id=sm.tenant_id AND r.id=sm.crawl_run_id
+WHERE sm.tenant_id=UUID_TO_BIN(?) AND sm.crawl_run_id=UUID_TO_BIN(?)
+ORDER BY sm.fetched_at,sm.url`, tenantID, runID)
+	if err != nil {
+		return nil, fmt.Errorf("query sitemap evidence: %w", err)
+	}
+	defer rows.Close()
+	items := []SitemapEvidence{}
+	for rows.Next() {
+		var item SitemapEvidence
+		if err := rows.Scan(&item.URL, &item.ParentURL, &item.HTTPStatus, &item.ContentHash, &item.URLCount, &item.ParserVersion, &item.ErrorCode, &item.FetchedAt); err != nil {
+			return nil, fmt.Errorf("scan sitemap evidence: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (s *Store) ListFindings(ctx context.Context, tenantID, runID string) ([]Finding, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT BIN_TO_UUID(f.id),f.rule_code,f.severity,f.status,f.summary,f.evidence_json,f.created_at

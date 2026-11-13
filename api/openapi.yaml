@@ -193,6 +193,22 @@ paths:
       parameters: [{$ref: '#/components/parameters/CrawlRunId'}]
       responses:
         '200': {description: Versioned technical findings, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/TechnicalFinding'}}}}}}}
+  /crawl-runs/{crawlRunId}/robots:
+    get:
+      tags: [Crawls]
+      operationId: getCrawlRobotsEvidence
+      parameters: [{$ref: '#/components/parameters/CrawlRunId'}]
+      responses:
+        '200': {description: Robots.txt snapshots used by the crawl run, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/RobotsEvidence'}}}}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /crawl-runs/{crawlRunId}/sitemaps:
+    get:
+      tags: [Crawls]
+      operationId: listCrawlSitemapEvidence
+      parameters: [{$ref: '#/components/parameters/CrawlRunId'}]
+      responses:
+        '200': {description: Sitemap documents and parse errors from the crawl run, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/SitemapEvidence'}}}}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /projects/{projectId}/questions:
     get:
       tags: [Questions]
@@ -414,6 +430,8 @@ components:
     BrandProfile: {type: object, required: [projectId, brandId, canonicalName, officialDomain, aliases, products, competitors], properties: {projectId: {$ref: '#/components/schemas/Id'}, brandId: {$ref: '#/components/schemas/Id'}, canonicalName: {type: string}, officialDomain: {type: string}, aliases: {type: array, items: {$ref: '#/components/schemas/BrandAlias'}}, products: {type: array, items: {$ref: '#/components/schemas/Product'}}, competitors: {type: array, items: {$ref: '#/components/schemas/Competitor'}}}}
     CrawlRunCreate: {type: object, required: [limits], properties: {websiteId: {$ref: '#/components/schemas/Id'}, startUrls: {type: array, items: {type: string, format: uri}}, limits: {type: object, required: [maxPages, maxDepth], properties: {maxPages: {type: integer, minimum: 1, maximum: 10000}, maxDepth: {type: integer, minimum: 0, maximum: 20}, concurrency: {type: integer, minimum: 1, maximum: 20}}}}}
     CrawlRun: {type: object, required: [id, projectId, status, counts], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [draft, queued, running, paused, partial_success, succeeded, failed, cancelled]}, counts: {type: object, additionalProperties: {type: integer}}}}
+    RobotsEvidence: {type: object, required: [host, requestedUrl, httpStatus, parserVersion, rules, fetchedAt], properties: {host: {type: string}, requestedUrl: {type: string, format: uri}, httpStatus: {type: integer}, contentHash: {type: string, pattern: '^[0-9a-f]{64}$'}, parserVersion: {type: string}, rules: {type: object, additionalProperties: true}, content: {type: string}, fetchedAt: {type: string, format: date-time}}}
+    SitemapEvidence: {type: object, required: [url, httpStatus, urlCount, parserVersion, fetchedAt], properties: {url: {type: string, format: uri}, parentUrl: {type: string, format: uri}, httpStatus: {type: integer}, contentHash: {type: string, pattern: '^[0-9a-f]{64}$'}, urlCount: {type: integer}, parserVersion: {type: string}, errorCode: {type: string}, fetchedAt: {type: string, format: date-time}}}
     PageSummary: {type: object, required: [pageId, contentId, finalUrl, httpStatus, title, contentHash, parserVersion, createdAt], properties: {pageId: {$ref: '#/components/schemas/Id'}, contentId: {$ref: '#/components/schemas/Id'}, canonicalUrl: {type: [string, 'null'], format: uri}, finalUrl: {type: string, format: uri}, httpStatus: {type: integer}, title: {type: string}, language: {type: [string, 'null']}, contentHash: {type: string, pattern: '^[0-9a-f]{64}$'}, parserVersion: {type: string}, createdAt: {type: string, format: date-time}}}
     PageDetail: {allOf: [{$ref: '#/components/schemas/PageSummary'}, {type: object, required: [links], properties: {links: {type: array, maxItems: 100, items: {type: string, format: uri}}}}]}
     TechnicalFinding: {type: object, required: [id, ruleCode, severity, status, summary, evidence, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, ruleCode: {type: string}, severity: {type: string, enum: [critical, high, medium, low]}, status: {type: string, enum: [open, accepted, resolved, dismissed]}, summary: {type: string}, evidence: {type: object, additionalProperties: true}, createdAt: {type: string, format: date-time}}}
