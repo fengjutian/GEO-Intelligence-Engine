@@ -4,6 +4,8 @@
 
 本目录把 [PRD](../product-requirements.md) 和 [技术原理](../technical-principles.md) 落实为 P0 可执行规范。发生冲突时，安全与数据隔离规范优先；指标口径以测量协议为准；接口与表结构变更必须同步更新相关文档。
 
+统一工程选型见 [技术栈与工程选型](../technology-stack.md)。
+
 | 编号 | 文档 | 主要评审人 |
 |---|---|---|
 | SPEC-01 | [GEO 测量协议与指标口径](./01-measurement-protocol.md) | 产品、算法、数据 |
