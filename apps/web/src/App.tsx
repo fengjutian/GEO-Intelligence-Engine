@@ -21,6 +21,7 @@ type BrandAlias = { id: string; alias: string; aliasType: string; locale: string
 type Product = { id: string; name: string; description: string | null; verificationStatus: string }
 type Competitor = { id: string; name: string; domain: string | null; status: string }
 type BrandProfile = { projectId: string; brandId: string; canonicalName: string; officialDomain: string; aliases: BrandAlias[]; products: Product[]; competitors: Competitor[] }
+type CrawlRun = { id: string; projectId: string; websiteId: string; status: string; counts: { discovered: number; fetched: number; failed: number } }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -101,6 +102,18 @@ async function addCompetitor(projectId: string, input: { name: string; domain: s
   return response.json() as Promise<Competitor>
 }
 
+async function startCrawl(projectId: string): Promise<CrawlRun> {
+  const response = await fetch(`/api/v1/projects/${projectId}/crawl-runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ limits: { maxPages: 1, maxDepth: 0, concurrency: 1 } }) })
+  if (!response.ok) throw new Error(response.status === 409 ? '归档项目不能启动抓取' : '抓取任务创建失败')
+  return response.json() as Promise<CrawlRun>
+}
+
+async function fetchCrawl(runId: string): Promise<CrawlRun> {
+  const response = await fetch(`/api/v1/crawl-runs/${runId}`)
+  if (!response.ok) throw new Error('抓取状态加载失败')
+  return response.json() as Promise<CrawlRun>
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -116,7 +129,9 @@ export function App() {
   const [editing, setEditing] = useState<Project | null>(null)
   const [published, setPublished] = useState<ConfigVersion | null>(null)
   const [profileProject, setProfileProject] = useState<Project | null>(null)
+  const [activeCrawlId, setActiveCrawlId] = useState<string | null>(null)
   const profile = useQuery({ queryKey: ['brand-profile', profileProject?.id], queryFn: () => fetchBrandProfile(profileProject!.id), enabled: profileProject !== null })
+  const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
   const create = useMutation({
     mutationFn: createProject,
     onSuccess: async () => {
@@ -140,6 +155,7 @@ export function App() {
   const aliasToggle = useMutation({ mutationFn: ({ projectId, alias }: { projectId: string; alias: BrandAlias }) => setAliasEnabled(projectId, alias), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const productCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; description: string } }) => addProduct(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
   const competitorCreate = useMutation({ mutationFn: ({ projectId, input }: { projectId: string; input: { name: string; domain: string } }) => addCompetitor(projectId, input), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['brand-profile', profileProject?.id] }) })
+  const crawlCreate = useMutation({ mutationFn: startCrawl, onSuccess: (run) => setActiveCrawlId(run.id) })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -216,7 +232,7 @@ export function App() {
           {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
             <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
             <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
-            <div className="project-actions"><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
+            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
           </article>)}
         </div>
         {editing && <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditing(null)}><form className="edit-dialog" aria-labelledby="edit-title" onSubmit={submitEdit} onMouseDown={(event) => event.stopPropagation()}>
@@ -247,6 +263,8 @@ export function App() {
         {archive.error && <p className="error" role="alert">{archive.error.message}</p>}
         {publish.error && <p className="error" role="alert">{publish.error.message}</p>}
         {published && <div className="publish-toast" role="status">配置 V{published.version} 已发布 · {published.contentHash.slice(0, 12)}…</div>}
+        {crawlCreate.error && <p className="error" role="alert">{crawlCreate.error.message}</p>}
+        {crawlStatus.data && <div className="crawl-toast" role="status"><strong>官网抓取：{crawlStatus.data.status}</strong><span>发现 {crawlStatus.data.counts.discovered} · 成功 {crawlStatus.data.counts.fetched} · 失败 {crawlStatus.data.counts.failed}</span></div>}
       </section>
     </div>
   </main>

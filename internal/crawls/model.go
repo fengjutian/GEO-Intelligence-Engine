@@ -15,12 +15,19 @@ type Run struct {
 	ProjectID       string     `json:"projectId"`
 	WebsiteID       string     `json:"websiteId"`
 	Status          string     `json:"status"`
-	DiscoveredCount uint32     `json:"discoveredCount"`
-	FetchedCount    uint32     `json:"fetchedCount"`
-	FailedCount     uint32     `json:"failedCount"`
+	DiscoveredCount uint32     `json:"-"`
+	FetchedCount    uint32     `json:"-"`
+	FailedCount     uint32     `json:"-"`
+	Counts          Counts     `json:"counts"`
 	StartedAt       *time.Time `json:"startedAt"`
 	FinishedAt      *time.Time `json:"finishedAt"`
 	CreatedAt       time.Time  `json:"createdAt"`
+}
+
+type Counts struct {
+	Discovered uint32 `json:"discovered"`
+	Fetched    uint32 `json:"fetched"`
+	Failed     uint32 `json:"failed"`
 }
 
 type Claim struct {

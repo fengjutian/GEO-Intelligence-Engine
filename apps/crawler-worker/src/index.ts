@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
-import { fetch } from 'undici'
+import { fetch, Headers, type RequestInit } from 'undici'
 import { parseHTML } from './parser.js'
 import { assertPublicResolvedUrl } from './url-policy.js'
 
@@ -27,8 +27,11 @@ server.listen(port, '0.0.0.0', () => {
 
 type Claim = { runId: string; crawlUrlId: string; websiteId: string; url: string; maxBytes: number }
 
-async function api(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${apiBaseUrl}${path}`, { ...init, headers: { authorization: `Bearer ${workerToken}`, 'x-worker-id': workerId, ...init.headers } }) as unknown as Response
+async function api(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers)
+  headers.set('authorization', `Bearer ${workerToken}`)
+  headers.set('x-worker-id', workerId)
+  return fetch(`${apiBaseUrl}${path}`, { ...init, headers })
 }
 
 async function fetchWithSafeRedirects(input: string, maxBytes: number) {

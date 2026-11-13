@@ -92,6 +92,7 @@ FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID,
 	if err != nil {
 		return Run{}, fmt.Errorf("read crawl run: %w", err)
 	}
+	run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount}
 	return run, nil
 }
 
