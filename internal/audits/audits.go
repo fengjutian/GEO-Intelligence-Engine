@@ -107,13 +107,15 @@ func (s *Store) CreateAudit(ctx context.Context, tenantID, projectID, protocolID
 	if budget > 0 && estimatedCost > budget {
 		return Audit{}, ErrBudgetExceeded
 	}
-
 	auditID, _ := uuid.NewV7()
 	_, err = tx.ExecContext(ctx, `INSERT INTO audits (id,tenant_id,project_id,protocol_id,question_version_id,knowledge_snapshot_id,status,planned_count,completed_count,eligible_count,budget_microunits,currency,idempotency_key,request_hash,created_at)
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'queued',?,0,0,?,?,?,?,UTC_TIMESTAMP(6))`,
 		auditID.String(), tenantID, projectID, protocolID, questionVersionID, knowledgeSnapshotID, planned, budget, currency, idempotencyKey, requestHash)
 	if err != nil {
 		return Audit{}, fmt.Errorf("insert audit: %w", err)
+	}
+	if err := ensureAuditBudget(ctx, tx, tenantID, auditID.String(), budget, estimatedCost, currency); err != nil {
+		return Audit{}, err
 	}
 
 	statement, err := tx.PrepareContext(ctx, `INSERT INTO audit_samples (id,tenant_id,audit_id,question_id,engine_config_id,model_selector,channel,region,language,sample_no,sample_key,status,dimensions_json,created_at)
