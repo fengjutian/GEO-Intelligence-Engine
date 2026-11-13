@@ -10,7 +10,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: '工作台' })).toBeTruthy()
     expect(screen.getByRole('navigation', { name: '主导航' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '项目空间' }))
-    expect(screen.getByRole('heading', { name: '项目空间' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '项目空间', level: 2 })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '模型服务' }))
     expect(screen.getByRole('heading', { name: '模型服务', level: 1 })).toBeTruthy()
   })
