@@ -435,6 +435,14 @@ paths:
       responses:
         '200': {description: Task with acceptance items and events, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Tasks]
+      operationId: updateOptimizationTask
+      parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {title: {type: string}, description: {type: string}, priority: {type: string, enum: [P0, P1, P2, P3]}, assigneeId: {$ref: '#/components/schemas/Id'}, dueAt: {type: string, format: date-time}}}}}}
+      responses:
+        '200': {description: Updated task, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
   /optimization-tasks/{taskId}/acceptance-items/{itemId}:
     patch:
       tags: [Tasks]

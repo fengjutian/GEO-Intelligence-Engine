@@ -170,6 +170,86 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UUID_TO_BIN(?),?,?,CAST
 	return nil
 }
 
+func (s *Store) Update(ctx context.Context, tenantID, actorID, taskID string, expectedVersion int64, input UpdateInput) (Task, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Task{}, err
+	}
+	defer tx.Rollback()
+	var version int64
+	var currentTitle, currentDescription, currentPriority, currentDue string
+	var currentAssignee []byte
+	err = tx.QueryRowContext(ctx, `SELECT version,title,COALESCE(description,''),priority,COALESCE(DATE_FORMAT(due_at,'%Y-%m-%dT%H:%i:%sZ'),''),assignee_id
+FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, taskID).Scan(&version, &currentTitle, &currentDescription, &currentPriority, &currentDue, &currentAssignee)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Task{}, ErrNotFound
+	}
+	if err != nil {
+		return Task{}, err
+	}
+	if expectedVersion > 0 && version != expectedVersion {
+		return Task{}, ErrConflict
+	}
+	before := map[string]any{"title": currentTitle, "description": currentDescription, "priority": currentPriority, "dueAt": currentDue, "assigneeId": string(currentAssignee)}
+	assignments := []string{}
+	args := []any{}
+	if title := strings.TrimSpace(input.Title); title != "" {
+		if len(title) > 500 {
+			return Task{}, ErrInvalidInput
+		}
+		assignments = append(assignments, "title=?")
+		args = append(args, title)
+	}
+	if input.Description != "" {
+		assignments = append(assignments, "description=?")
+		args = append(args, input.Description)
+	}
+	if priority := strings.TrimSpace(input.Priority); priority != "" {
+		if priority != "P0" && priority != "P1" && priority != "P2" && priority != "P3" {
+			return Task{}, ErrInvalidInput
+		}
+		assignments = append(assignments, "priority=?")
+		args = append(args, priority)
+	}
+	if strings.TrimSpace(input.DueAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, input.DueAt)
+		if err != nil {
+			return Task{}, ErrInvalidInput
+		}
+		assignments = append(assignments, "due_at=?")
+		args = append(args, parsed)
+	}
+	if strings.TrimSpace(input.AssigneeID) != "" {
+		if _, err := uuid.Parse(input.AssigneeID); err != nil {
+			return Task{}, ErrInvalidInput
+		}
+		assignments = append(assignments, "assignee_id=UUID_TO_BIN(?)")
+		args = append(args, input.AssigneeID)
+	}
+	if len(assignments) == 0 {
+		return Task{}, ErrInvalidInput
+	}
+	assignments = append(assignments, "version=version+1", "updated_at=UTC_TIMESTAMP(6)")
+	args = append(args, taskID, version)
+	query := "UPDATE optimization_tasks SET " + strings.Join(assignments, ",") + " WHERE id=UUID_TO_BIN(?) AND version=?"
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return Task{}, err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return Task{}, ErrConflict
+	}
+	payload, _ := json.Marshal(map[string]any{"before": before, "input": input})
+	if err := appendEvent(ctx, tx, tenantID, taskID, actorID, "updated", "", "", "", payload); err != nil {
+		return Task{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Task{}, err
+	}
+	return s.Get(ctx, tenantID, taskID)
+}
+
 func (s *Store) UpdateAcceptance(ctx context.Context, tenantID, actorID, taskID, itemID, status string, expectedVersion int64) (Task, error) {
 	status = strings.TrimSpace(status)
 	if status != "pending" && status != "done" {

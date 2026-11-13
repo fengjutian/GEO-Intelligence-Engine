@@ -67,3 +67,12 @@ type TransitionInput struct {
 	TargetState string `json:"targetState"`
 	Reason      string `json:"reason"`
 }
+
+// UpdateInput edits task metadata without changing state.
+type UpdateInput struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    string `json:"priority"`
+	AssigneeID  string `json:"assigneeId"`
+	DueAt       string `json:"dueAt"`
+}

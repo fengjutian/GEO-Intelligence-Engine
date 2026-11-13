@@ -103,6 +103,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/findings/{findingId}/optimization-tasks", taskHandler.createFromFinding)
 	mux.HandleFunc("GET /api/v1/optimization-tasks", taskHandler.list)
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}", taskHandler.get)
+	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}", taskHandler.update)
 	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskAction}", taskHandler.transition)
 	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}/acceptance-items/{itemId}", taskHandler.updateAcceptance)
 	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskId}/comments", taskHandler.addComment)
