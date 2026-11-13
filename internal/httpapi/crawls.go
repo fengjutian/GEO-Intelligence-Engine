@@ -76,7 +76,7 @@ func (h *crawlHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.Limits.MaxPages == 0 {
-		request.Limits.MaxPages = 1
+		request.Limits.MaxPages = crawls.DefaultMaxPages
 	}
 	if request.Limits.MaxDepth < 0 || request.Limits.MaxDepth > 20 || request.Limits.MaxPages < 1 || request.Limits.MaxPages > 10000 {
 		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_CRAWL_LIMITS", "Crawl limits are invalid", traceID(r))
@@ -273,6 +273,8 @@ func (h *crawlHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, http.StatusNotFound, "CRAWL_RESOURCE_NOT_FOUND", "Crawl resource was not found", traceID(r))
 	case errors.Is(err, crawls.ErrProjectArchived):
 		writeProblem(w, http.StatusConflict, "PROJECT_ARCHIVED", "Archived project cannot be crawled", traceID(r))
+	case errors.Is(err, crawls.ErrInvalidStartURL):
+		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_START_URL", "Crawl start URL is invalid", traceID(r))
 	case errors.Is(err, crawls.ErrInvalidState):
 		writeProblem(w, http.StatusConflict, "INVALID_CRAWL_STATE", "Crawl action is not allowed in the current state", traceID(r))
 	default:

@@ -17,6 +17,7 @@ var ErrNotFound = errors.New("crawl resource not found")
 var ErrNoWork = errors.New("no crawl work available")
 var ErrProjectArchived = errors.New("project is archived")
 var ErrInvalidState = errors.New("crawl run state does not allow this action")
+var ErrInvalidStartURL = errors.New("crawl start URL is invalid")
 
 type Store struct{ db *sql.DB }
 
@@ -48,17 +49,35 @@ WHERE w.tenant_id=UUID_TO_BIN(?) AND w.project_id=UUID_TO_BIN(?) AND w.id=UUID_T
 	if projectStatus == "archived" {
 		return Run{}, ErrProjectArchived
 	}
-	startURL := baseURL
-	if len(input.StartURLs) > 0 {
-		startURL = input.StartURLs[0]
+	input = NormalizeLimits(input)
+	startURLs := input.StartURLs
+	if len(startURLs) == 0 {
+		startURLs = []string{baseURL}
+	}
+	normalizedStarts := make([]string, 0, len(startURLs))
+	seenStarts := make(map[string]struct{}, len(startURLs))
+	for _, raw := range startURLs {
+		normalized, normalizeErr := NormalizeCrawlURL(raw)
+		if normalizeErr != nil {
+			return Run{}, ErrInvalidStartURL
+		}
+		if _, exists := seenStarts[normalized]; exists {
+			continue
+		}
+		seenStarts[normalized] = struct{}{}
+		normalizedStarts = append(normalizedStarts, normalized)
+		if len(normalizedStarts) >= input.MaxPages {
+			break
+		}
+	}
+	if len(normalizedStarts) == 0 {
+		return Run{}, ErrInvalidStartURL
 	}
 	runID, _ := uuid.NewV7()
-	urlID, _ := uuid.NewV7()
 	config, err := json.Marshal(input)
 	if err != nil {
 		return Run{}, fmt.Errorf("encode crawl config: %w", err)
 	}
-	hash := sha256.Sum256([]byte(startURL))
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Run{}, fmt.Errorf("begin crawl creation: %w", err)
@@ -66,15 +85,19 @@ WHERE w.tenant_id=UUID_TO_BIN(?) AND w.project_id=UUID_TO_BIN(?) AND w.id=UUID_T
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `
 INSERT INTO crawl_runs (id,tenant_id,project_id,website_id,status,config_snapshot,discovered_count,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'queued',CAST(? AS JSON),1,UTC_TIMESTAMP(6))`, runID.String(), tenantID, projectID, input.WebsiteID, config)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'queued',CAST(? AS JSON),?,UTC_TIMESTAMP(6))`, runID.String(), tenantID, projectID, input.WebsiteID, config, len(normalizedStarts))
 	if err != nil {
 		return Run{}, fmt.Errorf("insert crawl run: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `
+	for _, startURL := range normalizedStarts {
+		urlID, _ := uuid.NewV7()
+		hash := sha256.Sum256([]byte(startURL))
+		_, err = tx.ExecContext(ctx, `
 INSERT INTO crawl_urls (id,tenant_id,crawl_run_id,original_url,normalized_url,normalized_url_hash,state,depth,priority,created_at)
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'queued',0,100,UTC_TIMESTAMP(6))`, urlID.String(), tenantID, runID.String(), startURL, startURL, hash[:])
-	if err != nil {
-		return Run{}, fmt.Errorf("insert crawl URL: %w", err)
+		if err != nil {
+			return Run{}, fmt.Errorf("insert crawl URL: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return Run{}, fmt.Errorf("commit crawl creation: %w", err)
@@ -127,12 +150,19 @@ func (s *Store) Claim(ctx context.Context, workerID string) (Claim, error) {
 		return Claim{}, fmt.Errorf("begin crawl claim: %w", err)
 	}
 	defer tx.Rollback()
+	// A worker crash leaves URLs leased in 'fetching'. Requeue them once the lease expires so
+	// a long crawl can always make progress instead of stalling on a lost page.
+	_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='queued',lease_owner=NULL,lease_expires_at=NULL
+WHERE state='fetching' AND lease_expires_at IS NOT NULL AND lease_expires_at < UTC_TIMESTAMP(6)`)
+	if err != nil {
+		return Claim{}, fmt.Errorf("reclaim expired crawl leases: %w", err)
+	}
 	var claim Claim
 	var configJSON []byte
 	err = tx.QueryRowContext(ctx, `
 SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(u.id),BIN_TO_UUID(r.website_id),u.normalized_url,r.config_snapshot
 FROM crawl_urls u JOIN crawl_runs r ON r.tenant_id=u.tenant_id AND r.id=u.crawl_run_id
-WHERE u.state='queued' AND r.status='queued' ORDER BY u.priority DESC,u.created_at LIMIT 1 FOR UPDATE SKIP LOCKED`).
+WHERE u.state='queued' AND r.status IN ('queued','running') ORDER BY u.priority DESC,u.created_at LIMIT 1 FOR UPDATE SKIP LOCKED`).
 		Scan(&claim.RunID, &claim.CrawlURLID, &claim.WebsiteID, &claim.URL, &configJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Claim{}, ErrNoWork
@@ -177,8 +207,11 @@ func (s *Store) Complete(ctx context.Context, completion Completion) error {
 		return fmt.Errorf("begin crawl completion: %w", err)
 	}
 	defer tx.Rollback()
-	var tenantID, websiteID, projectID string
-	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id),BIN_TO_UUID(project_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?) AND status IN ('running','paused') FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID, &projectID)
+	var tenantID, websiteID, projectID, runStatus, baseURL string
+	var configJSON []byte
+	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(r.tenant_id),BIN_TO_UUID(r.website_id),BIN_TO_UUID(r.project_id),r.status,r.config_snapshot,w.base_url
+FROM crawl_runs r JOIN websites w ON w.id=r.website_id
+WHERE r.id=UUID_TO_BIN(?) AND r.status IN ('running','paused') FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID, &projectID, &runStatus, &configJSON, &baseURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -221,6 +254,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?)`, linkID.String(), ten
 	if err := insertTechnicalFindings(ctx, tx, tenantID, projectID, contentID.String(), completion); err != nil {
 		return err
 	}
+	if err := enqueueDiscoveredLinks(ctx, tx, tenantID, completion, configJSON, baseURL); err != nil {
+		return err
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='succeeded',lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?)`, completion.CrawlURLID, completion.RunID)
 	if err != nil {
 		return fmt.Errorf("complete crawl URL: %w", err)
@@ -230,9 +266,16 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),1,'succeeded',?,JSON_OBJECT
 	if err != nil {
 		return fmt.Errorf("insert fetch attempt: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE crawl_runs
-SET status=IF(status='paused','paused','succeeded'),fetched_count=fetched_count+1,
-    finished_at=IF(status='paused',NULL,UTC_TIMESTAMP(6)) WHERE id=UUID_TO_BIN(?)`, completion.RunID)
+	var remaining int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM crawl_urls WHERE crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, completion.RunID).Scan(&remaining)
+	if err != nil {
+		return fmt.Errorf("count remaining crawl URLs: %w", err)
+	}
+	if remaining == 0 && runStatus != "paused" {
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='succeeded',fetched_count=fetched_count+1,finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, completion.RunID)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status=?,fetched_count=fetched_count+1 WHERE id=UUID_TO_BIN(?)`, runStatus, completion.RunID)
+	}
 	if err != nil {
 		return fmt.Errorf("complete crawl run: %w", err)
 	}
@@ -242,15 +285,120 @@ SET status=IF(status='paused','paused','succeeded'),fetched_count=fetched_count+
 	return nil
 }
 
+func enqueueDiscoveredLinks(ctx context.Context, tx *sql.Tx, tenantID string, completion Completion, configJSON []byte, baseURL string) error {
+	var config CreateInput
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		return fmt.Errorf("decode crawl config: %w", err)
+	}
+	if config.MaxDepth <= 0 {
+		return nil
+	}
+	var depth int
+	err := tx.QueryRowContext(ctx, `SELECT depth FROM crawl_urls WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?)`, completion.CrawlURLID, completion.RunID).Scan(&depth)
+	if err != nil {
+		return fmt.Errorf("read crawl URL depth: %w", err)
+	}
+	if depth >= config.MaxDepth {
+		return nil
+	}
+	var discovered int
+	err = tx.QueryRowContext(ctx, `SELECT discovered_count FROM crawl_runs WHERE id=UUID_TO_BIN(?)`, completion.RunID).Scan(&discovered)
+	if err != nil {
+		return fmt.Errorf("read crawl discovered count: %w", err)
+	}
+	planned := PlanDiscovery(baseURL, completion.FinalURL, completion.Links, depth, config.MaxDepth, config.MaxPages-discovered)
+	inserted := 0
+	for _, link := range planned {
+		urlID, _ := uuid.NewV7()
+		hash := sha256.Sum256([]byte(link))
+		priority := 100 - (depth+1)*10
+		if priority < 0 {
+			priority = 0
+		}
+		result, insertErr := tx.ExecContext(ctx, `
+INSERT IGNORE INTO crawl_urls (id,tenant_id,crawl_run_id,original_url,normalized_url,normalized_url_hash,state,depth,priority,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'queued',?,?,UTC_TIMESTAMP(6))`, urlID.String(), tenantID, completion.RunID, link, link, hash[:], depth+1, priority)
+		if insertErr != nil {
+			return fmt.Errorf("enqueue discovered crawl URL: %w", insertErr)
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return fmt.Errorf("read enqueue result: %w", rowsErr)
+		}
+		if rows > 0 {
+			inserted++
+		}
+	}
+	if inserted > 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET discovered_count=discovered_count+? WHERE id=UUID_TO_BIN(?)`, inserted, completion.RunID)
+		if err != nil {
+			return fmt.Errorf("update crawl discovered count: %w", err)
+		}
+	}
+	return nil
+}
+
 func (s *Store) Fail(ctx context.Context, failure Failure) error {
 	if strings.TrimSpace(failure.ErrorCode) == "" {
 		failure.ErrorCode = "FETCH_FAILED"
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE crawl_urls u JOIN crawl_runs r ON r.id=u.crawl_run_id
-SET u.state='failed',u.lease_owner=NULL,u.lease_expires_at=NULL,r.status='failed',r.failed_count=r.failed_count+1,r.finished_at=UTC_TIMESTAMP(6)
-	WHERE u.id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?) AND r.status IN ('queued','running')`, failure.CrawlURLID, failure.RunID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("fail crawl run: %w", err)
+		return fmt.Errorf("begin crawl failure: %w", err)
+	}
+	defer tx.Rollback()
+	var runStatus string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM crawl_runs WHERE id=UUID_TO_BIN(?) FOR UPDATE`, failure.RunID).Scan(&runStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read crawl state: %w", err)
+	}
+	if runStatus != "queued" && runStatus != "running" && runStatus != "paused" {
+		// A late failure callback must not overwrite a cancelled or finished run.
+		return nil
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE crawl_urls SET state='failed',lease_owner=NULL,lease_expires_at=NULL
+WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, failure.CrawlURLID, failure.RunID)
+	if err != nil {
+		return fmt.Errorf("fail crawl URL: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read failed crawl URL count: %w", err)
+	}
+	if affected > 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET failed_count=failed_count+1 WHERE id=UUID_TO_BIN(?)`, failure.RunID)
+		if err != nil {
+			return fmt.Errorf("increment crawl failure count: %w", err)
+		}
+	}
+	var remaining int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM crawl_urls WHERE crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, failure.RunID).Scan(&remaining)
+	if err != nil {
+		return fmt.Errorf("count remaining crawl URLs: %w", err)
+	}
+	switch {
+	case runStatus == "paused":
+		// Keep the pause intent; remaining pages resume on the next resume action.
+	case remaining > 0:
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='running' WHERE id=UUID_TO_BIN(?)`, failure.RunID)
+	default:
+		var fetched int
+		if err = tx.QueryRowContext(ctx, `SELECT fetched_count FROM crawl_runs WHERE id=UUID_TO_BIN(?)`, failure.RunID).Scan(&fetched); err == nil {
+			finalStatus := "failed"
+			if fetched > 0 {
+				finalStatus = "succeeded"
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status=?,finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, finalStatus, failure.RunID)
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("finalize crawl after failure: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit crawl failure: %w", err)
 	}
 	return nil
 }

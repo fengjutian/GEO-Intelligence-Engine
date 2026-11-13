@@ -110,7 +110,7 @@ async function addCompetitor(projectId: string, input: { name: string; domain: s
 }
 
 async function startCrawl(projectId: string): Promise<CrawlRun> {
-  const response = await fetch(`/api/v1/projects/${projectId}/crawl-runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ limits: { maxPages: 1, maxDepth: 0, concurrency: 1 } }) })
+  const response = await fetch(`/api/v1/projects/${projectId}/crawl-runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ limits: { maxPages: 10, maxDepth: 2, concurrency: 2 } }) })
   if (!response.ok) throw new Error(response.status === 409 ? '归档项目不能启动抓取' : '抓取任务创建失败')
   return response.json() as Promise<CrawlRun>
 }
