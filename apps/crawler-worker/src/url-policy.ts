@@ -1,7 +1,24 @@
 import { isIP } from 'node:net'
 import { lookup } from 'node:dns/promises'
 
-const blockedIPv4 = [/^127\./, /^10\./, /^192\.168\./, /^169\.254\./, /^0\./]
+function isBlockedIPv4(host: string): boolean {
+  const octets = host.split('.').map(Number)
+  const [a = -1, b = -1, c = -1] = octets
+  return a === 0 || a === 10 || a === 127 || a >= 224
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && ((b === 0 && (c === 0 || c === 2)) || b === 168))
+    || (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100)))
+    || (a === 203 && b === 0 && c === 113)
+}
+
+function isBlockedIPv6(host: string): boolean {
+  const normalized = host.toLowerCase()
+  if (normalized.startsWith('::ffff:')) return isBlockedIPv4(normalized.slice(7))
+  return normalized === '::' || normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd')
+    || /^fe[89ab]/.test(normalized) || normalized.startsWith('ff') || normalized.startsWith('2001:db8:')
+}
 
 export function assertPublicHttpUrl(input: string): URL {
   const url = new URL(input)
@@ -9,8 +26,8 @@ export function assertPublicHttpUrl(input: string): URL {
   if (url.username || url.password) throw new Error('URL_CREDENTIALS_FORBIDDEN')
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (host === 'localhost' || host.endsWith('.localhost')) throw new Error('PRIVATE_ADDRESS')
-  if (isIP(host) === 4 && (blockedIPv4.some((rule) => rule.test(host)) || /^172\.(1[6-9]|2\d|3[01])\./.test(host))) throw new Error('PRIVATE_ADDRESS')
-  if (isIP(host) === 6 && (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd'))) throw new Error('PRIVATE_ADDRESS')
+  if (isIP(host) === 4 && isBlockedIPv4(host)) throw new Error('PRIVATE_ADDRESS')
+  if (isIP(host) === 6 && isBlockedIPv6(host)) throw new Error('PRIVATE_ADDRESS')
   if (url.port && !['80', '443'].includes(url.port)) throw new Error('PORT_FORBIDDEN')
   return url
 }
