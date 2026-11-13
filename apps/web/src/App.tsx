@@ -1,6 +1,8 @@
-import { BarChart3, Bot, ChevronRight, FolderKanban, Gauge, Globe2, Settings, ShieldCheck } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FormEvent, useState } from 'react'
+import { OverviewPage } from './features/overview/OverviewPage'
+import { ModelServicesPage } from './features/models/ModelServicesPage'
+import { AppShell, type PageId } from './layout/AppShell'
 
 type Version = { apiVersion: string; baseline: string }
 type Project = {
@@ -186,6 +188,7 @@ export function App() {
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null)
   const [historyProject, setHistoryProject] = useState<Project | null>(null)
   const [questionProject, setQuestionProject] = useState<Project | null>(null)
+  const [activePage, setActivePage] = useState<PageId>('overview')
   const profile = useQuery({ queryKey: ['brand-profile', profileProject?.id], queryFn: () => fetchBrandProfile(profileProject!.id), enabled: profileProject !== null })
   const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
   const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
@@ -277,41 +280,15 @@ export function App() {
   const activeProjects = projects.data?.items.filter((project) => project.status !== 'archived').length ?? 0
   const configuredProviders = modelProviders.data?.items.filter((provider) => provider.configured).length ?? 0
 
-  return <main className="app-shell">
-    <aside className="app-sidebar">
-      <div className="brand-mark"><span>G</span><div><strong>GEO</strong><small>Intelligence</small></div></div>
-      <nav aria-label="主导航">
-        <a className="active" href="#overview"><Gauge />概览</a>
-        <a href="#projects"><FolderKanban />项目空间</a>
-        <a href="#projects"><Globe2 />网站审计</a>
-        <a href="#measurement"><BarChart3 />模型测量</a>
-        <a href="#providers"><Bot />模型服务</a>
-      </nav>
-      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{version.data?.baseline ?? 'V1.0'}</small></div>
-    </aside>
-    <div className="app-page">
-      <header className="app-topbar">
-        <div><p>GEO Intelligence Engine</p><h1>工作台</h1></div>
-        <div className="status" data-state={version.isSuccess ? 'ready' : 'loading'}><span />{version.isSuccess ? `服务正常 · API ${version.data.apiVersion}` : version.isError ? 'API 连接异常' : '正在连接'}</div>
-      </header>
-      <div className="app-content">
-        <section className="dashboard-intro" id="overview">
-          <div><p className="eyebrow">OVERVIEW</p><h2>早上好，开始今天的 GEO 分析</h2><p>集中管理品牌资产、网站抓取、模型测量与证据报告。</p></div>
-          <button className="primary-button" type="button" onClick={() => setFormOpen(true)}>创建项目</button>
-        </section>
-        <section className="metric-grid" aria-label="工作台概览">
-          <article><FolderKanban /><div><strong>{activeProjects}</strong><span>活跃项目</span></div></article>
-          <article><Globe2 /><div><strong>{projects.data?.items.length ?? 0}</strong><span>已接入网站</span></div></article>
-          <article><Bot /><div><strong>{configuredProviders}/2</strong><span>模型服务</span></div></article>
-          <article><ShieldCheck /><div><strong>P0</strong><span>当前基线</span></div></article>
-        </section>
-        <section className="operations-grid">
-          <div className="pipeline-card" id="measurement"><div className="section-title"><div><p className="eyebrow">DELIVERY PIPELINE</p><h2>GEO Audit 工作流</h2></div><span>6 个阶段</span></div><div className="pipeline-steps">{['项目配置', '网站抓取', '问题空间', '模型采样', 'Answer Judge', '指标报告'].map((step, index) => <div key={step}><span>{index + 1}</span><strong>{step}</strong>{index < 5 && <ChevronRight />}</div>)}</div></div>
-          <section className="provider-panel" id="providers" aria-labelledby="providers-title"><div className="section-title"><div><p className="eyebrow">MODEL GATEWAY</p><h2 id="providers-title">模型服务</h2></div><span>{configuredProviders}/2 可用</span></div><div className="provider-list">{modelProviders.data?.items.map((provider) => <article key={provider.provider}><span className="provider-dot" data-configured={provider.configured} /><div><strong>{provider.provider === 'deepseek' ? 'DeepSeek' : 'MiniMax 国内站'}</strong><small>{provider.defaultModel}</small></div><button onClick={() => providerHealth.mutate(provider.provider)} disabled={!provider.configured || providerHealth.isPending}>{provider.configured ? '检查' : '未配置'}</button></article>)}</div>{providerHealth.data && <p className="provider-message">{providerHealth.data} 连接正常</p>}{providerHealth.error && <p className="error" role="alert">{providerHealth.error.message}</p>}</section>
-        </section>
-      <section className="workspace" id="projects" aria-labelledby="projects-title">
+  const workspaceTitle = activePage === 'audits' ? '网站审计' : activePage === 'questions' ? '问题空间' : '项目空间'
+  const workspaceDescription = activePage === 'audits' ? '选择项目发起官网抓取或查看历史证据。' : activePage === 'questions' ? '选择项目维护买家问题和测量问题集。' : '管理品牌基础资料、抓取任务和配置版本。'
+
+  return <AppShell activePage={activePage} onNavigate={setActivePage} apiVersion={version.data?.apiVersion} baseline={version.data?.baseline} connected={version.isSuccess} error={version.isError}>
+      {activePage === 'overview' && <OverviewPage activeProjects={activeProjects} websiteCount={projects.data?.items.length ?? 0} configuredProviders={configuredProviders} onCreateProject={() => { setActivePage('projects'); setFormOpen(true) }} />}
+      {activePage === 'models' && <ModelServicesPage providers={modelProviders.data?.items} checking={providerHealth.isPending} message={providerHealth.data} error={providerHealth.error?.message} onCheck={(provider) => providerHealth.mutate(provider)} />}
+      {!['overview', 'models'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
         <div className="section-heading">
-          <div><p className="eyebrow">PROJECTS</p><h2 id="projects-title">项目空间</h2><p>管理品牌基础资料、抓取任务和配置版本。</p></div>
+          <div><p className="eyebrow">{activePage.toUpperCase()}</p><h2 id="projects-title">{workspaceTitle}</h2><p>{workspaceDescription}</p></div>
           <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>
         </div>
         {formOpen && <form className="project-form" onSubmit={submitProject}>
@@ -367,8 +344,6 @@ export function App() {
         {crawlStatus.data && <div className="crawl-toast" role="status"><strong>官网抓取：{crawlStatus.data.status}</strong><span>发现 {crawlStatus.data.counts.discovered} · 成功 {crawlStatus.data.counts.fetched} · 失败 {crawlStatus.data.counts.failed}</span><div className="crawl-actions">{['queued', 'running'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'pause' })}>暂停</button>}{crawlStatus.data.status === 'paused' && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'resume' })}>继续</button>}{['queued', 'running', 'paused'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'cancel' })}>取消</button>}{crawlStatus.data.counts.fetched > 0 && <button onClick={() => setPagesOpen(true)}>查看页面</button>}</div></div>}
         {crawlControl.error && <p className="error" role="alert">{crawlControl.error.message}</p>}
         {pagesOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { setPagesOpen(false); setSelectedContentId(null) }}><section className="pages-dialog" aria-labelledby="pages-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL EVIDENCE</p><h2 id="pages-title">抓取页面</h2></div><button onClick={() => setPagesOpen(false)} aria-label="关闭">×</button></div>{crawlPages.isLoading && <p>正在加载…</p>}<div className="finding-strip">{findings.data?.items.length === 0 && <p>未发现首批技术规则问题。</p>}{findings.data?.items.map((finding) => <article key={finding.id} data-severity={finding.severity}><span>{finding.severity}</span><strong>{finding.ruleCode}</strong><p>{finding.summary}</p></article>)}</div><div className="pages-layout"><div className="page-list">{crawlPages.data?.items.map((page) => <button key={page.contentId} onClick={() => setSelectedContentId(page.contentId)} data-active={selectedContentId === page.contentId}><span>{page.httpStatus}</span><strong>{page.title || '无标题页面'}</strong><small>{page.finalUrl}</small></button>)}</div><div className="page-evidence">{!selectedContentId && <p>选择页面查看不可变版本证据。</p>}{pageDetail.isLoading && <p>正在加载详情…</p>}{pageDetail.data && <><h3>{pageDetail.data.title || '无标题页面'}</h3><dl><div><dt>最终 URL</dt><dd>{pageDetail.data.finalUrl}</dd></div><div><dt>Canonical</dt><dd>{pageDetail.data.canonicalUrl ?? '未声明'}</dd></div><div><dt>内容哈希</dt><dd className="hash">{pageDetail.data.contentHash}</dd></div><div><dt>解析器</dt><dd>{pageDetail.data.parserVersion}</dd></div></dl><h4>出站链接（{pageDetail.data.links.length}）</h4><ul>{pageDetail.data.links.slice(0, 20).map((link) => <li key={link}>{link}</li>)}</ul></>}</div></div></section></div>}
-      </section>
-      </div>
-    </div>
-  </main>
+      </section>}
+  </AppShell>
 }

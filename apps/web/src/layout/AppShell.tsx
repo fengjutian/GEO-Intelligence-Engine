@@ -1,0 +1,40 @@
+import { BarChart3, Bot, FolderKanban, Gauge, Globe2, Settings } from 'lucide-react'
+import type { ReactNode } from 'react'
+
+export type PageId = 'overview' | 'projects' | 'audits' | 'questions' | 'models'
+
+const navItems = [
+  { id: 'overview' as const, label: '概览', icon: Gauge },
+  { id: 'projects' as const, label: '项目空间', icon: FolderKanban },
+  { id: 'audits' as const, label: '网站审计', icon: Globe2 },
+  { id: 'questions' as const, label: '问题空间', icon: BarChart3 },
+  { id: 'models' as const, label: '模型服务', icon: Bot },
+]
+
+const titles: Record<PageId, string> = { overview: '工作台', projects: '项目空间', audits: '网站审计', questions: '问题空间', models: '模型服务' }
+
+type Props = {
+  activePage: PageId
+  onNavigate: (page: PageId) => void
+  apiVersion?: string
+  baseline?: string
+  connected: boolean
+  error: boolean
+  children: ReactNode
+}
+
+export function AppShell({ activePage, onNavigate, apiVersion, baseline, connected, error, children }: Props) {
+  return <main className="app-shell">
+    <aside className="app-sidebar">
+      <div className="brand-mark"><span>G</span><div><strong>GEO</strong><small>Intelligence</small></div></div>
+      <nav aria-label="主导航">
+        {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={activePage === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon />{label}</button>)}
+      </nav>
+      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{baseline ?? 'P0-V1.0'}</small></div>
+    </aside>
+    <div className="app-page">
+      <header className="app-topbar"><div><p>GEO Intelligence Engine</p><h1>{titles[activePage]}</h1></div><div className="status" data-state={connected ? 'ready' : 'loading'}><span />{connected ? `服务正常 · API ${apiVersion}` : error ? 'API 连接异常' : '正在连接'}</div></header>
+      <div className="app-content">{children}</div>
+    </div>
+  </main>
+}
