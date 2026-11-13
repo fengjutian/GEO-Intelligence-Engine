@@ -69,7 +69,7 @@ Scheduler 分批展开，避免一次事务创建过多记录。调用顺序在�
 2. Scheduler 使用游标分批创建 Sample，并由唯一 sample_key 去重。
 3. 每个阶段使用 Workflow/Stage/Job/Attempt 层级；MySQL 为事实源。
 4. Model Worker 完成后触发 Judge；Judge 达到门槛后触发指标；聚合完成后触发报告。
-5. 调用结果有效性分类由 Judge 提供，但 transport 状态由 Gateway 提供，二者分开保存。
+5. Gateway 提供 `transport_status`，Judge 提供 `content_validity` 和 `answer_outcome`，资格规则产生 `eligible_for_core_metrics`；四者分开保存。
 6. 取消是持久状态；已发出的外部调用可保存结果，但不进入取消审计的正式指标。
 7. 断点恢复扫描未完成 Sample 和过期租约，不重建成功 Sample。
 8. 部分失败按引擎、问题和切片计算完整性；低于协议门槛不得发布正式报告。
@@ -98,7 +98,7 @@ Scheduler 分批展开，避免一次事务创建过多记录。调用顺序在�
 - AC-02：相同输入产生确定且唯一的 Sample 集合，重复提交不产生重复样本。
 - AC-03：队列、限流、超时、退避、取消和断点恢复均可通过故障注入验证。
 - AC-04：模型 API、搜索 API 和消费者应用渠道在协议、样本、UI 和报告中始终分离。
-- AC-05：拒答、空响应、错误、截断和语言不符具有不同状态，分母按 SPEC-01 计算。
+- AC-05：传输状态、内容有效性、回答结果和指标资格正交保存，分母按 SPEC-01 资格规则计算。
 - AC-06：任一当前配置变更不影响运行中或历史审计。
 - AC-07：单供应商故障不破坏其他供应商结果，并正确生成 partial_success 或 failed。
 - AC-08：取消后不再创建新外部调用，已发生调用结果保留但不生成正式趋势点。

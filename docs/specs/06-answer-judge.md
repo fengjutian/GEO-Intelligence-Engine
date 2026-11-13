@@ -12,9 +12,9 @@
 
 ## 3. 标签体系
 
-### 3.1 回答有效性
+### 3.1 回答状态
 
-单选：`valid`、`refusal`、`no_recommendation`、`empty`、`transport_error`、`truncated`、`wrong_language`、`policy_blocked`。技术状态优先来自采集元数据，标注者只确认内容状态。
+回答状态按 SPEC-01 拆分：`transport_status` 来自 Gateway；标注者确认 `content_validity`；Judge 标注 `answer_outcome`。指标资格由版本化规则产生。`refusal` 和 `no_recommendation` 是回答结果，不是内容无效状态。
 
 ### 3.2 提及
 

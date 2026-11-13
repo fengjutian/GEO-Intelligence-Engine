@@ -38,9 +38,10 @@ API/BFF（Go）
 | `web` | React + TypeScript | 管理后台和报告 | CDN/静态部署 |
 | `api` | Go | 同步 API、鉴权、业务事务 | 无状态水平扩展 |
 | `scheduler` | Go | 定时任务和审计展开 | 单活租约或分片 |
-| `crawler-worker` | Go + Playwright | URL 获取、渲染、解析 | 按域名限流水平扩展 |
-| `model-worker` | Go/Python | 模型调用、预算、响应持久化 | 按供应商限流扩展 |
-| `judge-worker` | Python/Go | 判定、重评估、指标聚合 | 按评估版本扩展 |
+| `crawler-worker` | TypeScript + undici + Playwright + Cheerio | URL 获取、渲染、解析 | 按域名限流水平扩展 |
+| `model-worker` | Go | 模型调用、预算、响应持久化 | 按供应商限流扩展 |
+| `judge-worker` | Python + FastAPI/Pydantic | 判定与重评估 | 按评估版本扩展 |
+| `metrics-worker` | Go | 指标聚合与快照发布 | 按审计分片扩展 |
 | `report-worker` | Go | PDF/CSV 和快照 | 队列扩展 |
 
 ## 4. 模块边界

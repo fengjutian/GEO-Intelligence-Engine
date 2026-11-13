@@ -76,24 +76,22 @@
 
 默认每单元最少 3 次采样；正式趋势监测建议 10 次以上。具体数量由先导实验的方差和成本决定。
 
-## 6. 有效回答定义
+## 6. 回答状态与指标资格
 
-| 状态 | 是否进入有效分母 | 说明 |
+回答状态拆为四个正交字段，禁止把传输状态、内容质量和回答语义混在同一个枚举中：
+
+| 字段 | 枚举 | 说明 |
 |---|---|---|
-| `valid` | 是 | 成功、可解析、语言符合且未严重截断 |
-| `refusal` | 是 | 模型明确拒绝；反映实际体验，但单独展示 |
-| `no_recommendation` | 是 | 正常回答但没有推荐任何品牌 |
-| `empty` | 否 | 空响应或仅有协议噪声 |
-| `transport_error` | 否 | 超时、网络或供应商错误 |
-| `truncated` | 否 | 截断导致无法可靠判断 |
-| `wrong_language` | 否 | 非协议语言且无法正常分析 |
-| `policy_blocked` | 否 | 采集渠道阻断而未获得回答 |
+| `transport_status` | `succeeded`、`failed`、`timeout`、`cancelled`、`outcome_unknown` | 外部请求是否取得确定结果 |
+| `content_validity` | `valid`、`empty`、`truncated`、`wrong_language`、`policy_blocked`、`unparseable` | 返回内容能否可靠分析 |
+| `answer_outcome` | `answered`、`refusal`、`no_recommendation`、`recommendation`、`unknown` | 有效内容表达的回答结果 |
+| `eligible_for_core_metrics` | boolean | 由版本化资格规则计算，不由模型自由决定 |
 
-拒答进入分母是默认口径，因为用户实际得到了拒答；报告同时给出排除拒答的敏感性分析。规则版本必须保存。
+默认资格规则为 `transport_status=succeeded AND content_validity=valid`。因此拒答和没有推荐的正常回答默认进入核心指标分母，但分别通过 `answer_outcome` 展示；报告同时提供排除拒答的敏感性分析。任何规则变化必须创建新的 `eligibility_rule_version`。
 
 ## 7. 核心指标
 
-设切片内有效回答集合为 `R`：
+设切片内 `eligible_for_core_metrics=true` 的回答集合为 `R`：
 
 ```text
 Mention Rate = 含目标品牌提及的回答数 / |R|
@@ -101,8 +99,8 @@ Recommendation Rate = 主动推荐目标品牌的回答数 / |R|
 Official Citation Rate = 引用目标品牌自有域名的回答数 / |R|
 Trusted Third-party Citation Rate = 引用可信第三方且与品牌相关的回答数 / |R|
 Positive Mention Rate = 正向提及回答数 / 含目标品牌提及的回答数
-Valid Response Rate = 有效回答数 / 计划采样数
-Refusal Rate = 拒答数 / 有效回答数
+Eligible Response Rate = 指标合格回答数 / 计划采样数
+Refusal Rate = answer_outcome=refusal 的合格回答数 / 指标合格回答数
 ```
 
 同一回答多次提及在回答率中计一次；提及次数另存为 `mention_frequency`。分母为零时返回 `null`，不得返回 0%。
@@ -118,7 +116,10 @@ Refusal Rate = 拒答数 / 有效回答数
 
 ## 9. 不确定性与显著性
 
-- 单一比例展示 95% Wilson 置信区间。
+- 回答等权的简单二项比例使用 95% Wilson 置信区间。
+- 问题等权使用以问题为聚类单位的 Cluster Bootstrap 区间。
+- 业务加权使用冻结问题权重的加权 Cluster Bootstrap 区间。
+- Bootstrap 默认使用确定性随机种子和不少于 2,000 次重采样，并保存算法版本、种子和重采样次数。
 - 两批比例比较优先报告绝对差、相对差及区间。
 - 同一问题重复测量采用配对分析；独立样本不得伪装为配对。
 - 多问题、多指标同时检验时使用 Benjamini-Hochberg 控制 FDR。

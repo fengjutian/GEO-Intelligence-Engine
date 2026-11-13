@@ -43,8 +43,8 @@ Go Core Platform
 | 对象存储 | S3 兼容存储；本地 MinIO | 大对象和不可变原始证据 |
 | API 契约 | REST + OpenAPI 3.1 | 对外接口和客户端生成 |
 | 可观测性 | OpenTelemetry + Prometheus + Grafana + Loki + Tempo | Trace、Metric 和 Log |
-| 身份认证 | OIDC；托管服务或 Keycloak/Zitadel | 登录、MFA 和企业 SSO |
-| 密钥管理 | 云 Secret Manager/KMS 或 Vault | 模型和第三方凭据 |
+| 身份认证 | Keycloak 26.8.2 / OIDC | 登录、MFA 和企业 SSO |
+| 密钥管理 | AWS Secrets Manager + KMS | 模型和第三方凭据 |
 | 本地开发 | Docker Compose | 一键启动完整依赖 |
 | 生产部署 | Docker + 托管容器平台 | P0 生产运行环境 |
 | CI/CD | GitHub Actions | 测试、扫描、构建和部署 |
@@ -179,7 +179,7 @@ Go 1.26
 ├── OpenTelemetry Go SDK
 ├── OpenAPI code generation
 ├── structured logging
-└── golang-migrate 或 Atlas
+└── golang-migrate 4.20.1
 ```
 
 HTTP 框架保持轻量。业务代码不能直接依赖路由框架上下文，应通过明确的 Application Service 接口调用。
@@ -333,9 +333,9 @@ P0 内部优先使用版本化 HTTP/JSON，减少 gRPC 和 Protobuf 工具链复
 
 ## 10. 身份与密钥
 
-认证使用 OIDC。云环境优先采用托管身份平台；私有化场景选择 Keycloak 或 Zitadel。应用只管理组织、成员、角色和资源权限，不自行实现密码、MFA 或 SSO 协议。
+认证使用 Keycloak 26.8.2 和 OIDC Authorization Code + PKCE。应用只管理组织、成员、角色和资源权限，不自行实现密码、MFA 或 SSO 协议。详见 ADR-001。
 
-密钥进入 Secret Manager/KMS 或 Vault。数据库只存密钥引用。各 Worker 使用独立服务身份和最小权限。
+生产密钥进入 AWS Secrets Manager 并使用 KMS 加密；数据库只存密钥引用。各 Worker 使用独立服务身份和最小权限。详见 ADR-005。
 
 ## 11. 可观测性
 

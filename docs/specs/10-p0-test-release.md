@@ -162,7 +162,7 @@
 
 - PRD 所有 P0 Must 需求通过并有证据。
 - 核心 E2E 成功率 ≥ 95%，无阻断缺陷。
-- Mention F1 ≥ 0.95，Recommendation/Citation F1 ≥ 0.85 或启用已批准人工降级。
+- Mention F1 ≥ 0.95 且 Precision ≥ 0.97；Recommendation Macro F1 ≥ 0.85；Citation URL F1 ≥ 0.95；来源分类 Macro F1 ≥ 0.90；Sentiment Macro F1 ≥ 0.80；有效性 Macro F1 ≥ 0.95，或启用经产品、算法和 QA 共同批准的人工降级。
 - 跨租户、SSRF、权限和密钥测试 100% 通过。
 - 无未豁免 Critical/High 安全漏洞。
 - 指标从原始数据独立重算一致。

@@ -35,9 +35,9 @@
 
 ## 4. 权限模型
 
-授权输入为 `principal + tenant + action + resource + context`。资源操作至少包含 read、create、update、delete、run、review、export、manage_members、manage_credentials。
+授权输入为 `principal + tenant + action + resource + context`。资源操作和角色授权以 [P0 RBAC 矩阵](../security/rbac-matrix.md) 为唯一事实源。
 
-权限检查顺序：身份有效 → 成员有效 → 租户匹配 → 角色允许动作 → 项目范围允许 → 资源状态允许。拒绝默认返回 404 或统一的 403 策略，避免泄漏其他租户资源存在性。
+权限检查顺序：身份有效 → 成员有效 → 租户匹配 → 角色允许动作 → 项目范围允许 → 资源状态允许。非成员或跨租户资源返回 404；同租户但动作不足返回 403；未认证返回 401。
 
 ## 5. 数据模型
 

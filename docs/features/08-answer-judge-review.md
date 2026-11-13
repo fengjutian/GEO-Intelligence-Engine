@@ -24,7 +24,10 @@
 
 ## 3. 输出标签
 
-- 有效性：valid、refusal、no_recommendation、empty、transport_error、truncated、wrong_language、policy_blocked。
+- 传输状态：succeeded、failed、timeout、cancelled、outcome_unknown，由 Gateway 提供。
+- 内容有效性：valid、empty、truncated、wrong_language、policy_blocked、unparseable。
+- 回答结果：answered、refusal、no_recommendation、recommendation、unknown。
+- 指标资格：eligible_for_core_metrics，由版本化资格规则计算。
 - 提及：direct_brand、product_implied、ambiguous、competitor。
 - 推荐：primary、recommended_option、conditional、neutral_listing、not_recommended、insufficient。
 - 情感：positive、neutral、negative、mixed、unknown。
@@ -58,7 +61,7 @@
 
 ## 6. 实现细节
 
-1. 技术错误由 Gateway 状态提供，Judge 只补充内容有效性，避免 LLM 猜测网络结果。
+1. 技术错误由 Gateway 的 `transport_status` 提供；Judge 只补充 `content_validity` 和 `answer_outcome`，避免 LLM 猜测网络结果。
 2. 品牌候选先用启用别名、产品和域名规则检测，再用上下文模型消歧。
 3. 推荐必须存在建议语义；普通列举、引用域名和免责声明不计推荐。
 4. 推荐位置保存首次出现、列表位置、是否首选和同列品牌数。
@@ -99,7 +102,7 @@ Analyst 可查看和提交普通复核；被授权 Reviewer 可修改人工标�
 - AC-06：重评估创建新版本，原始响应、旧评估和旧报告不被覆盖。
 - AC-07：人工纠错与机器结果并存，包含操作者、原因和时间。
 - AC-08：黄金集上 Mention F1 ≥ 0.95、Recommendation ≥ 0.85、Citation ≥ 0.95 或按发布门槛执行批准的降级。
-- AC-09：拒答、空响应、错误、截断和语言不符按 SPEC-01 分类并可重算。
+- AC-09：传输、内容有效性和回答结果分别保存；拒答、空响应、错误、截断和语言不符按 SPEC-01 资格规则可重算。
 
 ## 11. 需求追踪
 
