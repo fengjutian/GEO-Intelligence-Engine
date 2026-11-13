@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 )
 
@@ -14,6 +15,7 @@ type Dependencies struct {
 	Logger      *slog.Logger
 	DevTenantID string
 	DevActorID  string
+	WorkerToken string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -49,6 +51,12 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}/brand-aliases/{aliasId}", projectHandler.setAliasEnabled)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/products", projectHandler.createProduct)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/competitors", projectHandler.createCompetitor)
+	crawlHandler := newCrawlHandler(crawls.NewStore(deps.DB), deps.DevTenantID, deps.WorkerToken, deps.Logger)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/crawl-runs", crawlHandler.create)
+	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}", crawlHandler.get)
+	mux.HandleFunc("POST /internal/crawler/v1/claim", crawlHandler.claim)
+	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/complete", crawlHandler.complete)
+	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/fail", crawlHandler.fail)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

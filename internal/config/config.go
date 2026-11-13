@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseDSN string
 	DevTenantID string
 	DevActorID  string
+	WorkerToken string
 	LogLevel    slog.Level
 }
 
@@ -21,6 +22,7 @@ func FromEnv() (Config, error) {
 		DatabaseDSN: strings.TrimSpace(os.Getenv("GEO_DATABASE_DSN")),
 		DevTenantID: envOr("GEO_DEV_TENANT_ID", "019a7f64-7c2c-7000-8000-000000000001"),
 		DevActorID:  envOr("GEO_DEV_ACTOR_ID", "019a7f64-7c2c-7000-8000-000000000002"),
+		WorkerToken: envOr("GEO_INTERNAL_WORKER_TOKEN", "local-worker-token-change-me"),
 		LogLevel:    slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {
