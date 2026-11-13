@@ -5,8 +5,29 @@ type EngineConfig = { id: string; provider: string; channel: string; status: str
 type QuestionSet = { id: string; draftVersionId: string; draftVersion: number; versions: Array<{ id: string; version: number; questionCount: number }> }
 type Protocol = { id: string; semanticVersion: string; status: string }
 type Audit = { id: string; status: string; plannedCount: number; completedCount: number; eligibleCount: number; budgetMicrounits: number; currency: string }
+type MetricValue = {
+  metricCode: string
+  aggregationMethod: string
+  dimensions: Record<string, unknown>
+  numerator: number | null
+  denominator: number | null
+  value: number | null
+  ciLow: number | null
+  ciHigh: number | null
+  intervalMethod: string
+}
 
 type Props = { projectId: string; projectName: string; onClose: () => void }
+
+const TERMINAL = ['succeeded', 'partial_success', 'failed', 'cancelled']
+const METRIC_LABELS: Record<string, string> = {
+  mention_rate: '品牌提及率',
+  recommendation_rate: '主动推荐率',
+  refusal_rate: '拒答率',
+  positive_mention_rate: '正向提及率',
+  eligible_response_rate: '有效回答率',
+  mention_frequency: '平均提及次数',
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
@@ -17,17 +38,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+function formatPercent(value: number | null): string {
+  if (value === null) return '—'
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function formatInterval(metric: MetricValue): string {
+  if (metric.ciLow === null || metric.ciHigh === null) return ''
+  return `95% CI ${(metric.ciLow * 100).toFixed(1)}–${(metric.ciHigh * 100).toFixed(1)}%`
+}
+
 export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const queryClient = useQueryClient()
+  const storageKey = `geo.audit.${projectId}`
   const questionSets = useQuery({ queryKey: ['question-sets', projectId], queryFn: () => request<{ items: QuestionSet[] }>(`/api/v1/projects/${projectId}/question-sets`) })
   const protocols = useQuery({ queryKey: ['protocols', projectId], queryFn: () => request<{ items: Protocol[] }>(`/api/v1/projects/${projectId}/measurement-protocols`) })
   const engines = useQuery({ queryKey: ['engine-configs'], queryFn: () => request<{ items: EngineConfig[] }>('/api/v1/engine-configs') })
   const [samples, setSamples] = useState(1)
   const [budget, setBudget] = useState(100000)
   const [costPerSample, setCostPerSample] = useState(1000)
-  const [audit, setAudit] = useState<Audit | null>(null)
+  const [auditId, setAuditId] = useState<string | null>(() => window.localStorage.getItem(storageKey))
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const audit = useQuery({
+    queryKey: ['audit', auditId],
+    queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
+    enabled: auditId !== null,
+    refetchInterval: (query) => TERMINAL.includes(query.state.data?.status ?? '') ? false : 2000,
+  })
+  const metrics = useQuery({
+    queryKey: ['audit-metrics', auditId],
+    queryFn: () => request<MetricValue[]>(`/api/v1/audits/${auditId}/metrics`),
+    enabled: auditId !== null && ['succeeded', 'partial_success'].includes(audit.data?.status ?? ''),
+  })
+
+  function rememberAudit(id: string | null) {
+    setAuditId(id)
+    if (id) window.localStorage.setItem(storageKey, id)
+    else window.localStorage.removeItem(storageKey)
+  }
 
   async function ensureEngines(): Promise<EngineConfig[]> {
     const existing = engines.data?.items.filter((engine) => engine.status === 'active') ?? []
@@ -85,7 +134,8 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
         headers: { 'content-type': 'application/json', 'Idempotency-Key': `${projectId}-${Date.now()}` },
         body: JSON.stringify({ projectId, protocolId: protocol.id }),
       })
-      setAudit(created)
+      rememberAudit(created.id)
+      await queryClient.invalidateQueries({ queryKey: ['audit', created.id] })
       setMessage(`协议 ${protocol.semanticVersion} 已发布，预计 ${estimate.plannedSamples} 个样本`)
       await queryClient.invalidateQueries({ queryKey: ['protocols', projectId] })
     } catch (error) {
@@ -96,11 +146,11 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   }
 
   async function cancelAudit() {
-    if (!audit) return
+    if (!auditId) return
     setBusy(true)
     try {
-      const cancelled = await request<Audit>(`/api/v1/audits/${audit.id}:cancel`, { method: 'POST' })
-      setAudit(cancelled)
+      await request<Audit>(`/api/v1/audits/${auditId}:cancel`, { method: 'POST' })
+      await queryClient.invalidateQueries({ queryKey: ['audit', auditId] })
       setMessage('审计已取消，已排队样本标记为 cancelled')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '取消失败')
@@ -108,6 +158,10 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       setBusy(false)
     }
   }
+
+  const current = audit.data
+  const channelMetrics = (metrics.data ?? []).filter((metric) => !('engineConfigId' in metric.dimensions))
+  const engineMetrics = (metrics.data ?? []).filter((metric) => 'engineConfigId' in metric.dimensions)
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="audit-dialog" aria-labelledby="audit-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -131,13 +185,43 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
         <button className="primary-button" type="button" disabled={busy} onClick={() => void startAudit()}>{busy ? '处理中…' : '创建协议并发起审计'}</button>
       </div>
       {message && <p className="audit-message" role="status">{message}</p>}
-      {audit && <article className="audit-result">
-        <header><strong>{audit.id}</strong><span data-status={audit.status}>{audit.status}</span></header>
-        <div><small>计划样本</small><strong>{audit.plannedCount}</strong></div>
-        <div><small>完成 / 有效</small><strong>{audit.completedCount} / {audit.eligibleCount}</strong></div>
-        <div><small>预算</small><strong>{audit.budgetMicrounits} {audit.currency}</strong></div>
-        {['queued', 'running'].includes(audit.status) && <button type="button" onClick={() => void cancelAudit()} disabled={busy}>取消审计</button>}
+      {audit.error && <p className="error" role="alert">{audit.error.message}</p>}
+      {current && <article className="audit-result">
+        <header><strong>{current.id}</strong><span data-status={current.status}>{current.status}</span></header>
+        <div><small>计划样本</small><strong>{current.plannedCount}</strong></div>
+        <div><small>完成 / 有效</small><strong>{current.completedCount} / {current.eligibleCount}</strong></div>
+        <div><small>预算</small><strong>{current.budgetMicrounits} {current.currency}</strong></div>
+        {['queued', 'running'].includes(current.status) && <button type="button" onClick={() => void cancelAudit()} disabled={busy}>取消审计</button>}
       </article>}
+      {current && !TERMINAL.includes(current.status) && <p className="audit-note">Worker 正在处理，状态每 2 秒自动刷新。</p>}
+      {current && TERMINAL.includes(current.status) && metrics.isLoading && <p className="audit-note">正在加载指标…</p>}
+      {metrics.error && <p className="error" role="alert">{metrics.error.message}</p>}
+      {channelMetrics.length > 0 && <section className="audit-metrics">
+        <h3>核心指标</h3>
+        <div className="metric-cards">
+          {channelMetrics.map((metric) => <article key={`${metric.metricCode}-${String(metric.dimensions.channel)}`}>
+            <small>{METRIC_LABELS[metric.metricCode] ?? metric.metricCode}</small>
+            <strong>{formatPercent(metric.value)}</strong>
+            <span>{metric.numerator ?? '—'} / {metric.denominator ?? '—'}</span>
+            <em>{formatInterval(metric)}</em>
+            {metric.denominator !== null && metric.denominator < 30 && <b>小样本</b>}
+          </article>)}
+        </div>
+      </section>}
+      {engineMetrics.length > 0 && <section className="audit-metrics">
+        <h3>按引擎 / 渠道</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>指标</span><span>引擎</span><span>渠道</span><span>比例</span><span>95% CI</span></div>
+          {engineMetrics.map((metric) => <div className="metric-row" key={`${metric.metricCode}-${String(metric.dimensions.engineConfigId)}`}>
+            <span>{METRIC_LABELS[metric.metricCode] ?? metric.metricCode}</span>
+            <span>{String(metric.dimensions.provider)} / {String(metric.dimensions.modelSelector)}</span>
+            <span>{String(metric.dimensions.channel)}</span>
+            <span>{formatPercent(metric.value)}（{metric.numerator ?? '—'}/{metric.denominator ?? '—'}）</span>
+            <span>{formatInterval(metric) || '—'}</span>
+          </div>)}
+        </div>
+      </section>}
+      {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}
     </section>
   </div>
 }
