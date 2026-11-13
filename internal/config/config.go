@@ -23,6 +23,7 @@ type Config struct {
 	ModelRPM         int
 	ModelConcurrency int
 	JudgeURL         string
+	ReportDir        string
 	LogLevel         slog.Level
 }
 
@@ -42,6 +43,7 @@ func FromEnv() (Config, error) {
 		ModelRPM:         envInt("GEO_MODEL_RPM", 60),
 		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
 		JudgeURL:         envOr("GEO_JUDGE_URL", "http://127.0.0.1:8081"),
+		ReportDir:        envOr("GEO_REPORT_DIR", ".run/reports"),
 		LogLevel:         slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

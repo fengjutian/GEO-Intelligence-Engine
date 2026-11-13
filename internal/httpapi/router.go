@@ -20,6 +20,7 @@ type Dependencies struct {
 	DevActorID   string
 	WorkerToken  string
 	ModelGateway *modelgateway.Gateway
+	ReportDir    string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -78,7 +79,7 @@ func New(deps Dependencies) http.Handler {
 	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/questions", questionHandler.list)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", questionHandler.create)
-	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ReportDir)
 	mux.HandleFunc("GET /api/v1/engine-configs", auditHandler.listEngineConfigs)
 	mux.HandleFunc("POST /api/v1/engine-configs", auditHandler.createEngineConfig)
 	mux.HandleFunc("POST /api/v1/question-sets/{questionSetId}/versions", auditHandler.publishQuestionSet)
@@ -91,6 +92,11 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}", auditHandler.getAudit)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/samples", auditHandler.listSamples)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/metrics", auditHandler.getMetrics)
+	mux.HandleFunc("POST /api/v1/audits/{auditId}/reports", auditHandler.createReport)
+	mux.HandleFunc("GET /api/v1/reports/{reportId}", auditHandler.getReport)
+	mux.HandleFunc("POST /api/v1/reports/{reportAction}", auditHandler.publishReport)
+	mux.HandleFunc("POST /api/v1/reports/{reportId}/exports", auditHandler.createReportExport)
+	mux.HandleFunc("GET /api/v1/reports/{reportId}/artifacts/{artifactId}", auditHandler.downloadReportArtifact)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))

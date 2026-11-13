@@ -5,6 +5,7 @@ type EngineConfig = { id: string; provider: string; channel: string; status: str
 type QuestionSet = { id: string; draftVersionId: string; draftVersion: number; versions: Array<{ id: string; version: number; questionCount: number }> }
 type Protocol = { id: string; semanticVersion: string; status: string }
 type Audit = { id: string; status: string; plannedCount: number; completedCount: number; eligibleCount: number; budgetMicrounits: number; currency: string }
+type Report = { id: string; version: number; status: string; sections: Array<{ code: string; content: Record<string, unknown> }> }
 type MetricValue = {
   metricCode: string
   aggregationMethod: string
@@ -60,6 +61,8 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const [auditId, setAuditId] = useState<string | null>(() => window.localStorage.getItem(storageKey))
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<Report | null>(null)
+  const [reportBusy, setReportBusy] = useState(false)
   const audit = useQuery({
     queryKey: ['audit', auditId],
     queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
@@ -159,6 +162,41 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     }
   }
 
+  async function generateReport() {
+    if (!auditId) return
+    setReportBusy(true)
+    try {
+      const created = await request<Report>(`/api/v1/audits/${auditId}/reports`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ templateVersion: 'report-v1' }),
+      })
+      setReport(created)
+      setMessage(`报告 v${created.version} 已生成`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '报告生成失败')
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
+  async function downloadCSV() {
+    if (!report) return
+    setReportBusy(true)
+    try {
+      const result = await request<{ downloadUrl: string }>(`/api/v1/reports/${report.id}/exports`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ format: 'csv' }),
+      })
+      window.location.assign(result.downloadUrl)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'CSV 导出失败')
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
   const current = audit.data
   const channelMetrics = (metrics.data ?? []).filter((metric) => !('engineConfigId' in metric.dimensions))
   const engineMetrics = (metrics.data ?? []).filter((metric) => 'engineConfigId' in metric.dimensions)
@@ -220,6 +258,20 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{formatInterval(metric) || '—'}</span>
           </div>)}
         </div>
+      </section>}
+      {current && ['succeeded', 'partial_success'].includes(current.status) && <section className="audit-report">
+        <h3>报告</h3>
+        {!report && <div className="report-create">
+          <p>把指标、技术发现、范围与限制固化为版本化报告；可继续导出 CSV。</p>
+          <button className="primary-button" type="button" disabled={reportBusy} onClick={() => void generateReport()}>{reportBusy ? '生成中…' : '生成报告'}</button>
+        </div>}
+        {report && <div className="report-card">
+          <div><small>版本</small><strong>v{report.version}</strong></div>
+          <div><small>状态</small><strong>{report.status}</strong></div>
+          <div><small>章节</small><strong>{report.sections.length}</strong></div>
+          <button type="button" disabled={reportBusy} onClick={() => void downloadCSV()}>{reportBusy ? '导出中…' : '导出 CSV'}</button>
+          <span>PDF 渲染暂未启用</span>
+        </div>}
       </section>}
       {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}
     </section>

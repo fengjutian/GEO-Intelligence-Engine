@@ -367,6 +367,22 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReportCreate'}}}}
       responses:
         '202': {description: Report generation queued, content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}}
+  /reports/{reportId}:
+    get:
+      tags: [Reports]
+      operationId: getReport
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {description: Report metadata and sections, content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /reports/{reportId}:publish:
+    post:
+      tags: [Reports]
+      operationId: publishReport
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {description: Published report, content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
   /reports/{reportId}/exports:
     post:
       tags: [Reports]
@@ -375,6 +391,17 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExportCreate'}}}}
       responses:
         '202': {description: Export queued, content: {application/json: {schema: {$ref: '#/components/schemas/JobRef'}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /reports/{reportId}/artifacts/{artifactId}:
+    get:
+      tags: [Reports]
+      operationId: downloadReportArtifact
+      parameters:
+        - {$ref: '#/components/parameters/ReportId'}
+        - {name: artifactId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      responses:
+        '200': {description: CSV report artifact, content: {text/csv: {schema: {type: string, format: binary}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /findings/{findingId}/optimization-tasks:
     post:
       tags: [Tasks]
@@ -523,7 +550,9 @@ components:
     HumanAnnotation: {allOf: [{$ref: '#/components/schemas/HumanAnnotationCreate'}, {type: object, required: [id, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, createdAt: {type: string, format: date-time}}}]}
     MetricValue: {type: object, required: [metricCode, aggregationMethod, dimensions, numerator, denominator, intervalMethod], properties: {metricCode: {type: string}, aggregationMethod: {type: string, enum: [answer_equal, question_equal, business_weighted]}, dimensions: {type: object, additionalProperties: true}, numerator: {type: [number, 'null']}, denominator: {type: [number, 'null']}, value: {type: [number, 'null']}, ciLow: {type: [number, 'null']}, ciHigh: {type: [number, 'null']}, intervalMethod: {type: string, enum: [wilson, cluster_bootstrap, weighted_cluster_bootstrap]}}}
     ReportCreate: {type: object, required: [metricSnapshotId, templateVersion], properties: {metricSnapshotId: {$ref: '#/components/schemas/Id'}, templateVersion: {type: string}}}
-    Report: {type: object, required: [id, auditId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string, enum: [draft, generating, ready, published, failed, superseded]}}}
+    Report: {type: object, required: [id, auditId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string, enum: [draft, generating, ready, published, failed, superseded]}, templateVersion: {type: string}, dependencyVersions: {type: object, additionalProperties: true}, sections: {type: array, items: {$ref: '#/components/schemas/ReportSection'}}, artifacts: {type: array, items: {$ref: '#/components/schemas/ReportArtifact'}}, createdAt: {type: string, format: date-time}, publishedAt: {type: [string, 'null'], format: date-time}}}
+    ReportSection: {type: object, required: [code, content], properties: {code: {type: string}, content: {type: object, additionalProperties: true}}}
+    ReportArtifact: {type: object, required: [id, type, sizeBytes, sha256, downloadUrl], properties: {id: {$ref: '#/components/schemas/Id'}, type: {type: string, enum: [csv, pdf]}, sizeBytes: {type: integer, format: int64}, sha256: {type: string}, downloadUrl: {type: string}, createdAt: {type: string, format: date-time}}}
     ExportCreate: {type: object, required: [format], properties: {format: {type: string, enum: [pdf, csv]}}}
     OptimizationTaskCreate: {type: object, required: [title, acceptanceItems], properties: {title: {type: string, maxLength: 500}, description: {type: string}, assigneeId: {$ref: '#/components/schemas/Id'}, dueAt: {type: string, format: date-time}, acceptanceItems: {type: array, minItems: 1, items: {type: string}}}}
     OptimizationTask: {allOf: [{$ref: '#/components/schemas/OptimizationTaskCreate'}, {type: object, required: [id, status, version], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [todo, in_progress, in_review, changes_requested, done, cancelled]}, version: {type: integer}}}]}

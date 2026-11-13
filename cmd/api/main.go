@@ -39,7 +39,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, ReportDir: cfg.ReportDir}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

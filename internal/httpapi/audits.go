@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -26,16 +27,25 @@ type auditStore interface {
 	CancelAudit(ctx context.Context, tenantID, auditID string) (audits.Audit, error)
 	ListSamples(ctx context.Context, tenantID, auditID string) ([]audits.Sample, error)
 	GetMetrics(ctx context.Context, tenantID, auditID, aggregationMethod, channel string) ([]audits.MetricValue, error)
+	CreateReport(ctx context.Context, tenantID, auditID, metricSnapshotID, templateVersion string) (audits.Report, error)
+	GetReport(ctx context.Context, tenantID, reportID string) (audits.Report, error)
+	PublishReport(ctx context.Context, tenantID, reportID string) (audits.Report, error)
+	CreateExport(ctx context.Context, tenantID, reportID, format, reportDir string) (audits.ReportArtifact, error)
+	GetArtifactPath(ctx context.Context, tenantID, reportID, artifactID string) (string, string, error)
 }
 
 type auditHandler struct {
 	store       auditStore
 	devTenantID string
+	reportDir   string
 	logger      *slog.Logger
 }
 
-func newAuditHandler(store auditStore, devTenantID string, logger *slog.Logger) *auditHandler {
-	return &auditHandler{store: store, devTenantID: devTenantID, logger: logger}
+func newAuditHandler(store auditStore, devTenantID string, logger *slog.Logger, reportDir string) *auditHandler {
+	if reportDir == "" {
+		reportDir = ".run/reports"
+	}
+	return &auditHandler{store: store, devTenantID: devTenantID, reportDir: reportDir, logger: logger}
 }
 
 func (h *auditHandler) tenant(r *http.Request) string {
@@ -250,6 +260,102 @@ func (h *auditHandler) getMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+func (h *auditHandler) createReport(w http.ResponseWriter, r *http.Request) {
+	auditID := r.PathValue("auditId")
+	if _, err := uuid.Parse(auditID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_AUDIT_ID", "Audit ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		MetricSnapshotID string `json:"metricSnapshotId"`
+		TemplateVersion  string `json:"templateVersion"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	report, err := h.store.CreateReport(r.Context(), h.tenant(r), auditID, input.MetricSnapshotID, input.TemplateVersion)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, report)
+}
+
+func (h *auditHandler) getReport(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	if _, err := uuid.Parse(reportID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REPORT_ID", "Report ID is invalid", traceID(r))
+		return
+	}
+	report, err := h.store.GetReport(r.Context(), h.tenant(r), reportID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *auditHandler) publishReport(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("reportAction")
+	separator := strings.LastIndexByte(raw, ':')
+	if separator < 1 || raw[separator+1:] != "publish" {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	reportID := raw[:separator]
+	if _, err := uuid.Parse(reportID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REPORT_ID", "Report ID is invalid", traceID(r))
+		return
+	}
+	report, err := h.store.PublishReport(r.Context(), h.tenant(r), reportID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *auditHandler) createReportExport(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	if _, err := uuid.Parse(reportID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REPORT_ID", "Report ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		Format string `json:"format"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	artifact, err := h.store.CreateExport(r.Context(), h.tenant(r), reportID, strings.ToLower(strings.TrimSpace(input.Format)), h.reportDir)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"jobId": artifact.ID, "status": "ready", "downloadUrl": artifact.DownloadURL, "sizeBytes": artifact.SizeBytes})
+}
+
+func (h *auditHandler) downloadReportArtifact(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	artifactID := r.PathValue("artifactId")
+	if _, err := uuid.Parse(reportID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REPORT_ID", "Report ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(artifactID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_ARTIFACT_ID", "Artifact ID is invalid", traceID(r))
+		return
+	}
+	path, name, err := h.store.GetArtifactPath(r.Context(), h.tenant(r), reportID, artifactID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	http.ServeFile(w, r, path)
+}
+
 func (h *auditHandler) listSamples(w http.ResponseWriter, r *http.Request) {
 	auditID := r.PathValue("auditId")
 	if _, err := uuid.Parse(auditID); err != nil {
@@ -274,6 +380,8 @@ func (h *auditHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, http.StatusConflict, "PROJECT_ARCHIVED", "Archived project cannot start an audit", traceID(r))
 	case errors.Is(err, audits.ErrPlanTooLarge):
 		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_PLAN_TOO_LARGE", "Audit plan exceeds the supported sample count", traceID(r))
+	case errors.Is(err, audits.ErrUnsupportedExport):
+		writeProblem(w, http.StatusUnprocessableEntity, "EXPORT_FORMAT_UNSUPPORTED", "Export format is not supported", traceID(r))
 	case errors.Is(err, audits.ErrBudgetExceeded):
 		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_BUDGET_EXCEEDED", "Estimated cost exceeds the protocol budget", traceID(r))
 	case errors.Is(err, audits.ErrInvalidInput):
