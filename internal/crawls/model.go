@@ -49,6 +49,8 @@ type Completion struct {
 	ParserVersion string   `json:"parserVersion"`
 	CanonicalURL  *string  `json:"canonicalUrl"`
 	Links         []string `json:"links"`
+	NoIndex       bool     `json:"noIndex"`
+	TextLength    int      `json:"textLength"`
 }
 
 type Failure struct {
@@ -73,4 +75,14 @@ type PageSummary struct {
 type PageDetail struct {
 	PageSummary
 	Links []string `json:"links"`
+}
+
+type Finding struct {
+	ID        string         `json:"id"`
+	RuleCode  string         `json:"ruleCode"`
+	Severity  string         `json:"severity"`
+	Status    string         `json:"status"`
+	Summary   string         `json:"summary"`
+	Evidence  map[string]any `json:"evidence"`
+	CreatedAt time.Time      `json:"createdAt"`
 }

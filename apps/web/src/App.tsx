@@ -24,6 +24,7 @@ type BrandProfile = { projectId: string; brandId: string; canonicalName: string;
 type CrawlRun = { id: string; projectId: string; websiteId: string; status: string; counts: { discovered: number; fetched: number; failed: number } }
 type PageSummary = { pageId: string; contentId: string; canonicalUrl: string | null; finalUrl: string; httpStatus: number; title: string; language: string | null; contentHash: string; parserVersion: string; createdAt: string }
 type PageDetail = PageSummary & { links: string[] }
+type Finding = { id: string; ruleCode: string; severity: string; status: string; summary: string; evidence: Record<string, unknown> }
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
@@ -134,6 +135,12 @@ async function fetchPageDetail(contentId: string): Promise<PageDetail> {
   return response.json() as Promise<PageDetail>
 }
 
+async function fetchFindings(runId: string): Promise<{ items: Finding[] }> {
+  const response = await fetch(`/api/v1/crawl-runs/${runId}/findings`)
+  if (!response.ok) throw new Error('技术问题加载失败')
+  return response.json() as Promise<{ items: Finding[] }>
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -156,6 +163,7 @@ export function App() {
   const crawlStatus = useQuery({ queryKey: ['crawl-run', activeCrawlId], queryFn: () => fetchCrawl(activeCrawlId!), enabled: activeCrawlId !== null, refetchInterval: (query) => ['succeeded', 'failed', 'cancelled'].includes(query.state.data?.status ?? '') ? false : 2000 })
   const crawlPages = useQuery({ queryKey: ['crawl-pages', activeCrawlId], queryFn: () => fetchCrawlPages(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const pageDetail = useQuery({ queryKey: ['page-content', selectedContentId], queryFn: () => fetchPageDetail(selectedContentId!), enabled: selectedContentId !== null })
+  const findings = useQuery({ queryKey: ['crawl-findings', activeCrawlId], queryFn: () => fetchFindings(activeCrawlId!), enabled: pagesOpen && activeCrawlId !== null })
   const create = useMutation({
     mutationFn: createProject,
     onSuccess: async () => {
@@ -291,7 +299,7 @@ export function App() {
         {crawlCreate.error && <p className="error" role="alert">{crawlCreate.error.message}</p>}
         {crawlStatus.data && <div className="crawl-toast" role="status"><strong>官网抓取：{crawlStatus.data.status}</strong><span>发现 {crawlStatus.data.counts.discovered} · 成功 {crawlStatus.data.counts.fetched} · 失败 {crawlStatus.data.counts.failed}</span><div className="crawl-actions">{['queued', 'running'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'pause' })}>暂停</button>}{crawlStatus.data.status === 'paused' && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'resume' })}>继续</button>}{['queued', 'running', 'paused'].includes(crawlStatus.data.status) && <button onClick={() => crawlControl.mutate({ runId: crawlStatus.data.id, action: 'cancel' })}>取消</button>}{crawlStatus.data.counts.fetched > 0 && <button onClick={() => setPagesOpen(true)}>查看页面</button>}</div></div>}
         {crawlControl.error && <p className="error" role="alert">{crawlControl.error.message}</p>}
-        {pagesOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { setPagesOpen(false); setSelectedContentId(null) }}><section className="pages-dialog" aria-labelledby="pages-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL EVIDENCE</p><h2 id="pages-title">抓取页面</h2></div><button onClick={() => setPagesOpen(false)} aria-label="关闭">×</button></div>{crawlPages.isLoading && <p>正在加载…</p>}<div className="pages-layout"><div className="page-list">{crawlPages.data?.items.map((page) => <button key={page.contentId} onClick={() => setSelectedContentId(page.contentId)} data-active={selectedContentId === page.contentId}><span>{page.httpStatus}</span><strong>{page.title || '无标题页面'}</strong><small>{page.finalUrl}</small></button>)}</div><div className="page-evidence">{!selectedContentId && <p>选择页面查看不可变版本证据。</p>}{pageDetail.isLoading && <p>正在加载详情…</p>}{pageDetail.data && <><h3>{pageDetail.data.title || '无标题页面'}</h3><dl><div><dt>最终 URL</dt><dd>{pageDetail.data.finalUrl}</dd></div><div><dt>Canonical</dt><dd>{pageDetail.data.canonicalUrl ?? '未声明'}</dd></div><div><dt>内容哈希</dt><dd className="hash">{pageDetail.data.contentHash}</dd></div><div><dt>解析器</dt><dd>{pageDetail.data.parserVersion}</dd></div></dl><h4>出站链接（{pageDetail.data.links.length}）</h4><ul>{pageDetail.data.links.slice(0, 20).map((link) => <li key={link}>{link}</li>)}</ul></>}</div></div></section></div>}
+        {pagesOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { setPagesOpen(false); setSelectedContentId(null) }}><section className="pages-dialog" aria-labelledby="pages-title" onMouseDown={(event) => event.stopPropagation()}><div className="profile-header"><div><p className="eyebrow">CRAWL EVIDENCE</p><h2 id="pages-title">抓取页面</h2></div><button onClick={() => setPagesOpen(false)} aria-label="关闭">×</button></div>{crawlPages.isLoading && <p>正在加载…</p>}<div className="finding-strip">{findings.data?.items.length === 0 && <p>未发现首批技术规则问题。</p>}{findings.data?.items.map((finding) => <article key={finding.id} data-severity={finding.severity}><span>{finding.severity}</span><strong>{finding.ruleCode}</strong><p>{finding.summary}</p></article>)}</div><div className="pages-layout"><div className="page-list">{crawlPages.data?.items.map((page) => <button key={page.contentId} onClick={() => setSelectedContentId(page.contentId)} data-active={selectedContentId === page.contentId}><span>{page.httpStatus}</span><strong>{page.title || '无标题页面'}</strong><small>{page.finalUrl}</small></button>)}</div><div className="page-evidence">{!selectedContentId && <p>选择页面查看不可变版本证据。</p>}{pageDetail.isLoading && <p>正在加载详情…</p>}{pageDetail.data && <><h3>{pageDetail.data.title || '无标题页面'}</h3><dl><div><dt>最终 URL</dt><dd>{pageDetail.data.finalUrl}</dd></div><div><dt>Canonical</dt><dd>{pageDetail.data.canonicalUrl ?? '未声明'}</dd></div><div><dt>内容哈希</dt><dd className="hash">{pageDetail.data.contentHash}</dd></div><div><dt>解析器</dt><dd>{pageDetail.data.parserVersion}</dd></div></dl><h4>出站链接（{pageDetail.data.links.length}）</h4><ul>{pageDetail.data.links.slice(0, 20).map((link) => <li key={link}>{link}</li>)}</ul></>}</div></div></section></div>}
       </section>
     </div>
   </main>

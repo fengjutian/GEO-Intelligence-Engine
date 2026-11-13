@@ -57,6 +57,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/crawl-runs/{runAction}", crawlHandler.controlAction)
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/pages", crawlHandler.listPages)
 	mux.HandleFunc("GET /api/v1/page-contents/{contentId}", crawlHandler.getPageContent)
+	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/findings", crawlHandler.listFindings)
 	mux.HandleFunc("POST /internal/crawler/v1/claim", crawlHandler.claim)
 	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/complete", crawlHandler.complete)
 	mux.HandleFunc("POST /internal/crawler/v1/runs/{crawlRunId}/fail", crawlHandler.fail)

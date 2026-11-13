@@ -22,6 +22,7 @@ type crawlStore interface {
 	Control(ctx context.Context, tenantID, runID, action string) (crawls.Run, error)
 	ListPages(ctx context.Context, tenantID, runID string) ([]crawls.PageSummary, error)
 	GetPageContent(ctx context.Context, tenantID, contentID string) (crawls.PageDetail, error)
+	ListFindings(ctx context.Context, tenantID, runID string) ([]crawls.Finding, error)
 }
 
 type crawlHandler struct {
@@ -166,6 +167,24 @@ func (h *crawlHandler) getPageContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, detail)
+}
+
+func (h *crawlHandler) listFindings(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	runID := r.PathValue("crawlRunId")
+	if _, err := uuid.Parse(runID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_RUN_ID", "Crawl run ID is invalid", traceID(r))
+		return
+	}
+	findings, err := h.store.ListFindings(r.Context(), tenantID, runID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": findings})
 }
 
 func (h *crawlHandler) claim(w http.ResponseWriter, r *http.Request) {

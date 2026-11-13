@@ -23,6 +23,8 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 
 Crawl Run 支持暂停、继续和取消。状态变更使用数据库锁串行化，迟到的 Worker 完成或失败回调不会覆盖取消状态；暂停期间已领取的短任务可在安全点结束，继续时从持久状态恢复。
 
+抓取结果支持页面级下钻：页面列表和不可变内容版本包含 HTTP 状态、最终 URL、canonical、语言、标题、SHA-256、解析器版本及最多 100 条出站链接证据。
+
 ## 本地开发（默认方式，不使用 Docker）
 
 前置环境：Go 1.26+、Node.js 24、pnpm 11、Python 3.13（可由 uv 自动安装）及 MySQL 8.4。当前可执行基线只强依赖 MySQL；Redis、MinIO 与 Keycloak 将在相应业务模块接入时启用。

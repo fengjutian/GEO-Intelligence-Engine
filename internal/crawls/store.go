@@ -153,8 +153,8 @@ func (s *Store) Complete(ctx context.Context, completion Completion) error {
 		return fmt.Errorf("begin crawl completion: %w", err)
 	}
 	defer tx.Rollback()
-	var tenantID, websiteID string
-	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?) AND status IN ('running','paused') FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID)
+	var tenantID, websiteID, projectID string
+	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id),BIN_TO_UUID(project_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?) AND status IN ('running','paused') FOR UPDATE`, completion.RunID).Scan(&tenantID, &websiteID, &projectID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -193,6 +193,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?)`, linkID.String(), ten
 		if err != nil {
 			return fmt.Errorf("insert page link: %w", err)
 		}
+	}
+	if err := insertTechnicalFindings(ctx, tx, tenantID, projectID, contentID.String(), completion); err != nil {
+		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='succeeded',lease_owner=NULL,lease_expires_at=NULL WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?)`, completion.CrawlURLID, completion.RunID)
 	if err != nil {
@@ -336,4 +339,73 @@ WHERE c.tenant_id=UUID_TO_BIN(?) AND c.id=UUID_TO_BIN(?)`, tenantID, contentID).
 		detail.Links = append(detail.Links, link)
 	}
 	return detail, rows.Err()
+}
+
+func (s *Store) ListFindings(ctx context.Context, tenantID, runID string) ([]Finding, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT BIN_TO_UUID(f.id),f.rule_code,f.severity,f.status,f.summary,f.evidence_json,f.created_at
+FROM findings f JOIN page_contents c ON c.id=f.source_id
+WHERE f.tenant_id=UUID_TO_BIN(?) AND c.crawl_run_id=UUID_TO_BIN(?) AND f.source_type='page_content'
+ORDER BY FIELD(f.severity,'critical','high','medium','low'),f.created_at,f.id`, tenantID, runID)
+	if err != nil {
+		return nil, fmt.Errorf("query crawl findings: %w", err)
+	}
+	defer rows.Close()
+	findings := []Finding{}
+	for rows.Next() {
+		var finding Finding
+		var evidence []byte
+		if err := rows.Scan(&finding.ID, &finding.RuleCode, &finding.Severity, &finding.Status, &finding.Summary, &evidence, &finding.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan crawl finding: %w", err)
+		}
+		if err := json.Unmarshal(evidence, &finding.Evidence); err != nil {
+			return nil, fmt.Errorf("decode finding evidence: %w", err)
+		}
+		findings = append(findings, finding)
+	}
+	return findings, rows.Err()
+}
+
+type technicalFinding struct {
+	code     string
+	severity string
+	summary  string
+	evidence map[string]any
+}
+
+func insertTechnicalFindings(ctx context.Context, tx *sql.Tx, tenantID, projectID, contentID string, completion Completion) error {
+	findings := []technicalFinding{}
+	if completion.HTTPStatus < 200 || completion.HTTPStatus >= 300 {
+		findings = append(findings, technicalFinding{"HTTP_NON_2XX", "high", "Page returned a non-success HTTP status", map[string]any{"httpStatus": completion.HTTPStatus, "url": completion.FinalURL}})
+	}
+	if completion.CanonicalURL == nil || strings.TrimSpace(*completion.CanonicalURL) == "" {
+		findings = append(findings, technicalFinding{"CANONICAL_MISSING", "medium", "Page does not declare a canonical URL", map[string]any{"url": completion.FinalURL}})
+	}
+	if completion.NoIndex {
+		findings = append(findings, technicalFinding{"ROBOTS_NOINDEX", "high", "Page declares a noindex directive", map[string]any{"url": completion.FinalURL}})
+	}
+	if completion.Language == nil || strings.TrimSpace(*completion.Language) == "" {
+		findings = append(findings, technicalFinding{"HTML_LANG_MISSING", "low", "Page does not declare an HTML language", map[string]any{"url": completion.FinalURL}})
+	}
+	if completion.TextLength < 200 {
+		findings = append(findings, technicalFinding{"CONTENT_THIN", "medium", "Extracted page text is below the minimum useful length", map[string]any{"url": completion.FinalURL, "textLength": completion.TextLength, "threshold": 200}})
+	}
+	for _, finding := range findings {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("create finding id: %w", err)
+		}
+		evidence, err := json.Marshal(finding.evidence)
+		if err != nil {
+			return fmt.Errorf("encode finding evidence: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `
+INSERT INTO findings (id,tenant_id,project_id,source_type,source_id,source_version,rule_code,severity,confidence,status,summary,evidence_json,created_at,updated_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'page_content',UUID_TO_BIN(?),'technical-rules-v1',?,?,1.0,'open',?,CAST(? AS JSON),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
+			id.String(), tenantID, projectID, contentID, finding.code, finding.severity, finding.summary, evidence)
+		if err != nil {
+			return fmt.Errorf("insert technical finding: %w", err)
+		}
+	}
+	return nil
 }
