@@ -351,7 +351,11 @@ func (h *auditHandler) downloadReportArtifact(w http.ResponseWriter, r *http.Req
 		h.writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	if strings.HasSuffix(strings.ToLower(name), ".pdf") {
+		w.Header().Set("Content-Type", "application/pdf")
+	} else {
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 	http.ServeFile(w, r, path)
 }
@@ -382,6 +386,9 @@ func (h *auditHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_PLAN_TOO_LARGE", "Audit plan exceeds the supported sample count", traceID(r))
 	case errors.Is(err, audits.ErrUnsupportedExport):
 		writeProblem(w, http.StatusUnprocessableEntity, "EXPORT_FORMAT_UNSUPPORTED", "Export format is not supported", traceID(r))
+	case errors.Is(err, audits.ErrPDFRenderFailed):
+		h.logger.Error("pdf rendering failed", "error", err, "trace_id", traceID(r))
+		writeProblem(w, http.StatusInternalServerError, "PDF_RENDER_FAILED", "PDF rendering failed", traceID(r))
 	case errors.Is(err, audits.ErrBudgetExceeded):
 		writeProblem(w, http.StatusUnprocessableEntity, "AUDIT_BUDGET_EXCEEDED", "Estimated cost exceeds the protocol budget", traceID(r))
 	case errors.Is(err, audits.ErrInvalidInput):

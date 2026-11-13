@@ -11,13 +11,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-var ErrUnsupportedExport = errors.New("export format is not supported")
+var (
+	ErrUnsupportedExport = errors.New("export format is not supported")
+	ErrPDFRenderFailed   = errors.New("pdf rendering failed")
+)
 
 // CreateReport snapshots one audit into a versioned, ready-to-read report.
 func (s *Store) CreateReport(ctx context.Context, tenantID, auditID string, metricSnapshotID, templateVersion string) (Report, error) {
@@ -242,9 +247,9 @@ func (s *Store) PublishReport(ctx context.Context, tenantID, reportID string) (R
 	return s.GetReport(ctx, tenantID, reportID)
 }
 
-// CreateExport writes a CSV artifact and records its hash and size.
+// CreateExport writes a CSV or PDF artifact and records its hash and size.
 func (s *Store) CreateExport(ctx context.Context, tenantID, reportID, format, reportDir string) (ReportArtifact, error) {
-	if format != "csv" {
+	if format != "csv" && format != "pdf" {
 		return ReportArtifact{}, ErrUnsupportedExport
 	}
 	report, err := s.GetReport(ctx, tenantID, reportID)
@@ -254,25 +259,109 @@ func (s *Store) CreateExport(ctx context.Context, tenantID, reportID, format, re
 	if report.Status != "ready" && report.Status != "published" {
 		return ReportArtifact{}, ErrConflict
 	}
+	if format == "pdf" {
+		return s.createPDFExport(ctx, tenantID, report, reportDir)
+	}
 	content := buildCSV(report)
-	hash := sha256.Sum256(content)
+	if err := s.removeArtifact(ctx, tenantID, reportID, "csv"); err != nil {
+		return ReportArtifact{}, err
+	}
+	return s.writeArtifact(ctx, tenantID, reportID, "csv", reportDir, "csv", content, map[string]any{"format": "csv", "templateVersion": report.TemplateVersion})
+}
+
+func (s *Store) createPDFExport(ctx context.Context, tenantID string, report Report, reportDir string) (ReportArtifact, error) {
+	if err := s.removeArtifact(ctx, tenantID, report.ID, "pdf"); err != nil {
+		return ReportArtifact{}, err
+	}
+	payload, err := json.Marshal(report)
+	if err != nil {
+		return ReportArtifact{}, err
+	}
 	artifactID, _ := uuid.NewV7()
 	directory := filepath.Join(reportDir, report.ID)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return ReportArtifact{}, err
 	}
-	path := filepath.Join(directory, fmt.Sprintf("%s-v%d.csv", artifactID, report.Version))
+	jsonPath := filepath.Join(directory, artifactID.String()+".json")
+	pdfPath := filepath.Join(directory, artifactID.String()+".pdf")
+	if err := os.WriteFile(jsonPath, payload, 0o644); err != nil {
+		return ReportArtifact{}, err
+	}
+	defer os.Remove(jsonPath)
+	nodeBinary := os.Getenv("GEO_NODE_BINARY")
+	if nodeBinary == "" {
+		nodeBinary = "node"
+	}
+	renderer := os.Getenv("GEO_REPORT_RENDERER")
+	if renderer == "" {
+		renderer = filepath.Join("apps", "report-renderer", "render.mjs")
+	}
+	renderCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	command := exec.CommandContext(renderCtx, nodeBinary, renderer, jsonPath, pdfPath)
+	if chromium := os.Getenv("GEO_CHROMIUM_PATH"); chromium != "" {
+		command.Env = append(os.Environ(), "GEO_CHROMIUM_PATH="+chromium)
+	}
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return ReportArtifact{}, fmt.Errorf("%w: %s", ErrPDFRenderFailed, strings.TrimSpace(string(output)))
+	}
+	defer os.Remove(pdfPath + ".meta.json")
+	content, err := os.ReadFile(pdfPath)
+	if err != nil {
+		return ReportArtifact{}, fmt.Errorf("%w: %s", ErrPDFRenderFailed, err)
+	}
+	metadata := map[string]any{"format": "pdf", "templateVersion": report.TemplateVersion}
+	if rawMeta, metaErr := os.ReadFile(pdfPath + ".meta.json"); metaErr == nil {
+		var decoded map[string]any
+		if json.Unmarshal(rawMeta, &decoded) == nil {
+			metadata = decoded
+			metadata["format"] = "pdf"
+		}
+	}
+	return s.writeArtifactWithID(ctx, tenantID, report.ID, artifactID.String(), "pdf", pdfPath, content, metadata)
+}
+
+func (s *Store) writeArtifact(ctx context.Context, tenantID, reportID, artifactType, reportDir, extension string, content []byte, metadata map[string]any) (ReportArtifact, error) {
+	artifactID, _ := uuid.NewV7()
+	directory := filepath.Join(reportDir, reportID)
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return ReportArtifact{}, err
+	}
+	path := filepath.Join(directory, fmt.Sprintf("%s.%s", artifactID, extension))
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return ReportArtifact{}, err
 	}
-	metadata, _ := json.Marshal(map[string]any{"format": "csv", "templateVersion": report.TemplateVersion})
-	_, err = s.db.ExecContext(ctx, `INSERT INTO report_artifacts (id,tenant_id,report_id,artifact_type,object_key,sha256,size_bytes,renderer_metadata,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'csv',?,?,?,CAST(? AS JSON),UTC_TIMESTAMP(6))`,
-		artifactID.String(), tenantID, reportID, path, hash[:], len(content), metadata)
+	return s.writeArtifactWithID(ctx, tenantID, reportID, artifactID.String(), artifactType, path, content, metadata)
+}
+
+func (s *Store) writeArtifactWithID(ctx context.Context, tenantID, reportID, artifactID, artifactType, path string, content []byte, metadata map[string]any) (ReportArtifact, error) {
+	hash := sha256.Sum256(content)
+	metadataJSON, _ := json.Marshal(metadata)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO report_artifacts (id,tenant_id,report_id,artifact_type,object_key,sha256,size_bytes,renderer_metadata,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,CAST(? AS JSON),UTC_TIMESTAMP(6))`,
+		artifactID, tenantID, reportID, artifactType, path, hash[:], len(content), metadataJSON)
 	if err != nil {
 		return ReportArtifact{}, err
 	}
-	return ReportArtifact{ID: artifactID.String(), Type: "csv", SizeBytes: int64(len(content)), SHA256: hex.EncodeToString(hash[:]), DownloadURL: fmt.Sprintf("/api/v1/reports/%s/artifacts/%s", reportID, artifactID), CreatedAt: time.Now().UTC()}, nil
+	return ReportArtifact{ID: artifactID, Type: artifactType, SizeBytes: int64(len(content)), SHA256: hex.EncodeToString(hash[:]), DownloadURL: fmt.Sprintf("/api/v1/reports/%s/artifacts/%s", reportID, artifactID), CreatedAt: time.Now().UTC()}, nil
+}
+
+// removeArtifact deletes a previous artifact of the same type so exports stay replaceable.
+func (s *Store) removeArtifact(ctx context.Context, tenantID, reportID, artifactType string) error {
+	var path string
+	err := s.db.QueryRowContext(ctx, `SELECT object_key FROM report_artifacts WHERE tenant_id=UUID_TO_BIN(?) AND report_id=UUID_TO_BIN(?) AND artifact_type=?`, tenantID, reportID, artifactType).Scan(&path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM report_artifacts WHERE tenant_id=UUID_TO_BIN(?) AND report_id=UUID_TO_BIN(?) AND artifact_type=?`, tenantID, reportID, artifactType); err != nil {
+		return err
+	}
+	_ = os.Remove(path)
+	return nil
 }
 
 // GetArtifactPath resolves a report artifact for download after tenant checks.

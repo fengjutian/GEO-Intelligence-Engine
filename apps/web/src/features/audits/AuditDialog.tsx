@@ -180,18 +180,18 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     }
   }
 
-  async function downloadCSV() {
+  async function downloadExport(format: 'csv' | 'pdf') {
     if (!report) return
     setReportBusy(true)
     try {
       const result = await request<{ downloadUrl: string }>(`/api/v1/reports/${report.id}/exports`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ format: 'csv' }),
+        body: JSON.stringify({ format }),
       })
       window.location.assign(result.downloadUrl)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'CSV 导出失败')
+      setMessage(error instanceof Error ? error.message : `${format.toUpperCase()} 导出失败`)
     } finally {
       setReportBusy(false)
     }
@@ -269,8 +269,9 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           <div><small>版本</small><strong>v{report.version}</strong></div>
           <div><small>状态</small><strong>{report.status}</strong></div>
           <div><small>章节</small><strong>{report.sections.length}</strong></div>
-          <button type="button" disabled={reportBusy} onClick={() => void downloadCSV()}>{reportBusy ? '导出中…' : '导出 CSV'}</button>
-          <span>PDF 渲染暂未启用</span>
+          <button type="button" disabled={reportBusy} onClick={() => void downloadExport('csv')}>{reportBusy ? '导出中…' : '导出 CSV'}</button>
+          <button type="button" disabled={reportBusy} onClick={() => void downloadExport('pdf')}>导出 PDF</button>
+          <span>PDF 由 Playwright Chromium 渲染</span>
         </div>}
       </section>}
       {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}

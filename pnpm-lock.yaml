@@ -33,6 +33,12 @@ importers:
         specifier: ^4.0.0
         version: 4.1.12(@types/node@24.19.2)(jsdom@27.4.0)(vite@7.3.8(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0))
 
+  apps/report-renderer:
+    dependencies:
+      playwright:
+        specifier: ^1.56.0
+        version: 1.65.0
+
   apps/web:
     dependencies:
       '@tanstack/react-query':
