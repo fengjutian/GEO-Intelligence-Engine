@@ -40,6 +40,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/projects", projectHandler.list)
 	mux.HandleFunc("POST /api/v1/projects", projectHandler.create)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}", projectHandler.get)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", projectHandler.update)
+	mux.HandleFunc("POST /api/v1/projects/{projectAction}", projectHandler.archiveAction)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

@@ -22,6 +22,8 @@ type projectStore interface {
 	Create(ctx context.Context, tenantID string, input projects.CreateInput) (projects.Project, error)
 	Get(ctx context.Context, tenantID, projectID string) (projects.Project, error)
 	List(ctx context.Context, tenantID string, limit int) (projects.Page, error)
+	Update(ctx context.Context, tenantID, projectID string, version uint64, input projects.PatchInput) (projects.Project, error)
+	Archive(ctx context.Context, tenantID, projectID string, version uint64) (projects.JobRef, error)
 }
 
 type projectHandler struct {
@@ -110,6 +112,114 @@ func (h *projectHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *projectHandler) update(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, version, ok := h.mutationContext(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var input projects.PatchInput
+	if err := decoder.Decode(&input); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_JSON", "Request body is invalid", traceID(r))
+		return
+	}
+	if input.Name == nil && input.Locale == nil && input.Region == nil && input.Timezone == nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "EMPTY_PATCH", "At least one project field is required", traceID(r))
+		return
+	}
+	createInput := projects.CreateInput{Name: "placeholder", BrandName: "placeholder", OfficialURL: "https://example.com", Locale: "en", Region: "global", Timezone: "UTC"}
+	if input.Name != nil {
+		value := strings.TrimSpace(*input.Name)
+		input.Name, createInput.Name = &value, value
+	}
+	if input.Locale != nil {
+		value := strings.TrimSpace(*input.Locale)
+		input.Locale, createInput.Locale = &value, value
+	}
+	if input.Region != nil {
+		value := strings.TrimSpace(*input.Region)
+		input.Region, createInput.Region = &value, value
+	}
+	if input.Timezone != nil {
+		value := strings.TrimSpace(*input.Timezone)
+		input.Timezone, createInput.Timezone = &value, value
+	}
+	if err := validateProjectInput(createInput); err != nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "VALIDATION_FAILED", err.Error(), traceID(r))
+		return
+	}
+	project, err := h.store.Update(r.Context(), tenantID, projectID, version, input)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, project.Version))
+	writeJSON(w, http.StatusOK, project)
+}
+
+func (h *projectHandler) archive(w http.ResponseWriter, r *http.Request) {
+	tenantID, projectID, version, ok := h.mutationContext(w, r)
+	if !ok {
+		return
+	}
+	job, err := h.store.Archive(r.Context(), tenantID, projectID, version)
+	if h.writeMutationError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (h *projectHandler) archiveAction(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := strings.CutSuffix(r.PathValue("projectAction"), ":archive")
+	if !ok || projectID == "" {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	r.SetPathValue("projectId", projectID)
+	h.archive(w, r)
+}
+
+func (h *projectHandler) mutationContext(w http.ResponseWriter, r *http.Request) (string, string, uint64, bool) {
+	tenantID, ok := h.tenantID(w, r)
+	if !ok {
+		return "", "", 0, false
+	}
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return "", "", 0, false
+	}
+	versionText := strings.Trim(strings.TrimSpace(r.Header.Get("If-Match")), `"`)
+	if versionText == "" {
+		writeProblem(w, http.StatusPreconditionRequired, "IF_MATCH_REQUIRED", "If-Match is required", traceID(r))
+		return "", "", 0, false
+	}
+	version, err := strconv.ParseUint(versionText, 10, 64)
+	if err != nil || version < 1 {
+		writeProblem(w, http.StatusBadRequest, "INVALID_IF_MATCH", "If-Match must contain the project version", traceID(r))
+		return "", "", 0, false
+	}
+	return tenantID, projectID, version, true
+}
+
+func (h *projectHandler) writeMutationError(w http.ResponseWriter, r *http.Request, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, projects.ErrNotFound):
+		writeProblem(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project was not found", traceID(r))
+	case errors.Is(err, projects.ErrVersionConflict):
+		writeProblem(w, http.StatusConflict, "VERSION_CONFLICT", "Project has been modified; reload and retry", traceID(r))
+	case errors.Is(err, projects.ErrArchived):
+		writeProblem(w, http.StatusConflict, "PROJECT_ARCHIVED", "Archived project cannot be modified", traceID(r))
+	default:
+		h.internalError(w, r, "mutate project", err)
+	}
+	return true
 }
 
 func (h *projectHandler) tenantID(w http.ResponseWriter, r *http.Request) (string, bool) {

@@ -42,6 +42,24 @@ async function createProject(input: ProjectInput): Promise<Project> {
   return response.json() as Promise<Project>
 }
 
+async function updateProject(project: Project, patch: Partial<Pick<Project, 'name' | 'locale' | 'region' | 'timezone'>>): Promise<Project> {
+  const response = await fetch(`/api/v1/projects/${project.id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/merge-patch+json', 'if-match': `"${project.version}"` },
+    body: JSON.stringify(patch),
+  })
+  if (!response.ok) throw new Error(response.status === 409 ? '项目已被其他用户修改，请刷新后重试' : '项目更新失败')
+  return response.json() as Promise<Project>
+}
+
+async function archiveProject(project: Project): Promise<void> {
+  const response = await fetch(`/api/v1/projects/${project.id}:archive`, {
+    method: 'POST',
+    headers: { 'if-match': `"${project.version}"` },
+  })
+  if (!response.ok) throw new Error(response.status === 409 ? '项目状态已变化，请刷新后重试' : '项目归档失败')
+}
+
 const modules = [
   { title: 'Discovery', text: '网站发现、抓取与技术审计', icon: Radar },
   { title: 'Knowledge', text: '品牌实体、关系与一致性', icon: Database },
@@ -54,12 +72,24 @@ export function App() {
   const projects = useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<Project | null>(null)
   const create = useMutation({
     mutationFn: createProject,
     onSuccess: async () => {
       setFormOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
+  })
+  const update = useMutation({
+    mutationFn: ({ project, patch }: { project: Project; patch: Partial<Pick<Project, 'name' | 'locale' | 'region' | 'timezone'>> }) => updateProject(project, patch),
+    onSuccess: async () => {
+      setEditing(null)
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+  const archive = useMutation({
+    mutationFn: archiveProject,
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 
   function submitProject(event: FormEvent<HTMLFormElement>) {
@@ -73,6 +103,13 @@ export function App() {
       region: String(data.get('region')),
       timezone: String(data.get('timezone')),
     })
+  }
+
+  function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editing) return
+    const data = new FormData(event.currentTarget)
+    update.mutate({ project: editing, patch: { name: String(data.get('name')), locale: String(data.get('locale')), region: String(data.get('region')), timezone: String(data.get('timezone')) } })
   }
 
   return <main className="min-h-screen px-6 py-10 sm:px-10">
@@ -106,8 +143,18 @@ export function App() {
           {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
             <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
             <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
+            <div className="project-actions"><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
           </article>)}
         </div>
+        {editing && <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditing(null)}><form className="edit-dialog" aria-labelledby="edit-title" onSubmit={submitEdit} onMouseDown={(event) => event.stopPropagation()}>
+          <div><p className="eyebrow">PROJECT SETTINGS</p><h2 id="edit-title">编辑项目</h2></div>
+          <label>项目名称<input name="name" required defaultValue={editing.name} /></label>
+          <div className="edit-grid"><label>语言<input name="locale" required defaultValue={editing.locale} /></label><label>地区<input name="region" required defaultValue={editing.region} /></label></div>
+          <label>时区<input name="timezone" required defaultValue={editing.timezone} /></label>
+          {update.error && <p className="error" role="alert">{update.error.message}</p>}
+          <div className="dialog-actions"><button type="button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={update.isPending}>{update.isPending ? '保存中…' : '保存修改'}</button></div>
+        </form></div>}
+        {archive.error && <p className="error" role="alert">{archive.error.message}</p>}
       </section>
     </div>
   </main>

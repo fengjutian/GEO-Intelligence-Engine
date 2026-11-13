@@ -31,6 +31,14 @@ func (f *fakeProjectStore) List(_ context.Context, _ string, _ int) (projects.Pa
 	return projects.Page{Items: []projects.Project{}, Page: projects.PageMeta{HasMore: false}}, nil
 }
 
+func (f *fakeProjectStore) Update(_ context.Context, _, _ string, _ uint64, input projects.PatchInput) (projects.Project, error) {
+	return projects.Project{ID: "019a7f64-7c2c-7000-8000-000000000002", Name: *input.Name, Version: 2}, nil
+}
+
+func (f *fakeProjectStore) Archive(_ context.Context, _, _ string, _ uint64) (projects.JobRef, error) {
+	return projects.JobRef{JobID: "019a7f64-7c2c-7000-8000-000000000003", Status: "succeeded"}, nil
+}
+
 func TestCreateProjectValidatesAndNormalizesInput(t *testing.T) {
 	store := &fakeProjectStore{}
 	handler := newProjectHandler(store, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -73,6 +81,19 @@ func TestListProjectsRejectsInvalidLimit(t *testing.T) {
 	handler.list(response, request)
 
 	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d", response.Code)
+	}
+}
+
+func TestUpdateProjectRequiresIfMatch(t *testing.T) {
+	handler := newProjectHandler(&fakeProjectStore{}, testTenantID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/projects/019a7f64-7c2c-7000-8000-000000000002", strings.NewReader(`{"name":"Updated"}`))
+	request.SetPathValue("projectId", "019a7f64-7c2c-7000-8000-000000000002")
+	response := httptest.NewRecorder()
+
+	handler.update(response, request)
+
+	if response.Code != http.StatusPreconditionRequired {
 		t.Fatalf("status = %d", response.Code)
 	}
 }

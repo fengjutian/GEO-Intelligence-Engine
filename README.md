@@ -13,6 +13,8 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 - `docs`：V1.0 产品、架构、功能与验收文档
 - `tests/golden`：内容质量黄金测试集
 
+当前已实现项目与品牌档案的创建、列表、详情、乐观锁编辑和归档。创建项目会在同一数据库事务中写入项目、主品牌和官方网站；编辑与归档要求 `If-Match` 版本，防止覆盖并发修改。
+
 ## 本地开发（默认方式，不使用 Docker）
 
 前置环境：Go 1.26+、Node.js 24、pnpm 11、Python 3.13（可由 uv 自动安装）及 MySQL 8.4。当前可执行基线只强依赖 MySQL；Redis、MinIO 与 Keycloak 将在相应业务模块接入时启用。

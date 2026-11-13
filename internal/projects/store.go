@@ -12,6 +12,8 @@ import (
 )
 
 var ErrNotFound = errors.New("project not found")
+var ErrVersionConflict = errors.New("project version conflict")
+var ErrArchived = errors.New("project is archived")
 
 type Store struct {
 	db *sql.DB
@@ -102,12 +104,109 @@ WHERE p.tenant_id=UUID_TO_BIN(?) ORDER BY p.created_at DESC,p.id DESC LIMIT ?`, 
 	return Page{Items: items, Page: PageMeta{HasMore: hasMore}}, nil
 }
 
+func (s *Store) Update(ctx context.Context, tenantID, projectID string, version uint64, input PatchInput) (Project, error) {
+	current, err := s.Get(ctx, tenantID, projectID)
+	if err != nil {
+		return Project{}, err
+	}
+	if current.Status == "archived" {
+		return Project{}, ErrArchived
+	}
+	name, locale, region, timezone := current.Name, current.Locale, current.Region, current.Timezone
+	if input.Name != nil {
+		name = *input.Name
+	}
+	if input.Locale != nil {
+		locale = *input.Locale
+	}
+	if input.Region != nil {
+		region = *input.Region
+	}
+	if input.Timezone != nil {
+		timezone = *input.Timezone
+	}
+	result, err := s.db.ExecContext(ctx, `
+UPDATE projects SET name=?,default_locale=?,region=?,timezone=?,version=version+1,updated_at=UTC_TIMESTAMP(6)
+WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) AND version=? AND status='active'`,
+		name, locale, region, timezone, tenantID, projectID, version)
+	if err != nil {
+		return Project{}, fmt.Errorf("update project: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Project{}, fmt.Errorf("read update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Project{}, ErrVersionConflict
+	}
+	return s.Get(ctx, tenantID, projectID)
+}
+
+func (s *Store) Archive(ctx context.Context, tenantID, projectID string, version uint64) (JobRef, error) {
+	workflowID, err := uuid.NewV7()
+	if err != nil {
+		return JobRef{}, fmt.Errorf("create workflow id: %w", err)
+	}
+	jobID, err := uuid.NewV7()
+	if err != nil {
+		return JobRef{}, fmt.Errorf("create archive job id: %w", err)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return JobRef{}, fmt.Errorf("begin archive transaction: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+UPDATE projects SET status='archived',archived_at=UTC_TIMESTAMP(6),version=version+1,updated_at=UTC_TIMESTAMP(6)
+WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) AND version=? AND status='active'`, tenantID, projectID, version)
+	if err != nil {
+		return JobRef{}, fmt.Errorf("archive project: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return JobRef{}, fmt.Errorf("read archive result: %w", err)
+	}
+	if rowsAffected == 0 {
+		var status string
+		var actualVersion uint64
+		err = tx.QueryRowContext(ctx, `SELECT status,version FROM projects WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, projectID).Scan(&status, &actualVersion)
+		if errors.Is(err, sql.ErrNoRows) {
+			return JobRef{}, ErrNotFound
+		}
+		if err != nil {
+			return JobRef{}, fmt.Errorf("read project archive state: %w", err)
+		}
+		if status == "archived" {
+			return JobRef{}, ErrArchived
+		}
+		return JobRef{}, ErrVersionConflict
+	}
+	_, err = tx.ExecContext(ctx, `
+INSERT INTO workflows (id,tenant_id,workflow_type,resource_type,resource_id,status,created_at,started_at,finished_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),'project_archive','project',UUID_TO_BIN(?),'succeeded',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`, workflowID.String(), tenantID, projectID)
+	if err != nil {
+		return JobRef{}, fmt.Errorf("insert archive workflow: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `
+INSERT INTO jobs (id,tenant_id,workflow_id,stage,job_type,idempotency_key,state,attempt_count,max_attempts,version,payload_json,created_at,updated_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'archive','project_archive',?,'succeeded',1,1,1,JSON_OBJECT('projectId',?),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
+		jobID.String(), tenantID, workflowID.String(), "project-archive:"+projectID+fmt.Sprintf(":%d", version), projectID)
+	if err != nil {
+		return JobRef{}, fmt.Errorf("insert archive job: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return JobRef{}, fmt.Errorf("commit archive transaction: %w", err)
+	}
+	return JobRef{JobID: jobID.String(), Status: "succeeded"}, nil
+}
+
 const projectSelect = `
-SELECT BIN_TO_UUID(p.id),p.name,b.canonical_name,w.base_url,p.default_locale,p.region,p.timezone,
+SELECT BIN_TO_UUID(p.id),p.name,
+       (SELECT b.canonical_name FROM brands b WHERE b.tenant_id=p.tenant_id AND b.project_id=p.id ORDER BY b.created_at,b.id LIMIT 1),
+       (SELECT w.base_url FROM websites w WHERE w.tenant_id=p.tenant_id AND w.project_id=p.id ORDER BY w.created_at,w.id LIMIT 1),
+       p.default_locale,p.region,p.timezone,
        p.status,p.version,p.created_at,p.updated_at
-FROM projects p
-JOIN brands b ON b.tenant_id=p.tenant_id AND b.project_id=p.id
-JOIN websites w ON w.tenant_id=p.tenant_id AND w.project_id=p.id `
+FROM projects p `
 
 type scanner interface {
 	Scan(dest ...any) error

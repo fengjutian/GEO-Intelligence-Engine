@@ -11,6 +11,18 @@ type CreateInput struct {
 	Timezone    string `json:"timezone"`
 }
 
+type PatchInput struct {
+	Name     *string `json:"name"`
+	Locale   *string `json:"locale"`
+	Region   *string `json:"region"`
+	Timezone *string `json:"timezone"`
+}
+
+type JobRef struct {
+	JobID  string `json:"jobId"`
+	Status string `json:"status"`
+}
+
 type Project struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`

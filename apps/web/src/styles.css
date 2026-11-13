@@ -38,4 +38,14 @@ h2 { margin:.8rem 0 .25rem; font-size:1.05rem; }
 .project-card dl div { min-width:6rem; }
 .project-card dt { color:var(--muted); font-size:.68rem; }
 .project-card dd { margin:.2rem 0 0; font-size:.8rem; font-weight:650; }
+.project-actions { display:flex; gap:.45rem; }
+.project-actions button,.dialog-actions>button:not(.primary-button) { border:1px solid #cbd7d0; border-radius:.6rem; padding:.55rem .7rem; color:var(--ink); background:white; cursor:pointer; }
+.project-actions button:disabled { opacity:.45; cursor:not-allowed; }
+.project-actions .danger { color:#9d3029; border-color:#e6c4c0; }
+.modal-backdrop { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:1rem; background:rgb(10 24 17 / 45%); backdrop-filter:blur(3px); }
+.edit-dialog { display:grid; gap:1rem; width:min(30rem,100%); padding:1.4rem; border-radius:1rem; background:white; box-shadow:0 30px 80px rgb(0 0 0 / 24%); }
+.edit-dialog label { display:grid; gap:.4rem; color:var(--muted); font-size:.78rem; font-weight:650; }
+.edit-dialog input { border:1px solid #cbd7d0; border-radius:.65rem; padding:.72rem .8rem; font:inherit; }
+.edit-grid { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+.dialog-actions { display:flex; justify-content:flex-end; gap:.6rem; }
 @media(min-width:720px){.project-form{grid-template-columns:repeat(3,minmax(0,1fr))}.project-card{flex-direction:row;align-items:center}.project-form .wide{grid-column:span 2}}
