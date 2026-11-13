@@ -32,6 +32,16 @@ Push-Location apps/judge-worker; uv sync; Pop-Location
 go run ./cmd/migrate up
 ```
 
+也可以使用零第三方依赖的 Python 管理脚本完成迁移并统一启停四个服务：
+
+```powershell
+python scripts/dev.py start --install
+python scripts/dev.py status
+python scripts/dev.py stop
+```
+
+脚本读取根目录 `.env`，运行状态和日志保存在 `.run/`。后续启动可省略 `--install`；如需保留当前数据库版本，可增加 `--skip-migrate`。
+
 分别打开四个终端启动服务：
 
 ```powershell
