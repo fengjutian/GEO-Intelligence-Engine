@@ -88,12 +88,20 @@ function renderFindings(items) {
     .join('')}</tbody></table>`
 }
 
+function renderPriorities(items) {
+  if (!Array.isArray(items) || items.length === 0) return '<p class="muted">没有开放的技术发现，无需排序。</p>'
+  return `<table><thead><tr><th>Priority</th><th>Rule</th><th>Severity</th><th>Score</th></tr></thead><tbody>${items
+    .map((item) => `<tr><td><strong>${escapeHtml(item.priority)}</strong></td><td>${escapeHtml(item.ruleCode)}</td><td>${escapeHtml(item.severity)}</td><td>${Number(item.score ?? 0).toFixed(3)}</td></tr>`)
+    .join('')}</tbody></table>`
+}
+
 function renderReport(report) {
   const sections = sectionMap(report)
   const summary = sections.summary ?? {}
   const scope = sections.scope ?? {}
   const metrics = sections.metrics ?? {}
   const findings = sections.findings ?? {}
+  const priorities = sections.priorities ?? {}
   const limitations = sections.limitations ?? {}
   const limitationsHtml = Array.isArray(limitations.items) && limitations.items.length > 0
     ? `<ul>${limitations.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
@@ -141,6 +149,9 @@ ${renderMetrics(metrics.values)}
 
 <h2>技术发现</h2>
 ${renderFindings(findings.items)}
+
+<h2>优先级建议</h2>
+${renderPriorities(priorities.items)}
 
 <h2>限制声明</h2>
 ${limitationsHtml}

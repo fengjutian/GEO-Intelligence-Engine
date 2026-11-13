@@ -212,7 +212,23 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     }
   }
 
+  async function publishReport() {
+    if (!report) return
+    setReportBusy(true)
+    try {
+      const updated = await request<Report>(`/api/v1/reports/${report.id}:publish`, { method: 'POST' })
+      setReport(updated)
+      setMessage('报告已发布')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '报告发布失败')
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
   const current = audit.data
+  const priorityItems = report?.sections.find((section) => section.code === 'priorities')?.content.items
+  const priorityCount = Array.isArray(priorityItems) ? priorityItems.length : 0
   const channelMetrics = (metrics.data ?? []).filter((metric) => !('engineConfigId' in metric.dimensions))
   const engineMetrics = (metrics.data ?? []).filter((metric) => 'engineConfigId' in metric.dimensions)
 
@@ -297,10 +313,11 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
         {report && <div className="report-card">
           <div><small>版本</small><strong>v{report.version}</strong></div>
           <div><small>状态</small><strong>{report.status}</strong></div>
-          <div><small>章节</small><strong>{report.sections.length}</strong></div>
+          <div><small>章节 / 优先级</small><strong>{report.sections.length} / {priorityCount}</strong></div>
+          {report.status === 'ready' && <button type="button" disabled={reportBusy} onClick={() => void publishReport()}>发布</button>}
           <button type="button" disabled={reportBusy} onClick={() => void downloadExport('csv')}>{reportBusy ? '导出中…' : '导出 CSV'}</button>
           <button type="button" disabled={reportBusy} onClick={() => void downloadExport('pdf')}>导出 PDF</button>
-          <span>PDF 由 Playwright Chromium 渲染</span>
+          <span>{report.status === 'published' ? '已发布' : 'PDF 由 Playwright Chromium 渲染'}</span>
         </div>}
       </section>}
       {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}

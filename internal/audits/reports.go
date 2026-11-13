@@ -83,6 +83,10 @@ FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, te
 	if err != nil {
 		return Report{}, err
 	}
+	priorities, err := generatePriorities(ctx, tx, tenantID, projectID)
+	if err != nil {
+		return Report{}, err
+	}
 
 	var version int
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0)+1 FROM reports WHERE audit_id=UUID_TO_BIN(?)`, auditID).Scan(&version); err != nil {
@@ -96,6 +100,7 @@ FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, te
 		"metricVersion":    metricVersion,
 		"judgeVersion":     judgeVersion,
 		"templateVersion":  templateVersion,
+		"priorityVersion":  PriorityVersion,
 	}
 	dependencyJSON, _ := json.Marshal(dependencies)
 	reportID, _ := uuid.NewV7()
@@ -125,6 +130,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion}},
 		{"metrics", map[string]any{"metricVersion": metricVersion, "values": metrics}},
 		{"findings", map[string]any{"items": findings}},
+		{"priorities", map[string]any{"items": priorities, "version": PriorityVersion}},
 		{"limitations", map[string]any{"items": limitations}},
 	}
 	for _, section := range sections {
@@ -413,6 +419,12 @@ func buildCSV(report Report) []byte {
 			for _, entry := range items {
 				finding, _ := entry.(map[string]any)
 				write("finding", csvValue(finding["ruleCode"]), csvCell(csvValue(finding["severity"])), "", "", csvCell(csvValue(finding["summary"])))
+			}
+		case "priorities":
+			items, _ := section.Content["items"].([]any)
+			for _, entry := range items {
+				priority, _ := entry.(map[string]any)
+				write("priority", csvValue(priority["ruleCode"]), csvValue(priority["priority"]), csvValue(priority["severity"]), "", csvValue(priority["score"]))
 			}
 		case "limitations":
 			items, _ := section.Content["items"].([]any)
