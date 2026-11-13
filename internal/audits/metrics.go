@@ -36,6 +36,7 @@ type metricGroup struct {
 	refusals         int
 	positiveMentions int
 	mentionFrequency int
+	members          []map[string]any
 }
 
 func (s *Store) GetMetrics(ctx context.Context, tenantID, auditID, aggregationMethod, channel string) ([]MetricValue, error) {
@@ -113,7 +114,7 @@ ON DUPLICATE KEY UPDATE id=id`, snapshotUUID.String(), tenantID, auditID, evalua
 	}
 
 	rows, err := tx.QueryContext(ctx, `
-SELECT BIN_TO_UUID(s.engine_config_id),ec.provider,s.channel,s.model_selector,ae.answer_outcome,COALESCE(ae.recommendation_label,''),COALESCE(ae.sentiment,''),COALESCE(JSON_LENGTH(ae.evidence_json->'$.mentions'),0)
+SELECT BIN_TO_UUID(s.engine_config_id),ec.provider,s.channel,s.model_selector,BIN_TO_UUID(ae.id),BIN_TO_UUID(ae.response_id),BIN_TO_UUID(s.question_id),BIN_TO_UUID(s.id),ae.answer_outcome,COALESCE(ae.recommendation_label,''),COALESCE(ae.sentiment,''),COALESCE(JSON_LENGTH(ae.evidence_json->'$.mentions'),0)
 FROM answer_evaluations ae
 JOIN ai_responses resp ON resp.id=ae.response_id
 JOIN audit_samples s ON s.id=resp.sample_id
@@ -135,10 +136,14 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 		return created
 	}
 	for rows.Next() {
-		var engineID, provider, channel, modelSelector, outcome, recommendation, sentiment string
+		var engineID, provider, channel, modelSelector, evaluationID, responseID, questionID, sampleID, outcome, recommendation, sentiment string
 		var mentions int
-		if err := rows.Scan(&engineID, &provider, &channel, &modelSelector, &outcome, &recommendation, &sentiment, &mentions); err != nil {
+		if err := rows.Scan(&engineID, &provider, &channel, &modelSelector, &evaluationID, &responseID, &questionID, &sampleID, &outcome, &recommendation, &sentiment, &mentions); err != nil {
 			return err
+		}
+		member := map[string]any{
+			"evaluationId": evaluationID, "responseId": responseID, "questionId": questionID, "sampleId": sampleID,
+			"answerOutcome": outcome, "recommendationLabel": recommendation, "sentiment": sentiment, "mentionCount": mentions,
 		}
 		targets := []*metricGroup{
 			group(map[string]any{"channel": channel}),
@@ -147,6 +152,7 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 		for _, target := range targets {
 			target.eligible++
 			target.mentionFrequency += mentions
+			target.members = append(target.members, member)
 			if recommendation == "mentioned" {
 				target.mentions++
 				if sentiment == "positive" {
@@ -176,13 +182,21 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 			{"positive_mention_rate", group.positiveMentions, group.mentions},
 			{"eligible_response_rate", group.eligible, planned},
 		} {
-			if err := insertMetricValue(ctx, tx, tenantID, snapshotID, metric.code, group.dimensions, metric.numerator, metric.denominator); err != nil {
+			metricValueID, err := insertMetricValue(ctx, tx, tenantID, snapshotID, metric.code, group.dimensions, metric.numerator, metric.denominator)
+			if err != nil {
+				return err
+			}
+			if err := insertMetricEvidence(ctx, tx, tenantID, metricValueID, group.members); err != nil {
 				return err
 			}
 		}
 		if group.eligible > 0 {
 			value := float64(group.mentionFrequency) / float64(group.eligible)
-			if err := insertMetricFrequency(ctx, tx, tenantID, snapshotID, group.dimensions, group.mentionFrequency, group.eligible, value); err != nil {
+			metricValueID, err := insertMetricFrequency(ctx, tx, tenantID, snapshotID, group.dimensions, group.mentionFrequency, group.eligible, value)
+			if err != nil {
+				return err
+			}
+			if err := insertMetricEvidence(ctx, tx, tenantID, metricValueID, group.members); err != nil {
 				return err
 			}
 		}
