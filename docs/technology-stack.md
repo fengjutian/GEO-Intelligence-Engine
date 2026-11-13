@@ -1,7 +1,7 @@
 # GEO Intelligence 技术栈与工程选型
 
-> 版本：V1.0  
-> 状态：已批准（V1.0 基线）  
+> 版本：V1.1
+> 状态：已批准（V1.1 增量基线）
 > 日期：2026-11-13  
 > 适用范围：P0 GEO Audit 及后续演进  
 > 关联文档：[PRD](./product-requirements.md)｜[技术原理](./technical-principles.md)｜[P0 设计规范集](./specs/README.md)
@@ -45,7 +45,8 @@ Go Core Platform
 | 可观测性 | OpenTelemetry + Prometheus + Grafana + Loki + Tempo | Trace、Metric 和 Log |
 | 身份认证 | Keycloak 26.8.2 / OIDC | 登录、MFA 和企业 SSO |
 | 密钥管理 | AWS Secrets Manager + KMS | 模型和第三方凭据 |
-| 本地开发 | Docker Compose | 一键启动完整依赖 |
+| 本地开发 | 原生进程 + 本机/远程基础服务 | 默认方式，不依赖容器运行时 |
+| 可选隔离环境 | Docker Compose | CI、演示和需要隔离时的一键环境 |
 | 生产部署 | Docker + 托管容器平台 | P0 生产运行环境 |
 | CI/CD | GitHub Actions | 测试、扫描、构建和部署 |
 
@@ -364,7 +365,7 @@ OpenTelemetry Collector
 | TypeScript Worker | Vitest + 录制网页 Fixture |
 | Python | pytest |
 | API 契约 | OpenAPI Schema Test |
-| 数据库 | 真实 MySQL 容器和迁移测试 |
+| 数据库 | 真实 MySQL 8.4 和迁移测试；CI 可选容器隔离 |
 | 安全 | SAST、SCA、Secret Scan、Container/IaC Scan |
 | 性能 | k6 |
 
@@ -372,12 +373,11 @@ CI 默认不调用真实付费模型 API。供应商行为通过脱敏 Fixture �
 
 ## 13. 本地开发环境
 
-Docker Compose 至少启动：
+默认在宿主机原生运行 Go、Node.js 和 Python 进程，通过环境变量连接本机安装或团队共享的 MySQL、Redis、S3 兼容存储与 Keycloak。数据库迁移使用仓库内的 `go run ./cmd/migrate up`，不得要求开发人员安装 Docker。
+
+原生开发进程包括：
 
 ```text
-mysql
-redis
-minio
 api
 scheduler
 crawler-worker
@@ -387,10 +387,9 @@ report-worker
 otel-collector
 prometheus
 grafana
-mailpit
 ```
 
-前端可在宿主机使用 Vite 开发服务器运行，也可以选择容器运行。仓库提供 `.env.example`，但不提供真实密钥。
+前端使用宿主机 Vite 开发服务器。仓库提供 `.env.example`，但不提供真实密钥。Docker Compose 仅作为 CI、快速演示和隔离依赖的可选方案，不是开发或运行前提。
 
 ## 14. 生产部署
 

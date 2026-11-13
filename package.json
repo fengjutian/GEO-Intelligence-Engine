@@ -4,6 +4,7 @@
   "packageManager": "pnpm@11.13.1",
   "scripts": {
     "dev:web": "pnpm --filter @geo/web dev",
+    "dev:crawler": "pnpm --filter @geo/crawler-worker build && pnpm --filter @geo/crawler-worker exec node dist/index.js",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

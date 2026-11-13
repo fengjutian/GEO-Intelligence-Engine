@@ -38,4 +38,12 @@ services:
   judge-worker:
     build: {context: ., dockerfile: apps/judge-worker/Dockerfile}
     ports: ["8081:8081"]
+  crawler-worker:
+    build: {context: ., dockerfile: apps/crawler-worker/Dockerfile}
+    environment: {PORT: "8082"}
+    ports: ["8082:8082"]
+  web:
+    build: {context: ., dockerfile: apps/web/Dockerfile}
+    ports: ["3000:8080"]
+    depends_on: [api]
 volumes: {mysql-data: {}, redis-data: {}, minio-data: {}}

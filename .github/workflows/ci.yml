@@ -65,8 +65,11 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - uses: golang-migrate/migrate-actions@v1
-        with:
-          command: up
-          source: file://db/migrations
-          database: mysql://root:root@tcp(127.0.0.1:3306)/geo
+      - name: Apply database migrations
+        run: >-
+          docker run --rm --network host
+          -v "$PWD/db/migrations:/migrations:ro"
+          migrate/migrate:v4.20.1
+          -path=/migrations
+          -database 'mysql://root:root@tcp(127.0.0.1:3306)/geo'
+          up

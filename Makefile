@@ -1,4 +1,4 @@
-.PHONY: test build up down migrate
+.PHONY: test build migrate api web crawler judge docker-up docker-down
 test:
 	go test ./...
 	pnpm test
@@ -6,9 +6,17 @@ test:
 build:
 	go build ./cmd/api
 	pnpm build
-up:
-	docker compose up --build
-down:
-	docker compose down
 migrate:
-	docker compose run --rm migrate
+	go run ./cmd/migrate up
+api:
+	go run ./cmd/api
+web:
+	pnpm dev:web
+crawler:
+	pnpm dev:crawler
+judge:
+	cd apps/judge-worker && uv run uvicorn geo_judge.app:app --reload --port 8081
+docker-up:
+	docker compose up --build
+docker-down:
+	docker compose down
