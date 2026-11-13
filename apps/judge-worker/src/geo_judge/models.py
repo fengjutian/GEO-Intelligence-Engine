@@ -37,3 +37,32 @@ class EligibilityInput(BaseModel):
 class EligibilityResult(BaseModel):
     eligible_for_core_metrics: bool
     eligibility_rule_version: str = Field(default="eligibility-v1.0")
+
+
+class JudgeRequest(BaseModel):
+    question: str
+    answer: str
+    brand_name: str = ""
+    brand_aliases: list[str] = Field(default_factory=list)
+    language: str = ""
+    transport_status: TransportStatus = TransportStatus.SUCCEEDED
+    finish_reason: str = ""
+
+
+class Mention(BaseModel):
+    text: str
+    start: int
+    end: int
+
+
+class JudgeResult(BaseModel):
+    content_validity: ContentValidity
+    answer_outcome: AnswerOutcome
+    recommendation_label: str
+    sentiment: str
+    confidence: float
+    eligible_for_core_metrics: bool
+    judge_version: str
+    eligibility_rule_version: str
+    mentions: list[Mention] = Field(default_factory=list)
+

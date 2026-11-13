@@ -22,6 +22,7 @@ type Config struct {
 	MiniMaxModel     string
 	ModelRPM         int
 	ModelConcurrency int
+	JudgeURL         string
 	LogLevel         slog.Level
 }
 
@@ -40,6 +41,7 @@ func FromEnv() (Config, error) {
 		MiniMaxModel:     envOr("MINIMAX_MODEL", "MiniMax-M2.5"),
 		ModelRPM:         envInt("GEO_MODEL_RPM", 60),
 		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
+		JudgeURL:         envOr("GEO_JUDGE_URL", "http://127.0.0.1:8081"),
 		LogLevel:         slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

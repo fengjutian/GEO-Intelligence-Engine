@@ -29,6 +29,7 @@ type SampleClaim struct {
 	Currency              string
 	BrandName             string
 	BrandDomain           string
+	BrandAliases          []string
 	PromptTemplateVersion string
 }
 
@@ -49,6 +50,27 @@ type SampleResult struct {
 	Currency          string
 	RequestHash       string
 	RawHash           string
+	Evaluation        *Evaluation
+}
+
+// Evaluation is the Answer Judge output attached to one model response.
+type Evaluation struct {
+	ContentValidity        string
+	AnswerOutcome          string
+	RecommendationLabel    string
+	Sentiment              string
+	Confidence             float64
+	Eligible               bool
+	JudgeVersion           string
+	EligibilityRuleVersion string
+	Mentions               []EvaluationMention
+}
+
+// EvaluationMention is one brand occurrence in the answer.
+type EvaluationMention struct {
+	Text  string `json:"text"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
 }
 
 // SampleFailure records an execution error and retries once before failing the sample.
@@ -71,6 +93,7 @@ WHERE s.status='running' AND s.lease_expires_at IS NOT NULL AND s.lease_expires_
 		return SampleClaim{}, fmt.Errorf("reclaim expired sample leases: %w", err)
 	}
 	var claim SampleClaim
+	var aliasesJSON []byte
 	err = tx.QueryRowContext(ctx, `
 SELECT BIN_TO_UUID(s.id),BIN_TO_UUID(s.audit_id),BIN_TO_UUID(a.project_id),BIN_TO_UUID(s.question_id),
        q.text_value,s.language,COALESCE(s.region,''),ec.provider,s.model_selector,s.channel,
@@ -78,6 +101,7 @@ SELECT BIN_TO_UUID(s.id),BIN_TO_UUID(s.audit_id),BIN_TO_UUID(a.project_id),BIN_T
        a.currency,
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(ks.content_json,'$.brand.canonicalName')),''),
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(ks.content_json,'$.brand.officialDomain')),''),
+       COALESCE(JSON_EXTRACT(ks.content_json,'$.aliases'),JSON_ARRAY()),
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(mp.config_json,'$.promptTemplateVersion')),'prompt-v1')
 FROM audit_samples s
 JOIN audits a ON a.id=s.audit_id AND a.tenant_id=s.tenant_id
@@ -89,12 +113,20 @@ WHERE s.status='queued' AND a.status IN ('queued','running')
 ORDER BY s.created_at,s.id LIMIT 1 FOR UPDATE SKIP LOCKED`).Scan(
 		&claim.SampleID, &claim.AuditID, &claim.ProjectID, &claim.QuestionID,
 		&claim.QuestionText, &claim.Language, &claim.Region, &claim.Provider, &claim.ModelSelector, &claim.Channel,
-		&claim.CostMicrounits, &claim.Currency, &claim.BrandName, &claim.BrandDomain, &claim.PromptTemplateVersion)
+		&claim.CostMicrounits, &claim.Currency, &claim.BrandName, &claim.BrandDomain, &aliasesJSON, &claim.PromptTemplateVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SampleClaim{}, ErrNoWork
 	}
 	if err != nil {
 		return SampleClaim{}, fmt.Errorf("select audit sample: %w", err)
+	}
+	var aliases []map[string]any
+	if len(aliasesJSON) > 0 && json.Unmarshal(aliasesJSON, &aliases) == nil {
+		for _, entry := range aliases {
+			if alias, ok := entry["alias"].(string); ok && strings.TrimSpace(alias) != "" {
+				claim.BrandAliases = append(claim.BrandAliases, alias)
+			}
+		}
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE audit_samples SET status='running',lease_owner=?,lease_expires_at=UTC_TIMESTAMP(6)+INTERVAL 2 MINUTE WHERE id=UUID_TO_BIN(?)`, workerID, claim.SampleID)
 	if err != nil {
@@ -163,6 +195,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'succeed
 		responseID.String(), tenantID, result.SampleID, requestID.String(), result.ProviderRequestID, result.ResolvedModel, "db://raw/"+responseID.String(), rawHash, usage, result.CostMicrounits, result.Currency, result.FinishReason, result.LatencyMS)
 	if err != nil {
 		return fmt.Errorf("persist model response: %w", err)
+	}
+	if err := persistEvaluation(ctx, tx, tenantID, result.AuditID, responseID.String(), result.Evaluation); err != nil {
+		return err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE audit_samples SET status='succeeded',lease_owner=NULL,lease_expires_at=NULL,last_error_code=NULL WHERE id=UUID_TO_BIN(?)`, result.SampleID); err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/config"
 	"github.com/fengjutian/geo-intelligence-engine/internal/database"
+	"github.com/fengjutian/geo-intelligence-engine/internal/judge"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/google/uuid"
 )
@@ -40,6 +41,7 @@ func main() {
 		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 	)
 	store := audits.NewStore(db)
+	judgeClient := judge.New(cfg.JudgeURL)
 	workerID := os.Getenv("GEO_WORKER_ID")
 	if workerID == "" {
 		workerID = "model-worker-" + uuid.NewString()
@@ -92,12 +94,12 @@ func main() {
 			if !anyConfigured {
 				continue
 			}
-			processOne(ctx, store, gateway, logger, workerID, configured)
+			processOne(ctx, store, gateway, judgeClient, logger, workerID, configured)
 		}
 	}
 }
 
-func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.Gateway, logger *slog.Logger, workerID string, configured map[string]bool) {
+func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.Gateway, judgeClient *judge.Client, logger *slog.Logger, workerID string, configured map[string]bool) {
 	claim, err := store.ClaimSample(ctx, workerID)
 	if errors.Is(err, audits.ErrNoWork) {
 		return
@@ -130,6 +132,35 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 	requestPayload, _ := json.Marshal(messages)
 	requestHash := sha256.Sum256(requestPayload)
 	rawHash := sha256.Sum256([]byte(response.Content))
+	var evaluation *audits.Evaluation
+	judgeResult, judgeErr := judgeClient.Evaluate(ctx, judge.Input{
+		Question:        claim.QuestionText,
+		Answer:          response.Content,
+		BrandName:       claim.BrandName,
+		BrandAliases:    claim.BrandAliases,
+		Language:        claim.Language,
+		TransportStatus: "succeeded",
+		FinishReason:    response.FinishReason,
+	})
+	if judgeErr != nil {
+		logger.Warn("judge evaluation failed; answer stays ineligible", "sample", claim.SampleID, "error", judgeErr)
+	} else {
+		mentions := make([]audits.EvaluationMention, 0, len(judgeResult.Mentions))
+		for _, mention := range judgeResult.Mentions {
+			mentions = append(mentions, audits.EvaluationMention{Text: mention.Text, Start: mention.Start, End: mention.End})
+		}
+		evaluation = &audits.Evaluation{
+			ContentValidity:        judgeResult.ContentValidity,
+			AnswerOutcome:          judgeResult.AnswerOutcome,
+			RecommendationLabel:    judgeResult.RecommendationLabel,
+			Sentiment:              judgeResult.Sentiment,
+			Confidence:             judgeResult.Confidence,
+			Eligible:               judgeResult.EligibleForCoreMetrics,
+			JudgeVersion:           judgeResult.JudgeVersion,
+			EligibilityRuleVersion: judgeResult.EligibilityRuleVersion,
+			Mentions:               mentions,
+		}
+	}
 	err = store.CompleteSample(ctx, audits.SampleResult{
 		SampleID:          claim.SampleID,
 		AuditID:           claim.AuditID,
@@ -146,6 +177,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		Currency:          claim.Currency,
 		RequestHash:       hex.EncodeToString(requestHash[:]),
 		RawHash:           hex.EncodeToString(rawHash[:]),
+		Evaluation:        evaluation,
 	})
 	if err != nil {
 		logger.Error("complete audit sample failed", "sample", claim.SampleID, "error", err)
