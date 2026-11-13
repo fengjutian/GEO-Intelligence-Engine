@@ -36,8 +36,8 @@ func main() {
 	}
 	defer db.Close()
 	gateway := modelgateway.New(
-		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens"},
-		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens"},
+		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
+		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 	)
 	store := audits.NewStore(db)
 	workerID := os.Getenv("GEO_WORKER_ID")
@@ -115,7 +115,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 	}
 	messages := buildMessages(claim)
 	temperature := 0.2
-	response, err := gateway.Chat(ctx, modelgateway.ChatRequest{Provider: claim.Provider, Model: claim.ModelSelector, Messages: messages, MaxTokens: 1200, Temperature: &temperature})
+	response, err := callWithRetry(ctx, gateway, modelgateway.ChatRequest{Provider: claim.Provider, Model: claim.ModelSelector, Messages: messages, MaxTokens: 1200, Temperature: &temperature}, logger)
 	if err != nil {
 		code := "MODEL_CALL_FAILED"
 		if errors.Is(err, modelgateway.ErrProviderUnconfigured) {
@@ -152,6 +152,37 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		return
 	}
 	logger.Info("audit sample completed", "sample", claim.SampleID, "audit", claim.AuditID, "provider", claim.Provider, "tokens", response.Usage.TotalTokens, "latency_ms", response.LatencyMS)
+}
+
+func callWithRetry(ctx context.Context, gateway *modelgateway.Gateway, request modelgateway.ChatRequest, logger *slog.Logger) (modelgateway.ChatResponse, error) {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		response, err := gateway.Chat(ctx, request)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if !modelgateway.Retryable(err) || attempt == 3 {
+			break
+		}
+		delay := time.Duration(250*(1<<(attempt-1))) * time.Millisecond
+		var providerErr *modelgateway.ProviderError
+		if errors.As(err, &providerErr) && providerErr.RetryAfter > 0 {
+			delay = providerErr.RetryAfter
+		}
+		if delay > 10*time.Second {
+			delay = 10 * time.Second
+		}
+		logger.Warn("retrying model call", "provider", request.Provider, "attempt", attempt, "delay_ms", delay.Milliseconds(), "error", err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return modelgateway.ChatResponse{}, ctx.Err()
+		}
+	}
+	return modelgateway.ChatResponse{}, lastErr
 }
 
 func buildMessages(claim audits.SampleClaim) []modelgateway.Message {

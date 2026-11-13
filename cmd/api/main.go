@@ -33,8 +33,8 @@ func main() {
 	}
 	defer db.Close()
 	gateway := modelgateway.New(
-		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens"},
-		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens"},
+		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
+		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 	)
 
 	server := &http.Server{

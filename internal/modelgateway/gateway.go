@@ -16,11 +16,13 @@ var ErrProviderUnsupported = errors.New("model provider is unsupported")
 var ErrProviderUnconfigured = errors.New("model provider is not configured")
 
 type ProviderConfig struct {
-	Name     string
-	BaseURL  string
-	APIKey   string
-	Model    string
-	MaxField string
+	Name           string
+	BaseURL        string
+	APIKey         string
+	Model          string
+	MaxField       string
+	RPMLimit       int
+	MaxConcurrency int
 }
 
 type Message struct {
@@ -62,17 +64,22 @@ type ProviderStatus struct {
 
 type Gateway struct {
 	providers map[string]ProviderConfig
+	limiters  map[string]*providerLimiter
 	client    *http.Client
 }
 
 func New(configs ...ProviderConfig) *Gateway {
 	providers := make(map[string]ProviderConfig, len(configs))
+	limiters := make(map[string]*providerLimiter, len(configs))
 	for _, config := range configs {
 		config.Name = strings.ToLower(strings.TrimSpace(config.Name))
 		config.BaseURL = strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
 		providers[config.Name] = config
+		if limiter := newProviderLimiter(config.RPMLimit, config.MaxConcurrency); limiter != nil {
+			limiters[config.Name] = limiter
+		}
 	}
-	return &Gateway{providers: providers, client: &http.Client{Timeout: 90 * time.Second}}
+	return &Gateway{providers: providers, limiters: limiters, client: &http.Client{Timeout: 90 * time.Second}}
 }
 
 func (g *Gateway) Statuses() []ProviderStatus {
@@ -96,6 +103,11 @@ func (g *Gateway) Chat(ctx context.Context, input ChatRequest) (ChatResponse, er
 	if strings.TrimSpace(config.APIKey) == "" {
 		return ChatResponse{}, ErrProviderUnconfigured
 	}
+	limiter := g.limiters[config.Name]
+	if err := limiter.acquire(ctx); err != nil {
+		return ChatResponse{}, fmt.Errorf("wait for %s rate limit: %w", config.Name, err)
+	}
+	defer limiter.release()
 	model := strings.TrimSpace(input.Model)
 	if model == "" {
 		model = config.Model
@@ -128,7 +140,7 @@ func (g *Gateway) Chat(ctx context.Context, input ChatRequest) (ChatResponse, er
 		return ChatResponse{}, fmt.Errorf("read provider response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ChatResponse{}, fmt.Errorf("provider %s returned HTTP %d: %s", config.Name, response.StatusCode, safeProviderError(data))
+		return ChatResponse{}, &ProviderError{Provider: config.Name, StatusCode: response.StatusCode, RetryAfter: parseRetryAfter(response.Header.Get("Retry-After")), Message: safeProviderError(data)}
 	}
 	var result struct {
 		ID      string `json:"id"`

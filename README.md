@@ -105,7 +105,11 @@ DEEPSEEK_MODEL=deepseek-flash
 MINIMAX_API_KEY=
 MINIMAX_BASE_URL=https://api.minimaxi.com/v1
 MINIMAX_MODEL=MiniMax-M2.5
+GEO_MODEL_RPM=60
+GEO_MODEL_MAX_CONCURRENCY=4
 ```
+
+`GEO_MODEL_RPM` 控制每个供应商的每分钟调用预算（平滑令牌桶），`GEO_MODEL_MAX_CONCURRENCY` 控制单供应商并发；Worker 对 408/429/5xx 和网络错误最多重试 3 次，并遵守 `Retry-After`。
 
 复制 `.env.example` 为 `.env` 后填写至少一个供应商密钥，再用 `python scripts/dev.py restart --skip-migrate` 重启。可通过 `GET /api/v1/model-providers` 查看配置状态，通过管理界面的“模型供应商”区域执行健康检查。
 
