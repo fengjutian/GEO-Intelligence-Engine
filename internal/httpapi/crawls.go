@@ -20,6 +20,9 @@ type crawlStore interface {
 	Claim(ctx context.Context, workerID string) (crawls.Claim, error)
 	Complete(ctx context.Context, completion crawls.Completion) error
 	Fail(ctx context.Context, failure crawls.Failure) error
+	Block(ctx context.Context, block crawls.BlockedURL) error
+	RecordRobotsSnapshot(ctx context.Context, runID string, snapshot crawls.RobotsSnapshot) error
+	RecordSitemaps(ctx context.Context, report crawls.SitemapReport) error
 	Control(ctx context.Context, tenantID, runID, action string) (crawls.Run, error)
 	ListPages(ctx context.Context, tenantID, runID string) ([]crawls.PageSummary, error)
 	GetPageContent(ctx context.Context, tenantID, contentID string) (crawls.PageDetail, error)
@@ -252,6 +255,54 @@ func (h *crawlHandler) fail(w http.ResponseWriter, r *http.Request) {
 	}
 	input.RunID = r.PathValue("crawlRunId")
 	if err := h.store.Fail(r.Context(), input); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *crawlHandler) block(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeWorker(w, r) {
+		return
+	}
+	var input crawls.BlockedURL
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	input.RunID = r.PathValue("crawlRunId")
+	if err := h.store.Block(r.Context(), input); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *crawlHandler) recordRobots(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeWorker(w, r) {
+		return
+	}
+	var input crawls.RobotsSnapshot
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	runID := r.PathValue("crawlRunId")
+	if err := h.store.RecordRobotsSnapshot(r.Context(), runID, input); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *crawlHandler) reportSitemaps(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeWorker(w, r) {
+		return
+	}
+	var input crawls.SitemapReport
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	input.RunID = r.PathValue("crawlRunId")
+	if err := h.store.RecordSitemaps(r.Context(), input); err != nil {
 		h.writeError(w, r, err)
 		return
 	}

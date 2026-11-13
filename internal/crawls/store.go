@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -107,24 +108,27 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'queued',0,100,UTC_TI
 
 func (s *Store) Get(ctx context.Context, tenantID, runID string) (Run, error) {
 	var run Run
+	var blocked uint32
 	err := s.db.QueryRowContext(ctx, `
-SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),BIN_TO_UUID(website_id),status,discovered_count,fetched_count,failed_count,started_at,finished_at,created_at
-FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, runID).Scan(&run.ID, &run.ProjectID, &run.WebsiteID, &run.Status, &run.DiscoveredCount, &run.FetchedCount, &run.FailedCount, &run.StartedAt, &run.FinishedAt, &run.CreatedAt)
+SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(r.project_id),BIN_TO_UUID(r.website_id),r.status,r.discovered_count,r.fetched_count,r.failed_count,r.started_at,r.finished_at,r.created_at,
+       (SELECT COUNT(*) FROM crawl_urls cu WHERE cu.crawl_run_id=r.id AND cu.state='blocked')
+FROM crawl_runs r WHERE r.tenant_id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?)`, tenantID, runID).Scan(&run.ID, &run.ProjectID, &run.WebsiteID, &run.Status, &run.DiscoveredCount, &run.FetchedCount, &run.FailedCount, &run.StartedAt, &run.FinishedAt, &run.CreatedAt, &blocked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
 	if err != nil {
 		return Run{}, fmt.Errorf("read crawl run: %w", err)
 	}
-	run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount}
+	run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount, Blocked: blocked}
 	return run, nil
 }
 
 func (s *Store) ListByProject(ctx context.Context, tenantID, projectID string, limit int) ([]Run, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),BIN_TO_UUID(website_id),status,discovered_count,fetched_count,failed_count,started_at,finished_at,created_at
-FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?)
-ORDER BY created_at DESC,id DESC LIMIT ?`, tenantID, projectID, limit)
+SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(r.project_id),BIN_TO_UUID(r.website_id),r.status,r.discovered_count,r.fetched_count,r.failed_count,r.started_at,r.finished_at,r.created_at,
+       (SELECT COUNT(*) FROM crawl_urls cu WHERE cu.crawl_run_id=r.id AND cu.state='blocked')
+FROM crawl_runs r WHERE r.tenant_id=UUID_TO_BIN(?) AND r.project_id=UUID_TO_BIN(?)
+ORDER BY r.created_at DESC,r.id DESC LIMIT ?`, tenantID, projectID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query project crawl runs: %w", err)
 	}
@@ -132,10 +136,11 @@ ORDER BY created_at DESC,id DESC LIMIT ?`, tenantID, projectID, limit)
 	runs := []Run{}
 	for rows.Next() {
 		var run Run
-		if err := rows.Scan(&run.ID, &run.ProjectID, &run.WebsiteID, &run.Status, &run.DiscoveredCount, &run.FetchedCount, &run.FailedCount, &run.StartedAt, &run.FinishedAt, &run.CreatedAt); err != nil {
+		var blocked uint32
+		if err := rows.Scan(&run.ID, &run.ProjectID, &run.WebsiteID, &run.Status, &run.DiscoveredCount, &run.FetchedCount, &run.FailedCount, &run.StartedAt, &run.FinishedAt, &run.CreatedAt, &blocked); err != nil {
 			return nil, fmt.Errorf("scan project crawl run: %w", err)
 		}
-		run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount}
+		run.Counts = Counts{Discovered: run.DiscoveredCount, Fetched: run.FetchedCount, Failed: run.FailedCount, Blocked: blocked}
 		runs = append(runs, run)
 	}
 	if err := rows.Err(); err != nil {
@@ -160,10 +165,10 @@ WHERE state='fetching' AND lease_expires_at IS NOT NULL AND lease_expires_at < U
 	var claim Claim
 	var configJSON []byte
 	err = tx.QueryRowContext(ctx, `
-SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(u.id),BIN_TO_UUID(r.website_id),u.normalized_url,r.config_snapshot
+SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(u.id),BIN_TO_UUID(r.website_id),u.normalized_url,u.depth,r.config_snapshot
 FROM crawl_urls u JOIN crawl_runs r ON r.tenant_id=u.tenant_id AND r.id=u.crawl_run_id
 WHERE u.state='queued' AND r.status IN ('queued','running') ORDER BY u.priority DESC,u.created_at LIMIT 1 FOR UPDATE SKIP LOCKED`).
-		Scan(&claim.RunID, &claim.CrawlURLID, &claim.WebsiteID, &claim.URL, &configJSON)
+		Scan(&claim.RunID, &claim.CrawlURLID, &claim.WebsiteID, &claim.URL, &claim.Depth, &configJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Claim{}, ErrNoWork
 	}
@@ -399,6 +404,186 @@ WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit crawl failure: %w", err)
+	}
+	return nil
+}
+
+// RecordRobotsSnapshot stores the latest robots.txt evidence for a run's website. The
+// table keeps one row per website host so repeated crawls refresh rather than duplicate it.
+func (s *Store) RecordRobotsSnapshot(ctx context.Context, runID string, snapshot RobotsSnapshot) error {
+	if snapshot.ParserVersion == "" {
+		snapshot.ParserVersion = "robots-v1"
+	}
+	if len(snapshot.Rules) == 0 {
+		snapshot.Rules = json.RawMessage(`{}`)
+	}
+	if !json.Valid(snapshot.Rules) {
+		return errors.New("invalid robots rules")
+	}
+	host := strings.TrimSpace(strings.ToLower(snapshot.Host))
+	if host == "" {
+		if parsed, err := url.Parse(snapshot.RequestedURL); err == nil {
+			host = strings.ToLower(parsed.Hostname())
+		}
+	}
+	if host == "" {
+		return errors.New("robots snapshot requires a host")
+	}
+	if len(snapshot.Content) > 512<<10 {
+		snapshot.Content = snapshot.Content[:512<<10]
+	}
+	var contentHash []byte
+	if strings.TrimSpace(snapshot.ContentHash) != "" {
+		decoded, err := hex.DecodeString(snapshot.ContentHash)
+		if err != nil || len(decoded) != sha256.Size {
+			return errors.New("invalid robots content hash")
+		}
+		contentHash = decoded
+	}
+	var tenantID, websiteID string
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(tenant_id),BIN_TO_UUID(website_id) FROM crawl_runs WHERE id=UUID_TO_BIN(?)`, runID).Scan(&tenantID, &websiteID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("load crawl run for robots snapshot: %w", err)
+	}
+	snapshotID, _ := uuid.NewV7()
+	_, err = s.db.ExecContext(ctx, `
+INSERT INTO robots_snapshots (id,tenant_id,website_id,host,requested_url,http_status,content_hash,parser_version,rules_json,content,fetched_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,CAST(? AS JSON),?,UTC_TIMESTAMP(6))
+ON DUPLICATE KEY UPDATE requested_url=VALUES(requested_url),http_status=VALUES(http_status),content_hash=VALUES(content_hash),
+  parser_version=VALUES(parser_version),rules_json=VALUES(rules_json),content=VALUES(content),fetched_at=UTC_TIMESTAMP(6)`,
+		snapshotID.String(), tenantID, websiteID, host, snapshot.RequestedURL, snapshot.HTTPStatus, contentHash, snapshot.ParserVersion, snapshot.Rules, snapshot.Content)
+	if err != nil {
+		return fmt.Errorf("store robots snapshot: %w", err)
+	}
+	return nil
+}
+
+// Block marks a URL as disallowed by robots.txt without counting it as a fetch failure.
+func (s *Store) Block(ctx context.Context, block BlockedURL) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin crawl block: %w", err)
+	}
+	defer tx.Rollback()
+	var runStatus string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM crawl_runs WHERE id=UUID_TO_BIN(?) FOR UPDATE`, block.RunID).Scan(&runStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read crawl state: %w", err)
+	}
+	if runStatus != "queued" && runStatus != "running" && runStatus != "paused" {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE crawl_urls SET state='blocked',lease_owner=NULL,lease_expires_at=NULL
+WHERE id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, block.CrawlURLID, block.RunID)
+	if err != nil {
+		return fmt.Errorf("block crawl URL: %w", err)
+	}
+	var remaining int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM crawl_urls WHERE crawl_run_id=UUID_TO_BIN(?) AND state IN ('queued','fetching')`, block.RunID).Scan(&remaining)
+	if err != nil {
+		return fmt.Errorf("count remaining crawl URLs: %w", err)
+	}
+	switch {
+	case runStatus == "paused":
+	case remaining > 0:
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='running' WHERE id=UUID_TO_BIN(?)`, block.RunID)
+	default:
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET status='succeeded',finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, block.RunID)
+	}
+	if err != nil {
+		return fmt.Errorf("finalize crawl after block: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit crawl block: %w", err)
+	}
+	return nil
+}
+
+// RecordSitemaps persists sitemap parse evidence and enqueues discovered URLs for the run.
+func (s *Store) RecordSitemaps(ctx context.Context, report SitemapReport) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin sitemap report: %w", err)
+	}
+	defer tx.Rollback()
+	var tenantID, websiteID, runStatus, baseURL string
+	var configJSON []byte
+	var discovered int
+	err = tx.QueryRowContext(ctx, `
+SELECT BIN_TO_UUID(r.tenant_id),BIN_TO_UUID(r.website_id),r.status,r.config_snapshot,r.discovered_count,w.base_url
+FROM crawl_runs r JOIN websites w ON w.id=r.website_id
+WHERE r.id=UUID_TO_BIN(?) FOR UPDATE`, report.RunID).Scan(&tenantID, &websiteID, &runStatus, &configJSON, &discovered, &baseURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("load crawl run for sitemaps: %w", err)
+	}
+	if runStatus != "queued" && runStatus != "running" && runStatus != "paused" {
+		return nil
+	}
+	for _, document := range report.Documents {
+		if strings.TrimSpace(document.URL) == "" {
+			continue
+		}
+		if document.ParserVersion == "" {
+			document.ParserVersion = "sitemap-v1"
+		}
+		var contentHash []byte
+		if strings.TrimSpace(document.ContentHash) != "" {
+			decoded, decodeErr := hex.DecodeString(document.ContentHash)
+			if decodeErr != nil || len(decoded) != sha256.Size {
+				continue
+			}
+			contentHash = decoded
+		}
+		documentID, _ := uuid.NewV7()
+		_, err = tx.ExecContext(ctx, `INSERT INTO crawl_sitemaps (id,tenant_id,crawl_run_id,url,parent_url,http_status,content_hash,url_count,parser_version,error_code,fetched_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,?,UTC_TIMESTAMP(6))`,
+			documentID.String(), tenantID, report.RunID, document.URL, document.ParentURL, document.HTTPStatus, contentHash, document.URLCount, document.ParserVersion, document.ErrorCode)
+		if err != nil {
+			return fmt.Errorf("insert crawl sitemap: %w", err)
+		}
+	}
+	var config CreateInput
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		return fmt.Errorf("decode crawl config: %w", err)
+	}
+	if config.MaxDepth > 0 && len(report.URLs) > 0 {
+		planned := PlanDiscovery(baseURL, "", report.URLs, 0, 1, config.MaxPages-discovered)
+		inserted := 0
+		for _, link := range planned {
+			urlID, _ := uuid.NewV7()
+			hash := sha256.Sum256([]byte(link))
+			result, insertErr := tx.ExecContext(ctx, `
+INSERT IGNORE INTO crawl_urls (id,tenant_id,crawl_run_id,original_url,normalized_url,normalized_url_hash,state,depth,priority,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'queued',1,95,UTC_TIMESTAMP(6))`, urlID.String(), tenantID, report.RunID, link, link, hash[:])
+			if insertErr != nil {
+				return fmt.Errorf("enqueue sitemap URL: %w", insertErr)
+			}
+			rows, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return fmt.Errorf("read sitemap enqueue result: %w", rowsErr)
+			}
+			if rows > 0 {
+				inserted++
+			}
+		}
+		if inserted > 0 {
+			_, err = tx.ExecContext(ctx, `UPDATE crawl_runs SET discovered_count=discovered_count+? WHERE id=UUID_TO_BIN(?)`, inserted, report.RunID)
+			if err != nil {
+				return fmt.Errorf("update sitemap discovered count: %w", err)
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit sitemap report: %w", err)
 	}
 	return nil
 }

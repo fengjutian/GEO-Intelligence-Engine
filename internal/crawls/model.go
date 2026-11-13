@@ -1,6 +1,9 @@
 package crawls
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type CreateInput struct {
 	WebsiteID   string   `json:"websiteId"`
@@ -28,6 +31,7 @@ type Counts struct {
 	Discovered uint32 `json:"discovered"`
 	Fetched    uint32 `json:"fetched"`
 	Failed     uint32 `json:"failed"`
+	Blocked    uint32 `json:"blocked"`
 }
 
 type Claim struct {
@@ -35,6 +39,7 @@ type Claim struct {
 	CrawlURLID string `json:"crawlUrlId"`
 	WebsiteID  string `json:"websiteId"`
 	URL        string `json:"url"`
+	Depth      int    `json:"depth"`
 	MaxBytes   int64  `json:"maxBytes"`
 }
 
@@ -85,4 +90,40 @@ type Finding struct {
 	Summary   string         `json:"summary"`
 	Evidence  map[string]any `json:"evidence"`
 	CreatedAt time.Time      `json:"createdAt"`
+}
+
+// RobotsSnapshot is the worker-reported evidence for one host's robots.txt.
+type RobotsSnapshot struct {
+	Host          string          `json:"host"`
+	RequestedURL  string          `json:"requestedUrl"`
+	HTTPStatus    uint16          `json:"httpStatus"`
+	ContentHash   string          `json:"contentHash"`
+	ParserVersion string          `json:"parserVersion"`
+	Rules         json.RawMessage `json:"rules"`
+	Content       string          `json:"content"`
+}
+
+// BlockedURL records a URL that the run must not fetch because robots.txt disallows it.
+type BlockedURL struct {
+	RunID      string `json:"runId"`
+	CrawlURLID string `json:"crawlUrlId"`
+	Reason     string `json:"reason"`
+}
+
+// SitemapDocument is one fetched sitemap (or sitemap index) and its parse outcome.
+type SitemapDocument struct {
+	URL           string `json:"url"`
+	ParentURL     string `json:"parentUrl,omitempty"`
+	HTTPStatus    uint16 `json:"httpStatus"`
+	ContentHash   string `json:"contentHash"`
+	URLCount      uint32 `json:"urlCount"`
+	ParserVersion string `json:"parserVersion"`
+	ErrorCode     string `json:"errorCode,omitempty"`
+}
+
+// SitemapReport carries sitemap evidence plus the URLs discovered from them.
+type SitemapReport struct {
+	RunID     string            `json:"runId"`
+	Documents []SitemapDocument `json:"documents"`
+	URLs      []string          `json:"urls"`
 }
