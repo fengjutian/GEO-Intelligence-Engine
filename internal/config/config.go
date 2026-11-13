@@ -10,6 +10,7 @@ import (
 type Config struct {
 	HTTPAddress string
 	DatabaseDSN string
+	DevTenantID string
 	LogLevel    slog.Level
 }
 
@@ -17,6 +18,7 @@ func FromEnv() (Config, error) {
 	cfg := Config{
 		HTTPAddress: envOr("GEO_HTTP_ADDRESS", ":8080"),
 		DatabaseDSN: strings.TrimSpace(os.Getenv("GEO_DATABASE_DSN")),
+		DevTenantID: envOr("GEO_DEV_TENANT_ID", "019a7f64-7c2c-7000-8000-000000000001"),
 		LogLevel:    slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

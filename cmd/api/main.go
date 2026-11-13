@@ -34,7 +34,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

@@ -5,11 +5,14 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 )
 
 type Dependencies struct {
-	DB     *sql.DB
-	Logger *slog.Logger
+	DB          *sql.DB
+	Logger      *slog.Logger
+	DevTenantID string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -33,6 +36,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"apiVersion": "1.0.0", "baseline": "P0-V1.0"})
 	})
+	projectHandler := newProjectHandler(projects.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("GET /api/v1/projects", projectHandler.list)
+	mux.HandleFunc("POST /api/v1/projects", projectHandler.create)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}", projectHandler.get)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
 }

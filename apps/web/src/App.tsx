@@ -1,12 +1,45 @@
 import { Activity, Database, Radar, ShieldCheck } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FormEvent, useState } from 'react'
 
 type Version = { apiVersion: string; baseline: string }
+type Project = {
+  id: string
+  name: string
+  brandName: string
+  officialUrl: string
+  locale: string
+  region: string
+  timezone: string
+  status: string
+  version: number
+}
+type ProjectPage = { items: Project[]; page: { hasMore: boolean } }
+type ProjectInput = Omit<Project, 'id' | 'status' | 'version'>
 
 async function fetchVersion(): Promise<Version> {
   const response = await fetch('/api/v1/version')
   if (!response.ok) throw new Error('API unavailable')
   return response.json() as Promise<Version>
+}
+
+async function fetchProjects(): Promise<ProjectPage> {
+  const response = await fetch('/api/v1/projects?limit=20')
+  if (!response.ok) throw new Error('项目列表加载失败')
+  return response.json() as Promise<ProjectPage>
+}
+
+async function createProject(input: ProjectInput): Promise<Project> {
+  const response = await fetch('/api/v1/projects', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({ title: '项目创建失败' })) as { title?: string }
+    throw new Error(problem.title ?? '项目创建失败')
+  }
+  return response.json() as Promise<Project>
 }
 
 const modules = [
@@ -18,6 +51,30 @@ const modules = [
 
 export function App() {
   const version = useQuery({ queryKey: ['version'], queryFn: fetchVersion })
+  const projects = useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
+  const queryClient = useQueryClient()
+  const [formOpen, setFormOpen] = useState(false)
+  const create = useMutation({
+    mutationFn: createProject,
+    onSuccess: async () => {
+      setFormOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+
+  function submitProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    create.mutate({
+      name: String(data.get('name')),
+      brandName: String(data.get('brandName')),
+      officialUrl: String(data.get('officialUrl')),
+      locale: String(data.get('locale')),
+      region: String(data.get('region')),
+      timezone: String(data.get('timezone')),
+    })
+  }
+
   return <main className="min-h-screen px-6 py-10 sm:px-10">
     <div className="mx-auto max-w-6xl">
       <header className="flex flex-col gap-5 border-b border-line pb-8 sm:flex-row sm:items-end sm:justify-between">
@@ -28,6 +85,30 @@ export function App() {
         {modules.map(({ title, text, icon: Icon }) => <article className="card" key={title}><Icon aria-hidden="true"/><h2>{title}</h2><p>{text}</p></article>)}
       </section>
       <section className="panel"><div><p className="eyebrow">P0 DELIVERY</p><h2>GEO Audit</h2></div><p>项目配置 → 网站抓取 → 问题空间 → 多模型采样 → Answer Judge → 指标与报告</p></section>
+      <section className="workspace" aria-labelledby="projects-title">
+        <div className="section-heading">
+          <div><p className="eyebrow">WORKSPACE</p><h2 id="projects-title">项目与品牌</h2></div>
+          <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>
+        </div>
+        {formOpen && <form className="project-form" onSubmit={submitProject}>
+          <label>项目名称<input name="name" required maxLength={200} placeholder="中国区 GEO 基线" /></label>
+          <label>品牌正式名<input name="brandName" required maxLength={300} placeholder="Acme" /></label>
+          <label className="wide">官方网站<input name="officialUrl" required type="url" placeholder="https://example.com" /></label>
+          <label>默认语言<input name="locale" required defaultValue="zh-CN" /></label>
+          <label>地区<input name="region" required defaultValue="CN" /></label>
+          <label>时区<input name="timezone" required defaultValue="Asia/Shanghai" /></label>
+          <div className="form-actions"><button className="primary-button" disabled={create.isPending}>{create.isPending ? '创建中…' : '确认创建'}</button>{create.error && <span role="alert">{create.error.message}</span>}</div>
+        </form>}
+        {projects.isLoading && <p className="empty-state">正在加载项目…</p>}
+        {projects.isError && <p className="empty-state error" role="alert">项目列表加载失败，请确认 API 与数据库状态。</p>}
+        {projects.data?.items.length === 0 && <p className="empty-state">暂无项目。创建第一个品牌测量空间。</p>}
+        <div className="project-grid">
+          {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
+            <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
+            <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
+          </article>)}
+        </div>
+      </section>
     </div>
   </main>
 }

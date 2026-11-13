@@ -197,6 +197,7 @@ def start(args: argparse.Namespace, environment: dict[str, str]) -> int:
     run_checked(["go", "build", "-o", str(API_BINARY), "./cmd/api"], ROOT, environment)
     if not args.skip_migrate:
         run_checked(["go", "run", "./cmd/migrate", "up"], ROOT, environment)
+        run_checked(["go", "run", "./cmd/devseed"], ROOT, environment)
 
     state: dict[str, dict[str, Any]] = {}
     handles: list[IO[bytes]] = []
