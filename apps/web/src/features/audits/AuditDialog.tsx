@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { TaskBoard } from '../tasks/TaskBoard'
 
 type EngineConfig = { id: string; provider: string; channel: string; status: string }
 type QuestionSet = { id: string; draftVersionId: string; draftVersion: number; versions: Array<{ id: string; version: number; questionCount: number }> }
@@ -69,6 +70,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const [evidence, setEvidence] = useState<{ members: Array<Record<string, unknown>>; memberCount: number; truncated?: boolean } | null>(null)
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [taskStates, setTaskStates] = useState<Record<string, string>>({})
+  const [taskBoardOpen, setTaskBoardOpen] = useState(false)
   const audit = useQuery({
     queryKey: ['audit', auditId],
     queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
@@ -325,7 +327,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
         </div>
       </section>}
       {priorityList.length > 0 && <section className="audit-metrics">
-        <h3>优先级建议</h3>
+        <h3>优先级建议 <button type="button" className="task-board-link" onClick={() => setTaskBoardOpen(true)}>任务看板</button></h3>
         <div className="metric-table">
           <div className="metric-row priority-row metric-head"><span>优先级</span><span>规则</span><span>分数</span><span>任务</span></div>
           {priorityList.map((item) => {
@@ -356,6 +358,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
         </div>}
       </section>}
       {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}
+      {taskBoardOpen && <TaskBoard projectId={projectId} projectName={projectName} onClose={() => setTaskBoardOpen(false)} />}
     </section>
   </div>
 }

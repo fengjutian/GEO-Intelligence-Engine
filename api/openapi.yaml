@@ -435,6 +435,33 @@ paths:
       responses:
         '200': {description: Task with acceptance items and events, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
+  /optimization-tasks/{taskId}/acceptance-items/{itemId}:
+    patch:
+      tags: [Tasks]
+      operationId: updateTaskAcceptanceItem
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {name: itemId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {type: string, enum: [pending, done]}}}}}}
+      responses:
+        '200': {description: Updated task, content: {application/json: {schema: {$ref: '#/components/schemas/OptimizationTask'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /optimization-tasks/{taskId}/comments:
+    post:
+      tags: [Tasks]
+      operationId: addTaskComment
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [body], properties: {body: {type: string, minLength: 1, maxLength: 5000}}}}}}
+      responses:
+        '201': {description: Task comment, content: {application/json: {schema: {type: object, required: [id, body, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, authorId: {$ref: '#/components/schemas/Id'}, body: {type: string}, createdAt: {type: string, format: date-time}}}}}}
+  /optimization-tasks/{taskId}/events:
+    get:
+      tags: [Tasks]
+      operationId: listTaskEvents
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200': {description: Task event timeline, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {type: object, additionalProperties: true}}}}}}}
   /optimization-tasks/{taskId}:transition:
     post:
       tags: [Tasks]

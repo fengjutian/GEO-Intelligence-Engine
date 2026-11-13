@@ -17,6 +17,8 @@ type taskStore interface {
 	Transition(ctx context.Context, tenantID, actorID, taskID string, expectedVersion int64, input tasks.TransitionInput) (tasks.Task, error)
 	Get(ctx context.Context, tenantID, taskID string) (tasks.Task, error)
 	List(ctx context.Context, tenantID, projectID, status string) ([]tasks.Task, error)
+	UpdateAcceptance(ctx context.Context, tenantID, actorID, taskID, itemID, status string, expectedVersion int64) (tasks.Task, error)
+	AddComment(ctx context.Context, tenantID, actorID, taskID, body string) (tasks.Comment, error)
 }
 
 type taskHandler struct {
@@ -93,6 +95,72 @@ func (h *taskHandler) transition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
+}
+
+func (h *taskHandler) updateAcceptance(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("taskId")
+	itemID := r.PathValue("itemId")
+	if _, err := uuid.Parse(taskID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_TASK_ID", "Task ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(itemID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_ACCEPTANCE_ID", "Acceptance item ID is invalid", traceID(r))
+		return
+	}
+	var version int64
+	if value := strings.Trim(strings.TrimSpace(r.Header.Get("If-Match")), `"`); value != "" {
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			writeProblem(w, http.StatusBadRequest, "INVALID_VERSION", "If-Match version is invalid", traceID(r))
+			return
+		}
+		version = parsed
+	}
+	var input tasks.AcceptanceUpdate
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	task, err := h.store.UpdateAcceptance(r.Context(), h.tenant(r), h.actor(r), taskID, itemID, input.Status, version)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+func (h *taskHandler) addComment(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("taskId")
+	if _, err := uuid.Parse(taskID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_TASK_ID", "Task ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		Body string `json:"body"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	comment, err := h.store.AddComment(r.Context(), h.tenant(r), h.actor(r), taskID, input.Body)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, comment)
+}
+
+func (h *taskHandler) listEvents(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("taskId")
+	if _, err := uuid.Parse(taskID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_TASK_ID", "Task ID is invalid", traceID(r))
+		return
+	}
+	task, err := h.store.Get(r.Context(), h.tenant(r), taskID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": task.Events})
 }
 
 func (h *taskHandler) get(w http.ResponseWriter, r *http.Request) {

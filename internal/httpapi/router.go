@@ -104,6 +104,9 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/optimization-tasks", taskHandler.list)
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}", taskHandler.get)
 	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskAction}", taskHandler.transition)
+	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}/acceptance-items/{itemId}", taskHandler.updateAcceptance)
+	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskId}/comments", taskHandler.addComment)
+	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}/events", taskHandler.listEvents)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
 
 	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))

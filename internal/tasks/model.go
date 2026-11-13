@@ -18,6 +18,20 @@ type Task struct {
 	UpdatedAt   time.Time        `json:"updatedAt"`
 	Acceptance  []AcceptanceItem `json:"acceptanceItems,omitempty"`
 	Events      []Event          `json:"events,omitempty"`
+	Comments    []Comment        `json:"comments,omitempty"`
+}
+
+// Comment is one discussion entry on a task.
+type Comment struct {
+	ID        string    `json:"id"`
+	AuthorID  string    `json:"authorId"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// AcceptanceUpdate sets one acceptance item's status.
+type AcceptanceUpdate struct {
+	Status string `json:"status"`
 }
 
 // AcceptanceItem is one verifiable completion condition.

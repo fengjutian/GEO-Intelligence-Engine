@@ -170,6 +170,83 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UUID_TO_BIN(?),?,?,CAST
 	return nil
 }
 
+func (s *Store) UpdateAcceptance(ctx context.Context, tenantID, actorID, taskID, itemID, status string, expectedVersion int64) (Task, error) {
+	status = strings.TrimSpace(status)
+	if status != "pending" && status != "done" {
+		return Task{}, ErrInvalidInput
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Task{}, err
+	}
+	defer tx.Rollback()
+	var currentStatus string
+	var version int64
+	err = tx.QueryRowContext(ctx, `SELECT status,version FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, taskID).Scan(&currentStatus, &version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Task{}, ErrNotFound
+	}
+	if err != nil {
+		return Task{}, err
+	}
+	if currentStatus == "done" || currentStatus == "cancelled" {
+		return Task{}, ErrInvalidTransition
+	}
+	if expectedVersion > 0 && version != expectedVersion {
+		return Task{}, ErrConflict
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE task_acceptance_items SET status=? WHERE tenant_id=UUID_TO_BIN(?) AND task_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, status, tenantID, taskID, itemID)
+	if err != nil {
+		return Task{}, err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return Task{}, ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE optimization_tasks SET version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, taskID); err != nil {
+		return Task{}, err
+	}
+	payload, _ := json.Marshal(map[string]any{"itemId": itemID, "status": status})
+	if err := appendEvent(ctx, tx, tenantID, taskID, actorID, "acceptance_updated", currentStatus, currentStatus, "", payload); err != nil {
+		return Task{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Task{}, err
+	}
+	return s.Get(ctx, tenantID, taskID)
+}
+
+func (s *Store) AddComment(ctx context.Context, tenantID, actorID, taskID, body string) (Comment, error) {
+	body = strings.TrimSpace(body)
+	if body == "" || len(body) > 5000 {
+		return Comment{}, ErrInvalidInput
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, err
+	}
+	defer tx.Rollback()
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, taskID).Scan(&exists); err != nil {
+		return Comment{}, err
+	}
+	if exists == 0 {
+		return Comment{}, ErrNotFound
+	}
+	commentID, _ := uuid.NewV7()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO task_comments (id,tenant_id,task_id,author_id,body,created_at) VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,UTC_TIMESTAMP(6))`, commentID.String(), tenantID, taskID, actorID, body); err != nil {
+		return Comment{}, err
+	}
+	payload, _ := json.Marshal(map[string]any{"commentId": commentID.String()})
+	if err := appendEvent(ctx, tx, tenantID, taskID, actorID, "comment", "", "", "", payload); err != nil {
+		return Comment{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Comment{}, err
+	}
+	return Comment{ID: commentID.String(), AuthorID: actorID, Body: body, CreatedAt: time.Now().UTC()}, nil
+}
+
 func (s *Store) Get(ctx context.Context, tenantID, taskID string) (Task, error) {
 	var task Task
 	var assignee []byte
@@ -214,6 +291,20 @@ FROM task_events WHERE tenant_id=UUID_TO_BIN(?) AND task_id=UUID_TO_BIN(?) ORDER
 		task.Events = append(task.Events, event)
 	}
 	eventRows.Close()
+	commentRows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(author_id),body,created_at FROM task_comments WHERE tenant_id=UUID_TO_BIN(?) AND task_id=UUID_TO_BIN(?) ORDER BY created_at,id`, tenantID, taskID)
+	if err != nil {
+		return Task{}, err
+	}
+	task.Comments = []Comment{}
+	for commentRows.Next() {
+		var comment Comment
+		if err := commentRows.Scan(&comment.ID, &comment.AuthorID, &comment.Body, &comment.CreatedAt); err != nil {
+			commentRows.Close()
+			return Task{}, err
+		}
+		task.Comments = append(task.Comments, comment)
+	}
+	commentRows.Close()
 	return task, nil
 }
 
