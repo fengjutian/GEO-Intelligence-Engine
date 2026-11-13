@@ -43,6 +43,7 @@ class JudgeRequest(BaseModel):
     question: str
     answer: str
     brand_name: str = ""
+    brand_domain: str = ""
     brand_aliases: list[str] = Field(default_factory=list)
     language: str = ""
     transport_status: TransportStatus = TransportStatus.SUCCEEDED
@@ -55,6 +56,14 @@ class Mention(BaseModel):
     end: int
 
 
+class Citation(BaseModel):
+    raw_url: str
+    normalized_url: str
+    domain: str
+    source_type: str
+    confidence: float
+
+
 class JudgeResult(BaseModel):
     content_validity: ContentValidity
     answer_outcome: AnswerOutcome
@@ -65,4 +74,5 @@ class JudgeResult(BaseModel):
     judge_version: str
     eligibility_rule_version: str
     mentions: list[Mention] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
 

@@ -34,6 +34,34 @@ def test_failed_transport_is_not_eligible() -> None:
     assert response.json()["eligible_for_core_metrics"] is False
 
 
+def test_citations_split_official_and_third_party() -> None:
+    response = client.post(
+        "/internal/judge/v1/evaluate",
+        json={
+            "question": "q",
+            "answer": "参见 https://www.example.com/guide 与 https://industry.example.org/report，以及 https://example.com/guide。",
+            "brand_name": "Acme GEO",
+            "brand_domain": "example.com",
+        },
+    )
+    payload = response.json()
+    assert len(payload["citations"]) == 2
+    official = [item for item in payload["citations"] if item["source_type"] == "official"]
+    third_party = [item for item in payload["citations"] if item["source_type"] == "third_party"]
+    assert official[0]["domain"] == "example.com"
+    assert third_party[0]["domain"] == "industry.example.org"
+
+
+def test_citation_trailing_punctuation_is_trimmed() -> None:
+    response = client.post(
+        "/internal/judge/v1/evaluate",
+        json={"question": "q", "answer": "来源：https://example.com/report.", "brand_domain": "example.com"},
+    )
+    citation = response.json()["citations"][0]
+    assert citation["raw_url"] == "https://example.com/report"
+    assert citation["source_type"] == "official"
+
+
 def test_brand_mention_produces_recommendation() -> None:
     response = client.post(
         "/internal/judge/v1/evaluate",

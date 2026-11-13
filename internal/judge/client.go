@@ -26,6 +26,7 @@ type Input struct {
 	Question        string   `json:"question"`
 	Answer          string   `json:"answer"`
 	BrandName       string   `json:"brand_name"`
+	BrandDomain     string   `json:"brand_domain"`
 	BrandAliases    []string `json:"brand_aliases"`
 	Language        string   `json:"language"`
 	TransportStatus string   `json:"transport_status"`
@@ -39,17 +40,27 @@ type Mention struct {
 	End   int    `json:"end"`
 }
 
+// Citation is one URL referenced by the answer, classified as official or third-party.
+type Citation struct {
+	RawURL        string  `json:"raw_url"`
+	NormalizedURL string  `json:"normalized_url"`
+	Domain        string  `json:"domain"`
+	SourceType    string  `json:"source_type"`
+	Confidence    float64 `json:"confidence"`
+}
+
 // Result is the deterministic judge output persisted for metrics eligibility.
 type Result struct {
-	ContentValidity        string    `json:"content_validity"`
-	AnswerOutcome          string    `json:"answer_outcome"`
-	RecommendationLabel    string    `json:"recommendation_label"`
-	Sentiment              string    `json:"sentiment"`
-	Confidence             float64   `json:"confidence"`
-	EligibleForCoreMetrics bool      `json:"eligible_for_core_metrics"`
-	JudgeVersion           string    `json:"judge_version"`
-	EligibilityRuleVersion string    `json:"eligibility_rule_version"`
-	Mentions               []Mention `json:"mentions"`
+	ContentValidity        string     `json:"content_validity"`
+	AnswerOutcome          string     `json:"answer_outcome"`
+	RecommendationLabel    string     `json:"recommendation_label"`
+	Sentiment              string     `json:"sentiment"`
+	Confidence             float64    `json:"confidence"`
+	EligibleForCoreMetrics bool       `json:"eligible_for_core_metrics"`
+	JudgeVersion           string     `json:"judge_version"`
+	EligibilityRuleVersion string     `json:"eligibility_rule_version"`
+	Mentions               []Mention  `json:"mentions"`
+	Citations              []Citation `json:"citations"`
 }
 
 func (c *Client) Evaluate(ctx context.Context, input Input) (Result, error) {

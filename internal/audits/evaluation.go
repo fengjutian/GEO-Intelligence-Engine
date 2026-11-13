@@ -39,6 +39,15 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,
 	if err != nil {
 		return fmt.Errorf("persist answer evaluation: %w", err)
 	}
+	for _, citation := range evaluation.Citations {
+		normalizedHash := sha256.Sum256([]byte(citation.NormalizedURL))
+		citationID, _ := uuid.NewV7()
+		if _, err := tx.ExecContext(ctx, `INSERT INTO citations (id,tenant_id,evaluation_id,raw_url,normalized_url,normalized_url_hash,domain,source_type,support_label,confidence,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,NULL,?,UTC_TIMESTAMP(6))`,
+			citationID.String(), tenantID, evaluationID.String(), citation.RawURL, citation.NormalizedURL, normalizedHash[:], citation.Domain, citation.SourceType, citation.Confidence); err != nil {
+			return fmt.Errorf("persist citation: %w", err)
+		}
+	}
 	if evaluation.Eligible {
 		if _, err := tx.ExecContext(ctx, `UPDATE audits SET eligible_count=eligible_count+1 WHERE id=UUID_TO_BIN(?)`, auditID); err != nil {
 			return fmt.Errorf("increment eligible count: %w", err)

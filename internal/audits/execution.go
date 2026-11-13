@@ -64,6 +64,7 @@ type Evaluation struct {
 	JudgeVersion           string
 	EligibilityRuleVersion string
 	Mentions               []EvaluationMention
+	Citations              []EvaluationCitation
 }
 
 // EvaluationMention is one brand occurrence in the answer.
@@ -71,6 +72,15 @@ type EvaluationMention struct {
 	Text  string `json:"text"`
 	Start int    `json:"start"`
 	End   int    `json:"end"`
+}
+
+// EvaluationCitation is one URL cited by the answer.
+type EvaluationCitation struct {
+	RawURL        string
+	NormalizedURL string
+	Domain        string
+	SourceType    string
+	Confidence    float64
 }
 
 // SampleFailure records an execution error and retries once before failing the sample.

@@ -1,7 +1,11 @@
+import re
+from urllib.parse import urlparse, urlunparse
+
 from fastapi import FastAPI
 
 from .models import (
     AnswerOutcome,
+    Citation,
     ContentValidity,
     EligibilityInput,
     EligibilityResult,
@@ -27,6 +31,8 @@ REFUSAL_MARKERS = (
     "unable to answer",
 )
 POSITIVE_MARKERS = ("推荐", "最佳", "领先", "recommend", "best", "leading")
+URL_PATTERN = re.compile(r"https?://[^\s<>\"')\]}]+", re.IGNORECASE)
+TRAILING_PUNCTUATION = ".,;:!?。，、；：！？）】》"
 
 
 @app.get("/healthz")
@@ -77,6 +83,7 @@ def evaluate(value: JudgeRequest) -> JudgeResult:
         sentiment = "positive"
 
     eligible = value.transport_status == TransportStatus.SUCCEEDED and validity == ContentValidity.VALID
+    citations = extract_citations(answer, value.brand_domain)
     return JudgeResult(
         content_validity=validity,
         answer_outcome=outcome,
@@ -87,6 +94,7 @@ def evaluate(value: JudgeRequest) -> JudgeResult:
         judge_version=JUDGE_VERSION,
         eligibility_rule_version=ELIGIBILITY_RULE_VERSION,
         mentions=mentions,
+        citations=citations,
     )
 
 
@@ -104,3 +112,34 @@ def find_mentions(answer: str, brand_name: str, aliases: list[str]) -> list[Ment
         if start >= 0:
             mentions.append(Mention(text=answer[start : start + len(candidate)], start=start, end=start + len(candidate)))
     return mentions
+
+
+def _netloc(domain: str, port: int | None) -> str:
+    return f"{domain}:{port}" if port else domain
+
+
+def extract_citations(answer: str, brand_domain: str) -> list[Citation]:
+    brand = brand_domain.strip().lower().removeprefix("www.")
+    citations: list[Citation] = []
+    seen: set[str] = set()
+    for match in URL_PATTERN.finditer(answer):
+        raw = match.group(0).rstrip(TRAILING_PUNCTUATION)
+        parsed = urlparse(raw)
+        domain = parsed.hostname.lower().removeprefix("www.") if parsed.hostname else ""
+        if not domain:
+            continue
+        normalized = urlunparse((parsed.scheme.lower(), _netloc(domain, parsed.port), parsed.path or "/", "", parsed.query, ""))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        official = bool(brand) and (domain == brand or domain.endswith("." + brand))
+        citations.append(
+            Citation(
+                raw_url=raw,
+                normalized_url=normalized,
+                domain=domain,
+                source_type="official" if official else "third_party",
+                confidence=1.0,
+            )
+        )
+    return citations

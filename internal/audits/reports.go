@@ -117,6 +117,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 	if eligible > 0 && eligible < 30 {
 		limitations = append(limitations, fmt.Sprintf("有效样本仅 %d 条，比例区间较宽，不应据此做趋势结论", eligible))
 	}
+	limitations = append(limitations, "第三方引用按所有非品牌域名统计，尚未配置可信域名白名单")
 	sections := []struct {
 		code    string
 		content map[string]any

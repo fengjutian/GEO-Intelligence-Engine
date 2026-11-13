@@ -27,6 +27,8 @@ const METRIC_LABELS: Record<string, string> = {
   recommendation_rate: '主动推荐率',
   refusal_rate: '拒答率',
   positive_mention_rate: '正向提及率',
+  official_citation_rate: '官网引用率',
+  third_party_citation_rate: '第三方引用率',
   eligible_response_rate: '有效回答率',
   mention_frequency: '平均提及次数',
 }
@@ -294,13 +296,15 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       {evidence && <section className="audit-metrics evidence-panel">
         <h3>指标证据 · {evidence.memberCount} 条{evidence.truncated ? '（已截断）' : ''} <button type="button" className="evidence-close" onClick={() => setEvidence(null)}>关闭</button></h3>
         <div className="metric-table">
-          <div className="metric-row evidence-row metric-head"><span>问题</span><span>回答结果</span><span>推荐</span><span>情感</span><span>提及数</span></div>
+          <div className="metric-row evidence-row metric-head"><span>问题</span><span>回答结果</span><span>推荐</span><span>情感</span><span>提及</span><span>官网引用</span><span>三方引用</span></div>
           {evidence.members.map((member, index) => <div className="metric-row evidence-row" key={index}>
             <span title={String(member.questionId)}>{String(member.questionId)}</span>
             <span>{String(member.answerOutcome)}</span>
             <span>{String(member.recommendationLabel)}</span>
             <span>{String(member.sentiment)}</span>
             <span>{String(member.mentionCount)}</span>
+            <span>{String(member.officialCitationCount ?? 0)}</span>
+            <span>{String(member.thirdPartyCitationCount ?? 0)}</span>
           </div>)}
         </div>
       </section>}

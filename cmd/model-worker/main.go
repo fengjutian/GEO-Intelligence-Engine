@@ -137,6 +137,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		Question:        claim.QuestionText,
 		Answer:          response.Content,
 		BrandName:       claim.BrandName,
+		BrandDomain:     claim.BrandDomain,
 		BrandAliases:    claim.BrandAliases,
 		Language:        claim.Language,
 		TransportStatus: "succeeded",
@@ -149,6 +150,10 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		for _, mention := range judgeResult.Mentions {
 			mentions = append(mentions, audits.EvaluationMention{Text: mention.Text, Start: mention.Start, End: mention.End})
 		}
+		citations := make([]audits.EvaluationCitation, 0, len(judgeResult.Citations))
+		for _, citation := range judgeResult.Citations {
+			citations = append(citations, audits.EvaluationCitation{RawURL: citation.RawURL, NormalizedURL: citation.NormalizedURL, Domain: citation.Domain, SourceType: citation.SourceType, Confidence: citation.Confidence})
+		}
 		evaluation = &audits.Evaluation{
 			ContentValidity:        judgeResult.ContentValidity,
 			AnswerOutcome:          judgeResult.AnswerOutcome,
@@ -159,6 +164,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 			JudgeVersion:           judgeResult.JudgeVersion,
 			EligibilityRuleVersion: judgeResult.EligibilityRuleVersion,
 			Mentions:               mentions,
+			Citations:              citations,
 		}
 	}
 	err = store.CompleteSample(ctx, audits.SampleResult{
