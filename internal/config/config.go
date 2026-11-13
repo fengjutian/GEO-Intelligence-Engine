@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 	MiniMaxAPIKey   string
 	MiniMaxBaseURL  string
 	MiniMaxModel    string
+	ModelRPM        int
+	ModelConcurrency int
 	LogLevel        slog.Level
 }
 
@@ -35,6 +38,8 @@ func FromEnv() (Config, error) {
 		MiniMaxAPIKey:   strings.TrimSpace(os.Getenv("MINIMAX_API_KEY")),
 		MiniMaxBaseURL:  envOr("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1"),
 		MiniMaxModel:    envOr("MINIMAX_MODEL", "MiniMax-M2.5"),
+		ModelRPM:        envInt("GEO_MODEL_RPM", 60),
+		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
 		LogLevel:        slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {
@@ -51,4 +56,16 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return fallback
+	}
+	return parsed
 }
