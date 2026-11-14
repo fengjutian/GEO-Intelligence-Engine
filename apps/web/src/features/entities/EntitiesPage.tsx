@@ -35,6 +35,11 @@ export function EntitiesPage({ projects }: Props) {
     queryFn: () => request<Detail>(`/api/v1/entities/${selectedId}`),
     enabled: Boolean(selectedId),
   })
+  const quality = useQuery({
+    queryKey: ['content-quality', projectId],
+    queryFn: () => request<{ total: number; bySeverity: Record<string, number> }>(`/api/v1/projects/${projectId}/content-quality`),
+    enabled: Boolean(projectId),
+  })
   const update = useMutation({
     mutationFn: (status: string) => request<Entity>(`/api/v1/entities/${selectedId}`, {
       method: 'PATCH',
@@ -80,6 +85,12 @@ export function EntitiesPage({ projects }: Props) {
       <label className="entity-project">项目<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setSelectedId(null) }}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
     </div>
     {message && <p className="audit-message" role="status">{message}</p>}
+    {quality.data && <div className="content-quality-card">
+      <div><strong>{quality.data.total}</strong><span>内容质量问题</span></div>
+      <span data-severity="high">高 {quality.data.bySeverity.high ?? 0}</span>
+      <span data-severity="medium">中 {quality.data.bySeverity.medium ?? 0}</span>
+      <span data-severity="low">低 {quality.data.bySeverity.low ?? 0}</span>
+    </div>}
     <div className="entity-layout">
       <div className="entity-list">
         {entities.isLoading && <p>正在加载…</p>}

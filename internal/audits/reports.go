@@ -188,7 +188,7 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 
 func loadContentQuality(ctx context.Context, tx *sql.Tx, tenantID, projectID string) (map[string]any, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT rule_code,severity,COUNT(*) FROM findings
-WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND rule_code LIKE 'CONTENT_%'
+WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND rule_code LIKE 'CONTENT_%' AND status='open'
 GROUP BY rule_code,severity ORDER BY rule_code`, tenantID, projectID)
 	if err != nil {
 		return nil, err

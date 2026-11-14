@@ -224,6 +224,9 @@ ON DUPLICATE KEY UPDATE status='running',finished_at=NULL`, analysisID, tenantID
 	if err := tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM content_analysis_runs WHERE crawl_run_id=UUID_TO_BIN(?) AND analyzer_version=? AND config_hash=?`, runID, version, configHash[:]).Scan(&analysisID); err != nil {
 		return ContentAnalysisRun{}, err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM content_signals WHERE tenant_id=UUID_TO_BIN(?) AND analysis_run_id=UUID_TO_BIN(?)`, tenantID, analysisID); err != nil {
+		return ContentAnalysisRun{}, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),content_json FROM page_contents WHERE tenant_id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?) AND content_json IS NOT NULL ORDER BY id`, tenantID, runID)
 	if err != nil {
 		return ContentAnalysisRun{}, err
