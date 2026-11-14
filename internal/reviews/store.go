@@ -69,7 +69,11 @@ func (s *Store) List(ctx context.Context, tenantID, status, priority string, lim
 	}
 	query := `SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(r.evaluation_id),BIN_TO_UUID(s.audit_id),q.text_value,
 r.reason_code,r.priority,r.status,COALESCE(ae.answer_outcome,''),COALESCE(ae.content_validity,''),
-COALESCE(ae.recommendation_label,''),r.assignee_id,r.created_at
+COALESCE(ae.recommendation_label,''),r.assignee_id,
+(SELECT COUNT(*) FROM human_annotations ha WHERE ha.review_item_id=r.id),
+(SELECT COUNT(*) FROM human_annotations ha WHERE ha.review_item_id=r.id AND JSON_UNQUOTE(JSON_EXTRACT(ha.labels_json,'$.decision'))='agree'),
+(SELECT COUNT(*) FROM human_annotations ha WHERE ha.review_item_id=r.id AND JSON_UNQUOTE(JSON_EXTRACT(ha.labels_json,'$.decision'))='disagree'),
+r.created_at
 FROM review_queue_items r
 JOIN answer_evaluations ae ON ae.id=r.evaluation_id
 JOIN ai_responses resp ON resp.id=ae.response_id
@@ -96,7 +100,7 @@ WHERE r.tenant_id=UUID_TO_BIN(?)`
 	for rows.Next() {
 		var item Item
 		var assignee []byte
-		if err := rows.Scan(&item.ID, &item.EvaluationID, &item.AuditID, &item.Question, &item.ReasonCode, &item.Priority, &item.Status, &item.AnswerOutcome, &item.ContentValidity, &item.Recommendation, &assignee, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.EvaluationID, &item.AuditID, &item.Question, &item.ReasonCode, &item.Priority, &item.Status, &item.AnswerOutcome, &item.ContentValidity, &item.Recommendation, &assignee, &item.AnnotationCount, &item.AgreeCount, &item.DisagreeCount, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		if len(assignee) > 0 {
@@ -144,7 +148,7 @@ func (s *Store) Adjudicate(ctx context.Context, tenantID, itemID, adjudicatorID 
 		}
 		return Adjudication{}, err
 	}
-	if status != "reviewed" {
+	if status != "reviewed" && status != "conflict" {
 		return Adjudication{}, ErrConflict
 	}
 	resultJSON, _ := json.Marshal(result)
@@ -164,7 +168,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),CAST(? AS JS
 }
 
 func (s *Store) Stats(ctx context.Context, tenantID string) (map[string]any, error) {
-	byStatus := map[string]int{"pending": 0, "reviewed": 0, "adjudicated": 0}
+	byStatus := map[string]int{"pending": 0, "reviewed": 0, "conflict": 0, "adjudicated": 0}
 	rows, err := s.db.QueryContext(ctx, `SELECT status,COUNT(*) FROM review_queue_items WHERE tenant_id=UUID_TO_BIN(?) GROUP BY status`, tenantID)
 	if err != nil {
 		return nil, err
@@ -235,7 +239,14 @@ func (s *Store) Annotate(ctx context.Context, tenantID, itemID, annotatorID stri
 		}
 		return Annotation{}, err
 	}
-	if status != "pending" {
+	if status != "pending" && status != "reviewed" {
+		return Annotation{}, ErrConflict
+	}
+	var duplicate int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM human_annotations WHERE tenant_id=UUID_TO_BIN(?) AND review_item_id=UUID_TO_BIN(?) AND annotator_id=UUID_TO_BIN(?)`, tenantID, itemID, annotatorID).Scan(&duplicate); err != nil {
+		return Annotation{}, err
+	}
+	if duplicate > 0 {
 		return Annotation{}, ErrConflict
 	}
 	labelsJSON, _ := json.Marshal(labels)
@@ -245,7 +256,18 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),CAST(? AS JS
 		annotation.ID, tenantID, itemID, annotatorID, labelsJSON, reason); err != nil {
 		return Annotation{}, fmt.Errorf("insert annotation: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE review_queue_items SET status='reviewed',updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, itemID); err != nil {
+	var agrees, disagrees int
+	if err := tx.QueryRowContext(ctx, `SELECT
+COALESCE(SUM(JSON_UNQUOTE(JSON_EXTRACT(labels_json,'$.decision'))='agree'),0),
+COALESCE(SUM(JSON_UNQUOTE(JSON_EXTRACT(labels_json,'$.decision'))='disagree'),0)
+FROM human_annotations WHERE tenant_id=UUID_TO_BIN(?) AND review_item_id=UUID_TO_BIN(?)`, tenantID, itemID).Scan(&agrees, &disagrees); err != nil {
+		return Annotation{}, err
+	}
+	nextStatus := "reviewed"
+	if disagrees > 0 {
+		nextStatus = "conflict"
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE review_queue_items SET status=?,updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, nextStatus, itemID); err != nil {
 		return Annotation{}, err
 	}
 	if err := tx.Commit(); err != nil {

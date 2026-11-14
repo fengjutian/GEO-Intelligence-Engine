@@ -15,6 +15,9 @@ type Item struct {
 	ContentValidity string    `json:"contentValidity"`
 	Recommendation  string    `json:"recommendationLabel"`
 	AssigneeID      *string   `json:"assigneeId"`
+	AnnotationCount int       `json:"annotationCount"`
+	AgreeCount      int       `json:"agreeCount"`
+	DisagreeCount   int       `json:"disagreeCount"`
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
