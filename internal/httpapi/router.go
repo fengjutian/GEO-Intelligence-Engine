@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
+	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
@@ -25,6 +27,9 @@ type Dependencies struct {
 	AuthMode     string
 	AuthSecret   string
 	DevRole      string
+	OIDCIssuer   string
+	OIDCAudience string
+	OIDCJWKSURL  string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -114,5 +119,15 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", requirePermission("run_audit", auditHandler.cancelAudit))
 	mux.HandleFunc("GET /api/v1/me", meHandler)
 
-	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(newAuthMiddleware(deps.AuthMode, deps.AuthSecret, deps.DevRole, deps.DevTenantID, deps.DevActorID)(mux))))
+	var oidcVerifier *auth.OIDCVerifier
+	if strings.EqualFold(deps.AuthMode, "oidc") {
+		oidcVerifier = auth.NewOIDCVerifier(deps.OIDCIssuer, deps.OIDCAudience, deps.OIDCJWKSURL)
+	}
+	authMiddleware := newAuthMiddleware(authOptions{
+		Mode: deps.AuthMode, Secret: deps.AuthSecret, DevRole: deps.DevRole,
+		DevTenant: deps.DevTenantID, DevActor: deps.DevActorID,
+		OIDC: oidcVerifier, DB: deps.DB, Logger: deps.Logger,
+	})
+
+	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(authMiddleware(mux))))
 }

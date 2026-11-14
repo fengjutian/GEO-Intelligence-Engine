@@ -27,6 +27,9 @@ type Config struct {
 	AuthMode         string
 	AuthSecret       string
 	DevRole          string
+	OIDCIssuer       string
+	OIDCAudience     string
+	OIDCJWKSURL      string
 	LogLevel         slog.Level
 }
 
@@ -50,6 +53,9 @@ func FromEnv() (Config, error) {
 		AuthMode:         envOr("GEO_AUTH_MODE", "dev"),
 		AuthSecret:       strings.TrimSpace(os.Getenv("GEO_AUTH_SECRET")),
 		DevRole:          envOr("GEO_DEV_ROLE", "owner"),
+		OIDCIssuer:       strings.TrimSpace(os.Getenv("GEO_OIDC_ISSUER")),
+		OIDCAudience:     strings.TrimSpace(os.Getenv("GEO_OIDC_AUDIENCE")),
+		OIDCJWKSURL:      strings.TrimSpace(os.Getenv("GEO_OIDC_JWKS_URL")),
 		LogLevel:         slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

@@ -22,11 +22,36 @@ type Principal struct {
 
 // Claims are the JWT fields trusted by the API.
 type Claims struct {
-	Subject  string `json:"sub"`
-	TenantID string `json:"tenant_id"`
-	Role     string `json:"role"`
-	Email    string `json:"email"`
-	Expires  int64  `json:"exp"`
+	Subject  string   `json:"sub"`
+	TenantID string   `json:"tenant_id"`
+	Role     string   `json:"role"`
+	Email    string   `json:"email"`
+	Expires  int64    `json:"exp"`
+	Issuer   string   `json:"iss"`
+	Audience Audience `json:"aud"`
+}
+
+// Audience accepts both a string and an array of strings in JWT payloads.
+type Audience []string
+
+func (a *Audience) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var single string
+		if err := json.Unmarshal(data, &single); err != nil {
+			return err
+		}
+		*a = Audience{single}
+		return nil
+	}
+	var multiple []string
+	if err := json.Unmarshal(data, &multiple); err != nil {
+		return err
+	}
+	*a = Audience(multiple)
+	return nil
 }
 
 // ParseHS256 validates a compact HS256 JWT and returns its claims.
