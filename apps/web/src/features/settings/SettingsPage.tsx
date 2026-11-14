@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 type Member = { id: string; userId: string; email: string; subject: string; role: string; status: string }
 type Invitation = { id: string; email: string; role: string; status: string; expiresAt: string; token?: string }
+type ServiceAccount = { id: string; name: string; status: string; createdAt: string }
+type APIToken = { id: string; principalId: string; scopes: string[]; expiresAt: string | null; lastUsedAt: string | null; revokedAt: string | null; createdAt: string; token?: string }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
@@ -20,6 +22,11 @@ export function SettingsPage() {
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('Analyst')
   const [invite, setInvite] = useState<Invitation | null>(null)
+  const [accountName, setAccountName] = useState('')
+  const [tokenAccountId, setTokenAccountId] = useState('')
+  const [tokenScopes, setTokenScopes] = useState('read')
+  const [expiresDays, setExpiresDays] = useState(30)
+  const [newToken, setNewToken] = useState<APIToken | null>(null)
   const [message, setMessage] = useState('')
   const me = useQuery({ queryKey: ['me'], queryFn: () => request<{ tenantId: string; role: string }>('/api/v1/me') })
   const members = useQuery({
@@ -53,6 +60,43 @@ export function SettingsPage() {
     onError: (error) => setMessage(error.message),
   })
 
+  const accounts = useQuery({ queryKey: ['service-accounts'], queryFn: () => request<{ items: ServiceAccount[] }>('/api/v1/service-accounts') })
+  const tokens = useQuery({ queryKey: ['api-tokens'], queryFn: () => request<{ items: APIToken[] }>('/api/v1/api-tokens') })
+  const createAccount = useMutation({
+    mutationFn: () => request<ServiceAccount>('/api/v1/service-accounts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: accountName }),
+    }),
+    onSuccess: async () => {
+      setAccountName('')
+      setMessage('服务账号已创建')
+      await queryClient.invalidateQueries({ queryKey: ['service-accounts'] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const createToken = useMutation({
+    mutationFn: () => request<APIToken>('/api/v1/api-tokens', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ serviceAccountId: tokenAccountId, scopes: tokenScopes.split(',').map((scope) => scope.trim()).filter(Boolean), expiresInDays: expiresDays }),
+    }),
+    onSuccess: async (result) => {
+      setNewToken(result)
+      setMessage('API Token 已创建，明文仅显示一次')
+      await queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const revokeToken = useMutation({
+    mutationFn: (id: string) => request(`/api/v1/api-tokens/${id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      setMessage('Token 已撤销')
+      await queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+
   return <section className="workspace module-workspace">
     <div className="module-heading"><div><p className="eyebrow">TENANT SETTINGS</p><h2>成员与权限</h2><p>管理当前租户成员、邀请与角色；最后一名 Owner 不可降级或停用。</p></div><span>{members.data?.items.length ?? 0} 成员</span></div>
     {message && <p className="audit-message" role="status">{message}</p>}
@@ -82,6 +126,39 @@ export function SettingsPage() {
           <code>{invite.token}</code>
           <small>Token 仅显示一次，请通过安全渠道发送。</small>
         </div>}
+      </section>
+    </div>
+    <div className="settings-grid">
+      <section className="settings-panel">
+        <h3>服务账号</h3>
+        <form className="invite-form" onSubmit={(event) => { event.preventDefault(); if (accountName.trim()) createAccount.mutate() }}>
+          <label>名称<input value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="ci-pipeline" maxLength={120} required /></label>
+          <button type="submit" disabled={createAccount.isPending}>创建服务账号</button>
+        </form>
+        <div className="account-list">
+          {accounts.data?.items.length === 0 && <p className="empty-state">暂无服务账号。</p>}
+          {accounts.data?.items.map((account) => <div className="account-row" key={account.id}><strong>{account.name}</strong><span>{account.status}</span></div>)}
+        </div>
+      </section>
+      <section className="settings-panel">
+        <h3>API Token</h3>
+        <form className="invite-form" onSubmit={(event) => { event.preventDefault(); if (tokenAccountId) createToken.mutate() }}>
+          <label>服务账号<select value={tokenAccountId} onChange={(event) => setTokenAccountId(event.target.value)} required><option value="">选择服务账号…</option>{accounts.data?.items.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <label>Scopes（逗号分隔）<input value={tokenScopes} onChange={(event) => setTokenScopes(event.target.value)} placeholder="read,write" /></label>
+          <label>有效期（天）<input type="number" min={1} max={365} value={expiresDays} onChange={(event) => setExpiresDays(Number(event.target.value))} /></label>
+          <button type="submit" disabled={createToken.isPending || !tokenAccountId}>创建 Token</button>
+        </form>
+        {newToken?.token && <div className="invite-result">
+          <p>Token 已创建，仅显示一次：</p>
+          <code>{newToken.token}</code>
+          <small>请立即保存；列表只显示哈希与元数据。</small>
+        </div>}
+        <div className="token-list">
+          {tokens.data?.items.map((token) => <div className="token-row" key={token.id}>
+            <div><strong>{token.scopes.join(', ')}</strong><small>{token.revokedAt ? '已撤销' : token.expiresAt ? `到期 ${new Date(token.expiresAt).toLocaleDateString()}` : '永不过期'}</small></div>
+            {!token.revokedAt && <button type="button" disabled={revokeToken.isPending} onClick={() => revokeToken.mutate(token.id)}>撤销</button>}
+          </div>)}
+        </div>
       </section>
     </div>
   </section>
