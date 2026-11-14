@@ -27,7 +27,7 @@ func (f *fakeProjectStore) Get(_ context.Context, _, _ string) (projects.Project
 	return projects.Project{}, projects.ErrNotFound
 }
 
-func (f *fakeProjectStore) List(_ context.Context, _ string, _ int) (projects.Page, error) {
+func (f *fakeProjectStore) List(_ context.Context, _, _, _ string, _ int) (projects.Page, error) {
 	return projects.Page{Items: []projects.Project{}, Page: projects.PageMeta{HasMore: false}}, nil
 }
 

@@ -33,6 +33,7 @@ type auditStore interface {
 	PublishReport(ctx context.Context, tenantID, reportID string) (audits.Report, error)
 	CreateExport(ctx context.Context, tenantID, reportID, format, reportDir string) (audits.ReportArtifact, error)
 	GetArtifactPath(ctx context.Context, tenantID, reportID, artifactID string) (string, string, error)
+	RecordReportAccess(ctx context.Context, tenantID, actorID, reportID, action string) error
 }
 
 type auditHandler struct {
@@ -307,7 +308,15 @@ func (h *auditHandler) getReport(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
+	h.recordReportAccess(r, reportID, "report.viewed")
 	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *auditHandler) recordReportAccess(r *http.Request, reportID, action string) {
+	actorID := r.Header.Get(headerActor)
+	if err := h.store.RecordReportAccess(r.Context(), h.tenant(r), actorID, reportID, action); err != nil {
+		h.logger.Warn("record report access failed", "error", err, "report_id", reportID, "action", action)
+	}
 }
 
 func (h *auditHandler) publishReport(w http.ResponseWriter, r *http.Request) {
@@ -347,6 +356,7 @@ func (h *auditHandler) createReportExport(w http.ResponseWriter, r *http.Request
 		h.writeError(w, r, err)
 		return
 	}
+	h.recordReportAccess(r, reportID, "report.exported")
 	writeJSON(w, http.StatusAccepted, map[string]any{"jobId": artifact.ID, "status": "ready", "downloadUrl": artifact.DownloadURL, "sizeBytes": artifact.SizeBytes})
 }
 
@@ -366,6 +376,7 @@ func (h *auditHandler) downloadReportArtifact(w http.ResponseWriter, r *http.Req
 		h.writeError(w, r, err)
 		return
 	}
+	h.recordReportAccess(r, reportID, "report.downloaded")
 	if strings.HasSuffix(strings.ToLower(name), ".pdf") {
 		w.Header().Set("Content-Type", "application/pdf")
 	} else {

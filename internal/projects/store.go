@@ -78,9 +78,13 @@ WHERE p.tenant_id=UUID_TO_BIN(?) AND p.id=UUID_TO_BIN(?)`, tenantID, projectID)
 	return scanProject(row)
 }
 
-func (s *Store) List(ctx context.Context, tenantID string, limit int) (Page, error) {
+func (s *Store) List(ctx context.Context, tenantID, userID, role string, limit int) (Page, error) {
 	rows, err := s.db.QueryContext(ctx, projectSelect+`
-WHERE p.tenant_id=UUID_TO_BIN(?) ORDER BY p.created_at DESC,p.id DESC LIMIT ?`, tenantID, limit+1)
+WHERE p.tenant_id=UUID_TO_BIN(?) AND (
+  ? IN ('owner','project_admin')
+  OR NOT EXISTS (SELECT 1 FROM project_memberships pm WHERE pm.tenant_id=p.tenant_id AND pm.user_id=UUID_TO_BIN(?))
+  OR EXISTS (SELECT 1 FROM project_memberships pm WHERE pm.tenant_id=p.tenant_id AND pm.project_id=p.id AND pm.user_id=UUID_TO_BIN(?))
+) ORDER BY p.created_at DESC,p.id DESC LIMIT ?`, tenantID, role, userID, userID, limit+1)
 	if err != nil {
 		return Page{}, fmt.Errorf("query projects: %w", err)
 	}

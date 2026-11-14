@@ -384,6 +384,23 @@ func (s *Store) GetArtifactPath(ctx context.Context, tenantID, reportID, artifac
 	return path, filepath.Base(path), nil
 }
 
+// RecordReportAccess appends an immutable report access event to audit_logs.
+func (s *Store) RecordReportAccess(ctx context.Context, tenantID, actorID, reportID, action string) error {
+	if _, err := uuid.Parse(reportID); err != nil {
+		return nil
+	}
+	var actor any
+	if _, err := uuid.Parse(actorID); err == nil {
+		actor = actorID
+	}
+	auditID, _ := uuid.NewV7()
+	payload, _ := json.Marshal(map[string]any{"action": action})
+	_, err := s.db.ExecContext(ctx, `INSERT INTO audit_logs (id,tenant_id,actor_type,actor_id,action,resource_type,resource_id,result,trace_id,payload_summary,occurred_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),'user',UUID_TO_BIN(?),?,'report',UUID_TO_BIN(?),'succeeded',NULL,CAST(? AS JSON),UTC_TIMESTAMP(6))`,
+		auditID.String(), tenantID, actor, action, reportID, payload)
+	return err
+}
+
 func buildCSV(report Report) []byte {
 	buffer := &bytes.Buffer{}
 	buffer.WriteString("\uFEFF")

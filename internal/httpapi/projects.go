@@ -21,7 +21,7 @@ import (
 type projectStore interface {
 	Create(ctx context.Context, tenantID string, input projects.CreateInput) (projects.Project, error)
 	Get(ctx context.Context, tenantID, projectID string) (projects.Project, error)
-	List(ctx context.Context, tenantID string, limit int) (projects.Page, error)
+	List(ctx context.Context, tenantID, userID, role string, limit int) (projects.Page, error)
 	Update(ctx context.Context, tenantID, projectID string, version uint64, input projects.PatchInput) (projects.Project, error)
 	Archive(ctx context.Context, tenantID, projectID string, version uint64) (projects.JobRef, error)
 	PublishConfig(ctx context.Context, tenantID, projectID, actorID string) (projects.ConfigVersion, error)
@@ -113,7 +113,7 @@ func (h *projectHandler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	page, err := h.store.List(r.Context(), tenantID, limit)
+	page, err := h.store.List(r.Context(), tenantID, r.Header.Get(headerActor), r.Header.Get(headerRole), limit)
 	if err != nil {
 		h.internalError(w, r, "list projects", err)
 		return
