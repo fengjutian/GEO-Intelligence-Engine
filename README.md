@@ -77,7 +77,7 @@ Set-Location apps/judge-worker; uv run uvicorn geo_judge.app:app --reload --port
 
 启动后：Web `http://localhost:5174`，API `http://localhost:8080`，Judge `http://localhost:8081`，Crawler 健康检查 `http://localhost:8082/healthz`，Model Worker 健康检查 `http://localhost:8083/healthz`。未配置任何供应商密钥时 Worker 保持健康但不会领取样本。
 
-核心回归（需 Worker 可调用 Provider）：`python scripts/regression.py`，覆盖项目→问题→协议→审计→Judge→指标→报告/CSV，结果写入 `.run/regression-verification.json`。
+核心回归（需 Worker 可调用 Provider）：`python scripts/regression.py`，覆盖项目→问题→协议→审计→Judge→指标→报告/CSV，并独立复算指标与 Wilson 区间；结果写入 `.run/regression-verification.json`。
 
 ## 质量检查
 

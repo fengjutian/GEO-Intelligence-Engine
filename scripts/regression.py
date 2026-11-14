@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 import urllib.error
@@ -45,6 +46,65 @@ def request(base_url: str, method: str, path: str, body: dict | None = None, hea
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
         raise RegressionError(f"{method} {path} -> {error.code}: {detail}") from error
+
+
+def wilson(numerator: int, denominator: int) -> tuple[float, float]:
+    if denominator == 0:
+        return 0.0, 0.0
+    z = 1.959963984540054
+    n = float(denominator)
+    p = numerator / n
+    denominator_term = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denominator_term
+    margin = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n) / denominator_term
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def recompute(code: str, members: list[dict], planned: int) -> tuple[int, int]:
+    def label(member): return member.get("recommendationLabel")
+    def outcome(member): return member.get("answerOutcome")
+    if code == "mention_rate":
+        return sum(1 for m in members if label(m) == "mentioned"), len(members)
+    if code == "recommendation_rate":
+        return sum(1 for m in members if outcome(m) == "recommendation"), len(members)
+    if code == "refusal_rate":
+        return sum(1 for m in members if outcome(m) == "refusal"), len(members)
+    if code == "positive_mention_rate":
+        mentions = [m for m in members if label(m) == "mentioned"]
+        return sum(1 for m in mentions if m.get("sentiment") == "positive"), len(mentions)
+    if code == "official_citation_rate":
+        return sum(1 for m in members if int(m.get("officialCitationCount") or 0) > 0), len(members)
+    if code == "third_party_citation_rate":
+        return sum(1 for m in members if int(m.get("thirdPartyCitationCount") or 0) > 0), len(members)
+    if code == "eligible_response_rate":
+        return len(members), planned
+    if code == "mention_frequency":
+        return sum(int(m.get("mentionCount") or 0) for m in members), len(members)
+    raise RegressionError(f"unknown metric code {code}")
+
+
+def verify_metrics(base_url: str, values: list[dict], planned: int) -> int:
+    checked = 0
+    for item in values:
+        _, evidence = request(base_url, "GET", f"/api/v1/metric-values/{item['id']}/evidence")
+        if evidence.get("truncated"):
+            continue
+        members = evidence.get("members") or []
+        numerator, denominator = recompute(item["metricCode"], members, planned)
+        if int(item.get("numerator") or 0) != numerator or int(item.get("denominator") or 0) != denominator:
+            raise RegressionError(
+                f"metric {item['metricCode']} mismatch: stored {item.get('numerator')}/{item.get('denominator')}, recomputed {numerator}/{denominator}"
+            )
+        if item.get("value") is not None and denominator > 0:
+            expected = numerator / denominator
+            if abs(float(item["value"]) - expected) > 1e-9:
+                raise RegressionError(f"metric {item['metricCode']} value mismatch")
+            if item.get("intervalMethod") == "wilson" and item.get("ciLow") is not None:
+                low, high = wilson(numerator, denominator)
+                if abs(float(item["ciLow"]) - low) > 1e-6 or abs(float(item["ciHigh"]) - high) > 1e-6:
+                    raise RegressionError(f"metric {item['metricCode']} interval mismatch")
+        checked += 1
+    return checked
 
 
 def main() -> int:
@@ -144,6 +204,7 @@ def main() -> int:
         raise RegressionError("audit produced no metric values")
     summary["metricValues"] = len(values)
     summary["metricCodes"] = sorted({item.get("metricCode") for item in values if item.get("metricCode")})
+    summary["metricsRecomputed"] = verify_metrics(args.base_url, values, int(audit.get("plannedCount") or 0))
 
     _, report = request(args.base_url, "POST", f"/api/v1/audits/{audit['id']}/reports", {"metricSnapshotId": "", "templateVersion": "report-v1"})
     summary["reportId"] = report["id"]
