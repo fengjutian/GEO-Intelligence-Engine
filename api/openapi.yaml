@@ -26,6 +26,13 @@ paths:
       responses:
         '200': {description: Current principal, content: {application/json: {schema: {$ref: '#/components/schemas/CurrentUser'}}}}
         '401': {$ref: '#/components/responses/Unauthorized'}
+  /auth-config:
+    get:
+      tags: [Identity]
+      operationId: getAuthConfig
+      security: []
+      responses:
+        '200': {description: Public authentication configuration for the web client, content: {application/json: {schema: {type: object, required: [mode], properties: {mode: {type: string, enum: [dev, jwt, oidc]}, issuer: {type: string}, clientId: {type: string}, audience: {type: string}, scope: {type: string}}}}}}
   /tenants/{tenantId}/members:
     parameters: [{$ref: '#/components/parameters/TenantId'}]
     get:

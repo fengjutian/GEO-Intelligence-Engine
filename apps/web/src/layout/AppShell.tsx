@@ -1,4 +1,4 @@
-import { BarChart3, Bot, FolderKanban, Gauge, Globe2, Settings } from 'lucide-react'
+import { BarChart3, Bot, FolderKanban, Gauge, Globe2, LogOut, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export type PageId = 'overview' | 'projects' | 'audits' | 'questions' | 'models'
@@ -20,17 +20,18 @@ type Props = {
   baseline?: string
   connected: boolean
   error: boolean
+  onLogout?: () => void
   children: ReactNode
 }
 
-export function AppShell({ activePage, onNavigate, apiVersion, baseline, connected, error, children }: Props) {
+export function AppShell({ activePage, onNavigate, apiVersion, baseline, connected, error, onLogout, children }: Props) {
   return <main className="app-shell">
     <aside className="app-sidebar">
       <div className="brand-mark"><span>G</span><div><strong>GEO</strong><small>Intelligence</small></div></div>
       <nav aria-label="主导航">
         {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={activePage === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon />{label}</button>)}
       </nav>
-      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{baseline ?? 'P0-V1.0'}</small></div>
+      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{baseline ?? 'P0-V1.0'}</small>{onLogout && <button type="button" className="logout-button" onClick={onLogout}><LogOut />退出登录</button>}</div>
     </aside>
     <div className="app-page">
       <header className="app-topbar"><div><p>GEO Intelligence Engine</p><h1>{titles[activePage]}</h1></div><div className="status" data-state={connected ? 'ready' : 'loading'}><span />{connected ? `服务正常 · API ${apiVersion}` : error ? 'API 连接异常' : '正在连接'}</div></header>

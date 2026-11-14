@@ -5,6 +5,7 @@ import { ModelServicesPage } from './features/models/ModelServicesPage'
 import { EvidenceDialog } from './features/crawls/EvidenceDialog'
 import { AuditDialog } from './features/audits/AuditDialog'
 import { AppShell, type PageId } from './layout/AppShell'
+import { useAuth } from './features/auth/AuthGate'
 
 type Version = { apiVersion: string; baseline: string }
 type Project = {
@@ -178,6 +179,7 @@ async function createQuestion(projectId: string, input: { text: string; language
 }
 
 export function App() {
+  const { mode, logout } = useAuth()
   const version = useQuery({ queryKey: ['version'], queryFn: fetchVersion })
   const projects = useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
   const queryClient = useQueryClient()
@@ -287,7 +289,7 @@ export function App() {
   const workspaceTitle = activePage === 'audits' ? '网站审计' : activePage === 'questions' ? '问题空间' : '项目空间'
   const workspaceDescription = activePage === 'audits' ? '选择项目发起官网抓取或查看历史证据。' : activePage === 'questions' ? '选择项目维护买家问题和测量问题集。' : '管理品牌基础资料、抓取任务和配置版本。'
 
-  return <AppShell activePage={activePage} onNavigate={setActivePage} apiVersion={version.data?.apiVersion} baseline={version.data?.baseline} connected={version.isSuccess} error={version.isError}>
+  return <AppShell activePage={activePage} onNavigate={setActivePage} apiVersion={version.data?.apiVersion} baseline={version.data?.baseline} connected={version.isSuccess} error={version.isError} onLogout={mode === 'oidc' ? logout : undefined}>
       {activePage === 'overview' && <OverviewPage activeProjects={activeProjects} websiteCount={projects.data?.items.length ?? 0} configuredProviders={configuredProviders} onCreateProject={() => { setActivePage('projects'); setFormOpen(true) }} />}
       {activePage === 'models' && <ModelServicesPage providers={modelProviders.data?.items} checking={providerHealth.isPending} message={providerHealth.data} error={providerHealth.error?.message} onCheck={(provider) => providerHealth.mutate(provider)} />}
       {!['overview', 'models'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">

@@ -31,6 +31,7 @@ type Dependencies struct {
 	OIDCIssuer   string
 	OIDCAudience string
 	OIDCJWKSURL  string
+	OIDCClientID string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -119,6 +120,15 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}/events", taskHandler.listEvents)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", requirePermission("run_audit", auditHandler.cancelAudit))
 	mux.HandleFunc("GET /api/v1/me", meHandler)
+	mux.HandleFunc("GET /api/v1/auth-config", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"mode":     deps.AuthMode,
+			"issuer":   deps.OIDCIssuer,
+			"clientId": deps.OIDCClientID,
+			"audience": deps.OIDCAudience,
+			"scope":    "openid profile email",
+		})
+	})
 	memberHandler := newMemberHandler(members.NewStore(deps.DB))
 	mux.HandleFunc("GET /api/v1/tenants/{tenantId}/members", requirePermission("read_members", memberHandler.list))
 	mux.HandleFunc("POST /api/v1/tenants/{tenantId}/invitations", requirePermission("manage_members", memberHandler.invite))

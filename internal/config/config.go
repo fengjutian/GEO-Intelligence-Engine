@@ -30,6 +30,7 @@ type Config struct {
 	OIDCIssuer       string
 	OIDCAudience     string
 	OIDCJWKSURL      string
+	OIDCClientID     string
 	LogLevel         slog.Level
 }
 
@@ -56,6 +57,7 @@ func FromEnv() (Config, error) {
 		OIDCIssuer:       strings.TrimSpace(os.Getenv("GEO_OIDC_ISSUER")),
 		OIDCAudience:     strings.TrimSpace(os.Getenv("GEO_OIDC_AUDIENCE")),
 		OIDCJWKSURL:      strings.TrimSpace(os.Getenv("GEO_OIDC_JWKS_URL")),
+		OIDCClientID:     strings.TrimSpace(os.Getenv("GEO_OIDC_CLIENT_ID")),
 		LogLevel:         slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

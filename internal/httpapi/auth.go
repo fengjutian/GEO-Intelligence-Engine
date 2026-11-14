@@ -56,7 +56,7 @@ func newAuthMiddleware(options authOptions) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
-			if path == "/healthz" || path == "/readyz" || path == "/api/v1/version" || strings.HasPrefix(path, "/internal/") {
+			if path == "/healthz" || path == "/readyz" || path == "/api/v1/version" || path == "/api/v1/auth-config" || strings.HasPrefix(path, "/internal/") {
 				next.ServeHTTP(w, r)
 				return
 			}
