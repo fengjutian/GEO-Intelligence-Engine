@@ -140,7 +140,11 @@ func (g *Gateway) Chat(ctx context.Context, input ChatRequest) (ChatResponse, er
 		return ChatResponse{}, fmt.Errorf("read provider response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ChatResponse{}, &ProviderError{Provider: config.Name, StatusCode: response.StatusCode, RetryAfter: parseRetryAfter(response.Header.Get("Retry-After")), Message: safeProviderError(data)}
+		message := safeProviderError(data)
+		if response.StatusCode == http.StatusTooManyRequests && strings.Contains(message, "2056") {
+			return ChatResponse{}, fmt.Errorf("%w: %s", ErrQuotaExceeded, message)
+		}
+		return ChatResponse{}, &ProviderError{Provider: config.Name, StatusCode: response.StatusCode, RetryAfter: parseRetryAfter(response.Header.Get("Retry-After")), Message: message}
 	}
 	var result struct {
 		ID      string `json:"id"`
@@ -166,6 +170,9 @@ func (g *Gateway) Chat(ctx context.Context, input ChatRequest) (ChatResponse, er
 		return ChatResponse{}, fmt.Errorf("decode provider response: %w", err)
 	}
 	if result.BaseResp != nil && result.BaseResp.StatusCode != 0 {
+		if result.BaseResp.StatusCode == 2056 {
+			return ChatResponse{}, fmt.Errorf("%w: %s", ErrQuotaExceeded, result.BaseResp.StatusMessage)
+		}
 		return ChatResponse{}, fmt.Errorf("provider minimax error %d: %s", result.BaseResp.StatusCode, result.BaseResp.StatusMessage)
 	}
 	if len(result.Choices) == 0 {

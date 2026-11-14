@@ -114,9 +114,12 @@ func (e *ProviderError) Error() string {
 	return fmt.Sprintf("provider %s returned HTTP %d: %s", e.Provider, e.StatusCode, e.Message)
 }
 
+// ErrQuotaExceeded marks a provider account quota exhaustion; retrying cannot help.
+var ErrQuotaExceeded = errors.New("provider quota exceeded")
+
 // Retryable reports whether a technical retry may succeed. Auth, parameter and policy errors are terminal.
 func Retryable(err error) bool {
-	if errors.Is(err, ErrProviderUnsupported) || errors.Is(err, ErrProviderUnconfigured) {
+	if errors.Is(err, ErrProviderUnsupported) || errors.Is(err, ErrProviderUnconfigured) || errors.Is(err, ErrQuotaExceeded) {
 		return false
 	}
 	var providerErr *ProviderError

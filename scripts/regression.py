@@ -51,6 +51,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--provider", help="only use an active engine config for this provider")
+    parser.add_argument("--model", help="model selector for the protocol (defaults per provider)")
     parser.add_argument("--evidence", default=".run/regression-verification.json")
     args = parser.parse_args()
 
@@ -62,10 +64,16 @@ def main() -> int:
     summary["apiVersion"] = version.get("apiVersion", "unknown")
 
     _, configs = request(args.base_url, "GET", "/api/v1/engine-configs")
-    engine = next((item for item in configs.get("items", []) if item.get("status") == "active"), None)
+    engine = next((
+        item for item in configs.get("items", [])
+        if item.get("status") == "active" and (not args.provider or item.get("provider") == args.provider)
+    ), None)
     if not engine:
         raise RegressionError("no active engine config; seed one before running regression")
+    model = args.model or ("MiniMax-M2.5" if engine.get("provider") == "minimax" else "deepseek-flash")
     summary["engineConfigId"] = engine["id"]
+    summary["provider"] = engine.get("provider")
+    summary["model"] = model
 
     _, project = request(args.base_url, "POST", "/api/v1/projects", {
         "name": f"Regression {stamp}",
@@ -93,7 +101,7 @@ def main() -> int:
         "questionVersionId": published_set["id"],
         "engines": [{
             "engineConfigId": engine["id"],
-            "modelSelector": "deepseek-flash",
+            "modelSelector": model,
             "channel": engine.get("channel") or "model_api",
             "parameters": {},
         }],

@@ -3,6 +3,7 @@ package modelgateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -67,6 +68,9 @@ func TestRetryableClassifiesProviderErrors(t *testing.T) {
 	}
 	if Retryable(ErrProviderUnconfigured) || Retryable(ErrProviderUnsupported) {
 		t.Fatal("configuration errors must not be retried")
+	}
+	if Retryable(ErrQuotaExceeded) || Retryable(fmt.Errorf("wrap: %w", ErrQuotaExceeded)) {
+		t.Fatal("quota exhaustion must not be retried")
 	}
 }
 

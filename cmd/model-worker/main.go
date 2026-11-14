@@ -122,6 +122,8 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		code := "MODEL_CALL_FAILED"
 		if errors.Is(err, modelgateway.ErrProviderUnconfigured) {
 			code = "PROVIDER_UNCONFIGURED"
+		} else if errors.Is(err, modelgateway.ErrQuotaExceeded) {
+			code = "PROVIDER_QUOTA_EXCEEDED"
 		}
 		logger.Error("model call failed", "sample", claim.SampleID, "provider", claim.Provider, "error", err)
 		if failErr := store.FailSample(ctx, audits.SampleFailure{SampleID: claim.SampleID, AuditID: claim.AuditID, ErrorCode: code}); failErr != nil {
