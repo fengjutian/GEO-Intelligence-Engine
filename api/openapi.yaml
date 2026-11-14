@@ -292,6 +292,22 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {type: string, enum: [proposed, confirmed, rejected]}}}}}}
       responses:
         '200': {description: Updated entity, content: {application/json: {schema: {$ref: '#/components/schemas/Entity'}}}}
+  /entities:merge:
+    post:
+      tags: [Entities]
+      operationId: mergeEntities
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [sourceEntityId, targetEntityId], properties: {sourceEntityId: {$ref: '#/components/schemas/Id'}, targetEntityId: {$ref: '#/components/schemas/Id'}, reason: {type: string}}}}}}
+      responses:
+        '201': {description: Merge event, content: {application/json: {schema: {$ref: '#/components/schemas/EntityMerge'}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /entity-merges/{mergeId}:undo:
+    post:
+      tags: [Entities]
+      operationId: undoEntityMerge
+      parameters: [{name: mergeId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: Undone merge event, content: {application/json: {schema: {$ref: '#/components/schemas/EntityMerge'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /projects/{projectId}/measurement-protocols:
     get:
       tags: [Audits]
@@ -594,6 +610,10 @@ components:
       properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, entityType: {type: string, enum: [Organization, Brand, Product, SoftwareApplication]}, canonicalName: {type: string}, normalizedName: {type: string}, status: {type: string, enum: [proposed, confirmed, rejected]}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}
     EntityDetail:
       allOf: [{$ref: '#/components/schemas/Entity'}, {type: object, properties: {aliases: {type: array, items: {type: string}}, evidence: {type: array, items: {type: object, additionalProperties: true}}, relations: {type: array, items: {type: object, additionalProperties: true}}}}]
+    EntityMerge:
+      type: object
+      required: [id, sourceEntityId, targetEntityId, status]
+      properties: {id: {$ref: '#/components/schemas/Id'}, sourceEntityId: {$ref: '#/components/schemas/Id'}, targetEntityId: {$ref: '#/components/schemas/Id'}, reason: {type: string}, status: {type: string, enum: [active, undone]}, occurredAt: {type: string, format: date-time}}
     ProjectCreate:
       type: object
       required: [name, brandName, officialUrl, locale, region, timezone]

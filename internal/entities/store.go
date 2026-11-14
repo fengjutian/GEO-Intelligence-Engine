@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"unicode"
@@ -386,7 +387,13 @@ type mergeSnapshot struct {
 }
 
 // Merge folds source into target, keeping the source row as a merged pointer.
-func (s *Store) Merge(ctx context.Context, tenantID, actorID string, input MergeInput) (MergeEvent, error) {
+func (s *Store) Merge(ctx context.Context, tenantID, actorID string, input MergeInput) (result MergeEvent, retErr error) {
+	step := "begin"
+	defer func() {
+		if retErr != nil {
+			retErr = fmt.Errorf("merge step %s: %w", step, retErr)
+		}
+	}()
 	if input.SourceEntityID == input.TargetEntityID {
 		return MergeEvent{}, ErrInvalid
 	}
@@ -395,25 +402,26 @@ func (s *Store) Merge(ctx context.Context, tenantID, actorID string, input Merge
 		return MergeEvent{}, err
 	}
 	defer tx.Rollback()
-	var sourceProject, targetProject, sourceType, targetType, sourceStatus, sourceName string
+	var sourceProject, targetProject, sourceType, targetType, sourceStatus, targetStatus, sourceName string
 	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(project_id),entity_type,status,canonical_name FROM entities WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, input.SourceEntityID).Scan(&sourceProject, &sourceType, &sourceStatus, &sourceName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MergeEvent{}, ErrNotFound
 	}
 	if err != nil {
-		return MergeEvent{}, err
+		return MergeEvent{}, fmt.Errorf("load merge source: %w", err)
 	}
 	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(project_id),entity_type,status FROM entities WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, input.TargetEntityID).Scan(&targetProject, &targetType, &targetStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MergeEvent{}, ErrNotFound
 	}
 	if err != nil {
-		return MergeEvent{}, err
+		return MergeEvent{}, fmt.Errorf("load merge target: %w", err)
 	}
 	if sourceProject != targetProject || sourceType != targetType || sourceStatus == "merged" || targetStatus == "merged" {
 		return MergeEvent{}, ErrInvalid
 	}
 	snapshot := mergeSnapshot{PreviousStatus: sourceStatus, CanonicalName: sourceName, AliasIDs: []string{}, EvidenceIDs: []string{}, RelationIDs: []string{}}
+	step = "aliases"
 	aliasRows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),alias FROM entity_aliases WHERE tenant_id=UUID_TO_BIN(?) AND entity_id=UUID_TO_BIN(?)`, tenantID, input.SourceEntityID)
 	if err != nil {
 		return MergeEvent{}, err
@@ -456,23 +464,28 @@ func (s *Store) Merge(ctx context.Context, tenantID, actorID string, input Merge
 		}
 		snapshot.AddedAliasID = addedAliasID
 	}
+	step = "evidence"
 	evidenceRows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id) FROM entity_evidence WHERE tenant_id=UUID_TO_BIN(?) AND target_type='entity' AND target_id=UUID_TO_BIN(?)`, tenantID, input.SourceEntityID)
 	if err != nil {
 		return MergeEvent{}, err
 	}
+	evidenceIDs := []string{}
 	for evidenceRows.Next() {
 		var evidenceID string
 		if err := evidenceRows.Scan(&evidenceID); err != nil {
 			evidenceRows.Close()
 			return MergeEvent{}, err
 		}
+		evidenceIDs = append(evidenceIDs, evidenceID)
+	}
+	evidenceRows.Close()
+	for _, evidenceID := range evidenceIDs {
 		if _, err := tx.ExecContext(ctx, `UPDATE entity_evidence SET target_id=UUID_TO_BIN(?) WHERE id=UUID_TO_BIN(?)`, input.TargetEntityID, evidenceID); err != nil {
-			evidenceRows.Close()
 			return MergeEvent{}, err
 		}
 		snapshot.EvidenceIDs = append(snapshot.EvidenceIDs, evidenceID)
 	}
-	evidenceRows.Close()
+	step = "relations"
 	relationRows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(subject_id),BIN_TO_UUID(object_id),predicate FROM entity_relations WHERE tenant_id=UUID_TO_BIN(?) AND (subject_id=UUID_TO_BIN(?) OR object_id=UUID_TO_BIN(?))`, tenantID, input.SourceEntityID, input.SourceEntityID)
 	if err != nil {
 		return MergeEvent{}, err
@@ -520,6 +533,7 @@ func (s *Store) Merge(ctx context.Context, tenantID, actorID string, input Merge
 	if _, err := tx.ExecContext(ctx, `UPDATE entities SET status='merged',updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, input.SourceEntityID); err != nil {
 		return MergeEvent{}, err
 	}
+	step = "event"
 	eventID, _ := uuid.NewV7()
 	snapshotJSON, _ := json.Marshal(snapshot)
 	if _, err := tx.ExecContext(ctx, `INSERT INTO entity_merge_events (id,tenant_id,source_entity_id,target_entity_id,actor_id,reason,status,snapshot_json,occurred_at)
@@ -527,7 +541,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(
 		eventID.String(), tenantID, input.SourceEntityID, input.TargetEntityID, actorID, input.Reason, string(snapshotJSON)); err != nil {
 		return MergeEvent{}, err
 	}
-	mergeEvent := MergeEvent{ID: eventID.String(), SourceEntityID: input.SourceEntityID, TargetEntityID: input.TargetEntityID, Reason: input.Reason, Status: "active"}
+	mergeEvent := MergeEvent{ID: eventID.String(), SourceEntityID: input.SourceEntityID, TargetEntityID: input.TargetEntityID, Reason: input.Reason, Status: "active", OccurredAt: time.Now().UTC()}
 	if err := tx.Commit(); err != nil {
 		return MergeEvent{}, err
 	}
@@ -588,7 +602,7 @@ FROM entity_merge_events WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FO
 	if err := tx.Commit(); err != nil {
 		return MergeEvent{}, err
 	}
-	return MergeEvent{ID: mergeID, SourceEntityID: sourceID, TargetEntityID: targetID, Reason: reason, Status: "undone"}, nil
+	return MergeEvent{ID: mergeID, SourceEntityID: sourceID, TargetEntityID: targetID, Reason: reason, Status: "undone", OccurredAt: time.Now().UTC()}, nil
 }
 
 func (s *Store) UpdateStatus(ctx context.Context, tenantID, entityID, status string) (Entity, error) {

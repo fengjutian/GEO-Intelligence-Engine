@@ -135,10 +135,12 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/tenants/{tenantId}/invitations", requirePermission("manage_members", memberHandler.invite))
 	mux.HandleFunc("PATCH /api/v1/tenants/{tenantId}/members/{memberId}", requirePermission("manage_members", memberHandler.update))
 	mux.HandleFunc("POST /api/v1/invitations/{invitationAction}", memberHandler.accept)
-	entityHandler := newEntityHandler(entities.NewStore(deps.DB), deps.DevTenantID)
+	entityHandler := newEntityHandler(entities.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/entities", projectAccess(deps.DB, entityHandler.list))
 	mux.HandleFunc("GET /api/v1/entities/{entityId}", entityHandler.get)
 	mux.HandleFunc("PATCH /api/v1/entities/{entityId}", requirePermission("edit_project", entityHandler.update))
+	mux.HandleFunc("POST /api/v1/entities:merge", requirePermission("edit_project", entityHandler.merge))
+	mux.HandleFunc("POST /api/v1/entity-merges/{mergeAction}", requirePermission("edit_project", entityHandler.undoMerge))
 
 	var oidcVerifier *auth.OIDCVerifier
 	if strings.EqualFold(deps.AuthMode, "oidc") {

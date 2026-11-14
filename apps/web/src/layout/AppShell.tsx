@@ -1,17 +1,18 @@
-import { BarChart3, Bot, FolderKanban, Gauge, Globe2, LogOut, Settings } from 'lucide-react'
+import { BarChart3, Bot, FolderKanban, Gauge, Globe2, LogOut, Network, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-export type PageId = 'overview' | 'projects' | 'audits' | 'questions' | 'models'
+export type PageId = 'overview' | 'projects' | 'audits' | 'entities' | 'questions' | 'models'
 
 const navItems = [
   { id: 'overview' as const, label: '概览', icon: Gauge },
   { id: 'projects' as const, label: '项目空间', icon: FolderKanban },
   { id: 'audits' as const, label: '网站审计', icon: Globe2 },
+  { id: 'entities' as const, label: '实体知识', icon: Network },
   { id: 'questions' as const, label: '问题空间', icon: BarChart3 },
   { id: 'models' as const, label: '模型服务', icon: Bot },
 ]
 
-const titles: Record<PageId, string> = { overview: '工作台', projects: '项目空间', audits: '网站审计', questions: '问题空间', models: '模型服务' }
+const titles: Record<PageId, string> = { overview: '工作台', projects: '项目空间', audits: '网站审计', entities: '实体知识', questions: '问题空间', models: '模型服务' }
 
 type Props = {
   activePage: PageId
