@@ -45,6 +45,23 @@ type Detail struct {
 	Relations []Relation `json:"relations"`
 }
 
+// MergeEvent records one reversible merge.
+type MergeEvent struct {
+	ID             string    `json:"id"`
+	SourceEntityID string    `json:"sourceEntityId"`
+	TargetEntityID string    `json:"targetEntityId"`
+	Reason         string    `json:"reason"`
+	Status         string    `json:"status"`
+	OccurredAt     time.Time `json:"occurredAt"`
+}
+
+// MergeInput identifies the source and target of a merge.
+type MergeInput struct {
+	SourceEntityID string `json:"sourceEntityId"`
+	TargetEntityID string `json:"targetEntityId"`
+	Reason         string `json:"reason"`
+}
+
 // RelationCandidate is a relation parsed from structured data.
 type RelationCandidate struct {
 	Predicate  string
