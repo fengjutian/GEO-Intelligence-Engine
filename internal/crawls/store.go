@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/google/uuid"
@@ -826,7 +827,7 @@ var statisticPattern = regexp.MustCompile(`(?i)\d+(\.\d+)?\s*(%|percent|倍)|\d{
 
 func findingVersion(code string) string {
 	switch code {
-	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE":
+	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE", "CONTENT_AUTHOR_MISSING", "CONTENT_PUBLISHED_DATE_MISSING", "CONTENT_PUBLISHED_DATE_INVALID", "CONTENT_STALE_CONTENT", "CONTENT_FAQ_ANSWER_MISSING", "CONTENT_FAQ_DUPLICATE":
 		return "content-rules-v1"
 	default:
 		return "technical-rules-v1"
@@ -876,7 +877,41 @@ func contentFindings(completion Completion) []technicalFinding {
 			findings = append(findings, technicalFinding{"CONTENT_NO_EVIDENCE", "medium", "Page contains statistics without external evidence links", map[string]any{"opening": firstSentence}})
 		}
 	}
+	if strings.TrimSpace(completion.Author) == "" {
+		findings = append(findings, technicalFinding{"CONTENT_AUTHOR_MISSING", "low", "Page does not declare an author", map[string]any{"url": completion.FinalURL}})
+	}
+	if strings.TrimSpace(completion.PublishedAt) == "" {
+		findings = append(findings, technicalFinding{"CONTENT_PUBLISHED_DATE_MISSING", "low", "Page does not declare a published date", map[string]any{"url": completion.FinalURL}})
+	} else if published, err := parsePublishedDate(completion.PublishedAt); err != nil {
+		findings = append(findings, technicalFinding{"CONTENT_PUBLISHED_DATE_INVALID", "low", "Published date cannot be parsed", map[string]any{"publishedAt": completion.PublishedAt}})
+	} else if age := time.Since(published); age > 730*24*time.Hour {
+		findings = append(findings, technicalFinding{"CONTENT_STALE_CONTENT", "medium", "Page content appears stale", map[string]any{"publishedAt": completion.PublishedAt, "ageDays": int(age.Hours() / 24)}})
+	}
+	seenQuestions := map[string]bool{}
+	for _, item := range completion.FAQ {
+		question := strings.TrimSpace(item.Question)
+		if question == "" {
+			continue
+		}
+		if strings.TrimSpace(item.Answer) == "" {
+			findings = append(findings, technicalFinding{"CONTENT_FAQ_ANSWER_MISSING", "high", "FAQ question has no answer", map[string]any{"question": question}})
+		}
+		normalized := strings.ToLower(question)
+		if seenQuestions[normalized] {
+			findings = append(findings, technicalFinding{"CONTENT_FAQ_DUPLICATE", "medium", "FAQ contains a duplicate question", map[string]any{"question": question}})
+		}
+		seenQuestions[normalized] = true
+	}
 	return findings
+}
+
+func parsePublishedDate(value string) (time.Time, error) {
+	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006-01-02T15:04:05Z0700"} {
+		if parsed, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported date: %s", value)
 }
 
 func externalLinkCount(completion Completion) int {

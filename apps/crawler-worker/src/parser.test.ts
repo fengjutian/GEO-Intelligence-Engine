@@ -17,3 +17,11 @@ it('extracts JSON-LD objects and arrays', () => {
 it('ignores malformed JSON-LD', () => {
   expect(parseStructuredData('<script type="application/ld+json">{oops</script>')).toEqual([])
 })
+
+it('extracts author, published date and FAQ answers', () => {
+  const html = `<html><head><meta name="author" content="Acme Team"><meta property="article:published_time" content="2026-01-02T00:00:00Z"></head><body><h1>FAQ</h1><script type="application/ld+json">{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is GEO?","acceptedAnswer":{"@type":"Answer","text":"GEO is AI visibility analytics."}}]}</script></body></html>`
+  const page = parseHTML(html, 'https://example.com/faq')
+  expect(page.author).toBe('Acme Team')
+  expect(page.publishedAt).toBe('2026-01-02T00:00:00Z')
+  expect(page.faq).toEqual([{ question: 'What is GEO?', answer: 'GEO is AI visibility analytics.' }])
+})

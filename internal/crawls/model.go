@@ -59,6 +59,15 @@ type Completion struct {
 	StructuredData []json.RawMessage `json:"structuredData,omitempty"`
 	Headings       []Heading         `json:"headings,omitempty"`
 	TextSample     string            `json:"textSample,omitempty"`
+	Author         string            `json:"author,omitempty"`
+	PublishedAt    string            `json:"publishedAt,omitempty"`
+	FAQ            []FAQItem         `json:"faq,omitempty"`
+}
+
+// FAQItem is one question/answer pair from FAQPage structured data.
+type FAQItem struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
 }
 
 // Heading is one semantic page heading with its level.

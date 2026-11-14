@@ -1,6 +1,9 @@
 package crawls
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func findingCodes(items []technicalFinding) map[string]bool {
 	codes := map[string]bool{}
@@ -42,13 +45,36 @@ func TestContentFindingsMultipleH1AndEvidence(t *testing.T) {
 
 func TestContentFindingsGoodPage(t *testing.T) {
 	completion := Completion{
-		FinalURL:   "https://example.com/",
-		TextLength: 800,
-		Headings:   []Heading{{Level: 1, Text: "Acme GEO"}, {Level: 2, Text: "Overview"}},
-		TextSample: "Acme GEO is a visibility analytics platform for AI search answers and citations.",
-		Links:      []string{"https://industry.example.org/report"},
+		FinalURL:    "https://example.com/",
+		TextLength:  800,
+		Headings:    []Heading{{Level: 1, Text: "Acme GEO"}, {Level: 2, Text: "Overview"}},
+		TextSample:  "Acme GEO is a visibility analytics platform for AI search answers and citations.",
+		Links:       []string{"https://industry.example.org/report"},
+		Author:      "Acme Team",
+		PublishedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	if findings := contentFindings(completion); len(findings) != 0 {
 		t.Fatalf("unexpected findings: %+v", findings)
+	}
+}
+
+func TestContentFindingsFAQAndFreshness(t *testing.T) {
+	completion := Completion{
+		FinalURL:    "https://example.com/faq",
+		TextLength:  600,
+		Headings:    []Heading{{Level: 1, Text: "FAQ"}},
+		TextSample:  "A sufficiently detailed opening answer for the page.",
+		Author:      "Acme Team",
+		PublishedAt: "2020-01-01",
+		FAQ: []FAQItem{
+			{Question: "What is GEO?", Answer: ""},
+			{Question: "What is GEO?", Answer: "Answer"},
+		},
+	}
+	codes := findingCodes(contentFindings(completion))
+	for _, code := range []string{"CONTENT_FAQ_ANSWER_MISSING", "CONTENT_FAQ_DUPLICATE", "CONTENT_STALE_CONTENT"} {
+		if !codes[code] {
+			t.Fatalf("missing %s in %+v", code, codes)
+		}
 	}
 }
