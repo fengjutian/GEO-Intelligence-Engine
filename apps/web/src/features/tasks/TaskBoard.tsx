@@ -14,6 +14,7 @@ type Task = {
   priority: string
   version: number
   dueAt: string | null
+  assigneeId: string | null
   acceptanceItems: Acceptance[]
   events: TaskEvent[]
   comments: Comment[]
@@ -49,6 +50,29 @@ export function TaskBoard({ projectId, projectName, onClose }: Props) {
   const refresh = async (id: string) => {
     await queryClient.invalidateQueries({ queryKey: ['task', id] })
     await queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
+  }
+
+  async function updateTask(task: Task, form: HTMLFormElement) {
+    const data = new FormData(form)
+    const body: Record<string, string> = { priority: String(data.get('priority')) }
+    const assigneeId = String(data.get('assigneeId') ?? '').trim()
+    if (assigneeId) body.assigneeId = assigneeId
+    const dueLocal = String(data.get('dueAt') ?? '').trim()
+    if (dueLocal) body.dueAt = new Date(dueLocal).toISOString()
+    setBusy(true)
+    try {
+      await request<Task>(`/api/v1/optimization-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', 'If-Match': `"${task.version}"` },
+        body: JSON.stringify(body),
+      })
+      await refresh(task.id)
+      setMessage('任务字段已更新')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '任务更新失败')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function transition(task: Task, target: string, reason = '') {
@@ -142,6 +166,13 @@ export function TaskBoard({ projectId, projectName, onClose }: Props) {
               <div><dt>来源 Finding</dt><dd className="hash">{task.findingId}</dd></div>
               <div><dt>截止</dt><dd>{task.dueAt ? new Date(task.dueAt).toLocaleDateString() : '未设置'}</dd></div>
             </dl>
+            <h4>任务字段</h4>
+            <form className="task-edit" key={`${task.id}-${task.version}`} onSubmit={(event) => { event.preventDefault(); void updateTask(task, event.currentTarget) }}>
+              <label>优先级<select name="priority" defaultValue={task.priority}><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option></select></label>
+              <label>负责人 UUID<input name="assigneeId" defaultValue={task.assigneeId ?? ''} placeholder="可选" /></label>
+              <label>截止时间<input name="dueAt" type="datetime-local" defaultValue={task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : ''} /></label>
+              <button type="submit" disabled={busy}>保存字段</button>
+            </form>
             <h4>验收条件</h4>
             <ul className="acceptance-list">{task.acceptanceItems.map((item) => <li key={item.id}>
               <label><input type="checkbox" checked={item.status === 'done'} disabled={busy || ['done', 'cancelled'].includes(task.status)} onChange={() => void toggleItem(task, item)} /> {item.description}</label>

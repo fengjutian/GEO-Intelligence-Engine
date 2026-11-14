@@ -177,9 +177,8 @@ func (s *Store) Update(ctx context.Context, tenantID, actorID, taskID string, ex
 	}
 	defer tx.Rollback()
 	var version int64
-	var currentTitle, currentDescription, currentPriority, currentDue string
-	var currentAssignee []byte
-	err = tx.QueryRowContext(ctx, `SELECT version,title,COALESCE(description,''),priority,COALESCE(DATE_FORMAT(due_at,'%Y-%m-%dT%H:%i:%sZ'),''),assignee_id
+	var currentTitle, currentDescription, currentPriority, currentDue, currentAssignee string
+	err = tx.QueryRowContext(ctx, `SELECT version,title,COALESCE(description,''),priority,COALESCE(DATE_FORMAT(due_at,'%Y-%m-%dT%H:%i:%sZ'),''),COALESCE(BIN_TO_UUID(assignee_id),'')
 FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, taskID).Scan(&version, &currentTitle, &currentDescription, &currentPriority, &currentDue, &currentAssignee)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, ErrNotFound
@@ -190,7 +189,7 @@ FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR
 	if expectedVersion > 0 && version != expectedVersion {
 		return Task{}, ErrConflict
 	}
-	before := map[string]any{"title": currentTitle, "description": currentDescription, "priority": currentPriority, "dueAt": currentDue, "assigneeId": string(currentAssignee)}
+	before := map[string]any{"title": currentTitle, "description": currentDescription, "priority": currentPriority, "dueAt": currentDue, "assigneeId": currentAssignee}
 	assignments := []string{}
 	args := []any{}
 	if title := strings.TrimSpace(input.Title); title != "" {
@@ -329,8 +328,8 @@ func (s *Store) AddComment(ctx context.Context, tenantID, actorID, taskID, body 
 
 func (s *Store) Get(ctx context.Context, tenantID, taskID string) (Task, error) {
 	var task Task
-	var assignee []byte
-	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),BIN_TO_UUID(finding_id),title,COALESCE(description,''),status,priority,assignee_id,due_at,version,created_at,updated_at
+	var assignee string
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),BIN_TO_UUID(finding_id),title,COALESCE(description,''),status,priority,COALESCE(BIN_TO_UUID(assignee_id),''),due_at,version,created_at,updated_at
 FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, taskID).Scan(&task.ID, &task.ProjectID, &task.FindingID, &task.Title, &task.Description, &task.Status, &task.Priority, &assignee, &task.DueAt, &task.Version, &task.CreatedAt, &task.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, ErrNotFound
@@ -338,8 +337,8 @@ FROM optimization_tasks WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, t
 	if err != nil {
 		return Task{}, err
 	}
-	if len(assignee) > 0 {
-		value := string(assignee)
+	if assignee != "" {
+		value := assignee
 		task.AssigneeID = &value
 	}
 	itemRows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),description,status,position FROM task_acceptance_items WHERE tenant_id=UUID_TO_BIN(?) AND task_id=UUID_TO_BIN(?) ORDER BY position`, tenantID, taskID)
