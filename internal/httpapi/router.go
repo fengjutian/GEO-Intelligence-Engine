@@ -16,6 +16,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
+	"github.com/fengjutian/geo-intelligence-engine/internal/serviceaccounts"
 	"github.com/fengjutian/geo-intelligence-engine/internal/tasks"
 )
 
@@ -138,6 +139,12 @@ func New(deps Dependencies) http.Handler {
 		})
 	})
 	memberHandler := newMemberHandler(members.NewStore(deps.DB))
+	serviceAccountHandler := newServiceAccountHandler(serviceaccounts.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("POST /api/v1/service-accounts", requirePermission("manage_keys", serviceAccountHandler.createAccount))
+	mux.HandleFunc("GET /api/v1/service-accounts", requirePermission("manage_keys", serviceAccountHandler.listAccounts))
+	mux.HandleFunc("POST /api/v1/api-tokens", requirePermission("manage_keys", serviceAccountHandler.createToken))
+	mux.HandleFunc("GET /api/v1/api-tokens", requirePermission("manage_keys", serviceAccountHandler.listTokens))
+	mux.HandleFunc("DELETE /api/v1/api-tokens/{tokenId}", requirePermission("manage_keys", serviceAccountHandler.revokeToken))
 	mux.HandleFunc("GET /api/v1/tenants/{tenantId}/members", requirePermission("read_members", memberHandler.list))
 	mux.HandleFunc("POST /api/v1/tenants/{tenantId}/invitations", requirePermission("manage_members", memberHandler.invite))
 	mux.HandleFunc("PATCH /api/v1/tenants/{tenantId}/members/{memberId}", requirePermission("manage_members", memberHandler.update))

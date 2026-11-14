@@ -40,3 +40,40 @@ type Adjudication struct {
 	Reason        string         `json:"reason"`
 	CreatedAt     time.Time      `json:"createdAt"`
 }
+
+// AnnotationInput is one entry in a batch annotation request.
+type AnnotationInput struct {
+	ReviewItemID string         `json:"reviewItemId"`
+	Labels       map[string]any `json:"labels"`
+	Reason       string         `json:"reason"`
+}
+
+// AdjudicationInput is one entry in a batch adjudication request.
+type AdjudicationInput struct {
+	ReviewItemID string         `json:"reviewItemId"`
+	Result       map[string]any `json:"result"`
+	Reason       string         `json:"reason"`
+}
+
+// BatchOutcome reports the result of one item inside a batch request.
+type BatchOutcome struct {
+	ReviewItemID string `json:"reviewItemId"`
+	Status       string `json:"status"`
+	ErrorCode    string `json:"errorCode,omitempty"`
+}
+
+// BatchResult is the response body of every batch endpoint.
+type BatchResult struct {
+	Applied int            `json:"applied"`
+	Failed  int            `json:"failed"`
+	Results []BatchOutcome `json:"results"`
+}
+
+// HumanOverride is the Judge decision rewritten by a final adjudication.
+type HumanOverride struct {
+	AnswerOutcome       string `json:"answerOutcome,omitempty"`
+	RecommendationLabel string `json:"recommendationLabel,omitempty"`
+	ContentValidity     string `json:"contentValidity,omitempty"`
+	Sentiment           string `json:"sentiment,omitempty"`
+	Eligible            *bool  `json:"eligible,omitempty"`
+}

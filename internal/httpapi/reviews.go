@@ -19,6 +19,9 @@ type reviewStore interface {
 	Assign(ctx context.Context, tenantID, itemID, assigneeID string) error
 	Adjudicate(ctx context.Context, tenantID, itemID, adjudicatorID string, result map[string]any, reason string) (reviews.Adjudication, error)
 	Stats(ctx context.Context, tenantID string) (map[string]any, error)
+	BatchAnnotate(ctx context.Context, tenantID, annotatorID string, inputs []reviews.AnnotationInput) (reviews.BatchResult, error)
+	BatchAdjudicate(ctx context.Context, tenantID, adjudicatorID string, inputs []reviews.AdjudicationInput) (reviews.BatchResult, error)
+	BatchAssign(ctx context.Context, tenantID, assigneeID string, itemIDs []string) (reviews.BatchResult, error)
 }
 
 type reviewHandler struct {
@@ -145,6 +148,52 @@ func (h *reviewHandler) annotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, annotation)
+}
+
+func (h *reviewHandler) batchAnnotate(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Items []reviews.AnnotationInput `json:"items"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.BatchAnnotate(r.Context(), h.tenant(r), r.Header.Get(headerActor), input.Items)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *reviewHandler) batchAdjudicate(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Items []reviews.AdjudicationInput `json:"items"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.BatchAdjudicate(r.Context(), h.tenant(r), r.Header.Get(headerActor), input.Items)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *reviewHandler) batchAssign(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ReviewItemIDs []string `json:"reviewItemIds"`
+		AssigneeID    string   `json:"assigneeId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.BatchAssign(r.Context(), h.tenant(r), input.AssigneeID, input.ReviewItemIDs)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *reviewHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {

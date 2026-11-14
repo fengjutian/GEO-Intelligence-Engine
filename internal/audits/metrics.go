@@ -12,7 +12,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const MetricVersion = "metrics-v1"
+const (
+	// MetricVersion is the immutable snapshot computed from Judge output.
+	MetricVersion = "metrics-v1"
+	// HumanMetricVersion is the snapshot recomputed after adjudications rewrite
+	// the effective Judge decision for some answers.
+	HumanMetricVersion = "metrics-v1h"
+)
 
 // MetricValue is one aggregated rate with its numerator, denominator and interval.
 type MetricValue struct {
@@ -84,6 +90,13 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 }
 
 func generateMetrics(ctx context.Context, tx *sql.Tx, tenantID, auditID string) error {
+	return generateMetricsVersion(ctx, tx, tenantID, auditID, MetricVersion, false)
+}
+
+// generateMetricsVersion writes one snapshot per (audit, evaluation run,
+// version). The Judge snapshot is immutable and never rewritten; the human
+// snapshot is rebuilt in place so repeated adjudications stay idempotent.
+func generateMetricsVersion(ctx context.Context, tx *sql.Tx, tenantID, auditID, version string, human bool) error {
 	var evaluationRunID string
 	err := tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM evaluation_runs WHERE tenant_id=UUID_TO_BIN(?) AND audit_id=UUID_TO_BIN(?) ORDER BY created_at DESC,id DESC LIMIT 1`, tenantID, auditID).Scan(&evaluationRunID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -99,12 +112,12 @@ func generateMetrics(ctx context.Context, tx *sql.Tx, tenantID, auditID string) 
 	snapshotUUID, _ := uuid.NewV7()
 	_, err = tx.ExecContext(ctx, `INSERT INTO metric_snapshots (id,tenant_id,audit_id,evaluation_run_id,metric_version,status,generated_at)
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,'ready',UTC_TIMESTAMP(6))
-ON DUPLICATE KEY UPDATE id=id`, snapshotUUID.String(), tenantID, auditID, evaluationRunID, MetricVersion)
+ON DUPLICATE KEY UPDATE id=id`, snapshotUUID.String(), tenantID, auditID, evaluationRunID, version)
 	if err != nil {
 		return fmt.Errorf("create metric snapshot: %w", err)
 	}
 	var snapshotID string
-	if err := tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM metric_snapshots WHERE audit_id=UUID_TO_BIN(?) AND evaluation_run_id=UUID_TO_BIN(?) AND metric_version=?`, auditID, evaluationRunID, MetricVersion).Scan(&snapshotID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM metric_snapshots WHERE audit_id=UUID_TO_BIN(?) AND evaluation_run_id=UUID_TO_BIN(?) AND metric_version=?`, auditID, evaluationRunID, version).Scan(&snapshotID); err != nil {
 		return err
 	}
 	var existing int
@@ -112,18 +125,33 @@ ON DUPLICATE KEY UPDATE id=id`, snapshotUUID.String(), tenantID, auditID, evalua
 		return err
 	}
 	if existing > 0 {
-		return nil
+		if !human {
+			return nil
+		}
+		if err := clearMetricSnapshot(ctx, tx, snapshotID); err != nil {
+			return err
+		}
 	}
 
-	rows, err := tx.QueryContext(ctx, `
-SELECT BIN_TO_UUID(s.engine_config_id),ec.provider,s.channel,s.model_selector,BIN_TO_UUID(ae.id),BIN_TO_UUID(ae.response_id),BIN_TO_UUID(s.question_id),BIN_TO_UUID(s.id),ae.answer_outcome,COALESCE(ae.recommendation_label,''),COALESCE(ae.sentiment,''),COALESCE(JSON_LENGTH(ae.evidence_json->'$.mentions'),0),
+	factsQuery := `
+SELECT BIN_TO_UUID(s.engine_config_id),ec.provider,s.channel,s.model_selector,BIN_TO_UUID(ae.id),BIN_TO_UUID(ae.response_id),BIN_TO_UUID(s.question_id),BIN_TO_UUID(s.id),
+       COALESCE(JSON_UNQUOTE(ae.human_decision_json->'$.answerOutcome'), ae.answer_outcome),
+       COALESCE(JSON_UNQUOTE(ae.human_decision_json->'$.recommendationLabel'), COALESCE(ae.recommendation_label,'')),
+       COALESCE(JSON_UNQUOTE(ae.human_decision_json->'$.sentiment'), COALESCE(ae.sentiment,'')),
+       COALESCE(JSON_LENGTH(ae.evidence_json->'$.mentions'),0),
        (SELECT COUNT(*) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official'),
        (SELECT COUNT(*) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='third_party')
 FROM answer_evaluations ae
 JOIN ai_responses resp ON resp.id=ae.response_id
 JOIN audit_samples s ON s.id=resp.sample_id
 JOIN engine_configs ec ON ec.id=s.engine_config_id
-WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation_run_id=UUID_TO_BIN(?) AND ae.eligible_for_core_metrics=TRUE`, tenantID, auditID, evaluationRunID)
+WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation_run_id=UUID_TO_BIN(?)
+  AND (ae.eligible_for_core_metrics=TRUE OR %s)`
+	eligibility := "FALSE"
+	if human {
+		eligibility = "ae.human_decision_json->'$.eligible' = TRUE"
+	}
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(factsQuery, eligibility), tenantID, auditID, evaluationRunID)
 	if err != nil {
 		return fmt.Errorf("load metric facts: %w", err)
 	}
@@ -215,6 +243,57 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 		}
 	}
 	return nil
+}
+
+// clearMetricSnapshot removes the derived rows of one human snapshot so it can
+// be rebuilt without violating the uniqueness of its values.
+func clearMetricSnapshot(ctx context.Context, tx *sql.Tx, snapshotID string) error {
+	for _, statement := range []string{
+		`DELETE me FROM metric_evidence_sets me JOIN metric_values mv ON mv.id=me.metric_value_id WHERE mv.snapshot_id=UUID_TO_BIN(?)`,
+		`DELETE mq FROM metric_quality_flags mq JOIN metric_values mv ON mv.id=mq.metric_value_id WHERE mv.snapshot_id=UUID_TO_BIN(?)`,
+		`DELETE FROM metric_values WHERE snapshot_id=UUID_TO_BIN(?)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement, snapshotID); err != nil {
+			return fmt.Errorf("clear metric snapshot: %w", err)
+		}
+	}
+	return nil
+}
+
+// RecomputeMetrics rebuilds the human-adjusted snapshot from the effective
+// Judge decisions, including adjudication write-backs. The immutable Judge
+// snapshot (metrics-v1) is left untouched.
+func (s *Store) RecomputeMetrics(ctx context.Context, tenantID, auditID string) ([]MetricValue, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, auditID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if status != "succeeded" && status != "partial_success" {
+		return nil, ErrConflict
+	}
+	var evaluationRuns int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM evaluation_runs WHERE tenant_id=UUID_TO_BIN(?) AND audit_id=UUID_TO_BIN(?)`, tenantID, auditID).Scan(&evaluationRuns); err != nil {
+		return nil, err
+	}
+	if evaluationRuns == 0 {
+		return nil, ErrConflict
+	}
+	if err := generateMetricsVersion(ctx, tx, tenantID, auditID, HumanMetricVersion, true); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.GetMetrics(ctx, tenantID, auditID, "answer_equal", "")
 }
 
 func insertMetricValue(ctx context.Context, tx *sql.Tx, tenantID, snapshotID, code string, dimensions map[string]any, numerator, denominator int) (string, error) {

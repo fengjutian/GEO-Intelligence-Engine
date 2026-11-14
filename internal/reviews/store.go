@@ -136,6 +136,10 @@ func (s *Store) Adjudicate(ctx context.Context, tenantID, itemID, adjudicatorID 
 	if len(result) == 0 || reason == "" {
 		return Adjudication{}, ErrInvalid
 	}
+	override, err := parseOverride(result)
+	if err != nil {
+		return Adjudication{}, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Adjudication{}, err
@@ -161,10 +165,77 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),CAST(? AS JS
 	if _, err := tx.ExecContext(ctx, `UPDATE review_queue_items SET status='adjudicated',updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, itemID); err != nil {
 		return Adjudication{}, err
 	}
+	overrideJSON, _ := json.Marshal(override)
+	if _, err := tx.ExecContext(ctx, `UPDATE answer_evaluations ae
+JOIN review_queue_items r ON r.evaluation_id=ae.id
+SET ae.human_decision_json=CAST(? AS JSON),ae.human_adjudication_id=UUID_TO_BIN(?),ae.human_reviewed_at=UTC_TIMESTAMP(6)
+WHERE r.tenant_id=UUID_TO_BIN(?) AND r.id=UUID_TO_BIN(?)`,
+		overrideJSON, adjudication.ID, tenantID, itemID); err != nil {
+		return Adjudication{}, fmt.Errorf("write back adjudication: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return Adjudication{}, err
 	}
 	return adjudication, nil
+}
+
+// parseOverride extracts the Judge fields a human adjudicator is allowed to
+// rewrite. Unknown keys stay in the adjudication record but are not applied.
+func parseOverride(result map[string]any) (HumanOverride, error) {
+	override := HumanOverride{}
+	stringFields := map[string]*string{
+		"answerOutcome":       &override.AnswerOutcome,
+		"recommendationLabel": &override.RecommendationLabel,
+		"contentValidity":     &override.ContentValidity,
+		"sentiment":           &override.Sentiment,
+	}
+	for key, target := range stringFields {
+		raw, ok := result[key]
+		if !ok {
+			continue
+		}
+		value, ok := raw.(string)
+		if !ok {
+			return HumanOverride{}, ErrInvalid
+		}
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if err := validateOverrideValue(key, value); err != nil {
+			return HumanOverride{}, err
+		}
+		*target = value
+	}
+	if raw, ok := result["eligible"]; ok {
+		value, ok := raw.(bool)
+		if !ok {
+			return HumanOverride{}, ErrInvalid
+		}
+		override.Eligible = &value
+	}
+	return override, nil
+}
+
+var overrideEnums = map[string]map[string]bool{
+	"answerOutcome":   {"answered": true, "refusal": true, "no_recommendation": true, "recommendation": true, "unknown": true},
+	"contentValidity": {"valid": true, "empty": true, "truncated": true, "wrong_language": true, "policy_blocked": true, "unparseable": true},
+	"sentiment":       {"positive": true, "neutral": true, "negative": true},
+}
+
+func validateOverrideValue(field, value string) error {
+	allowed, checked := overrideEnums[field]
+	if !checked {
+		// recommendationLabel is a free-form label but still bounded.
+		if len(value) > 64 {
+			return ErrInvalid
+		}
+		return nil
+	}
+	if !allowed[value] {
+		return ErrInvalid
+	}
+	return nil
 }
 
 func (s *Store) Stats(ctx context.Context, tenantID string) (map[string]any, error) {
@@ -274,4 +345,92 @@ FROM human_annotations WHERE tenant_id=UUID_TO_BIN(?) AND review_item_id=UUID_TO
 		return Annotation{}, err
 	}
 	return annotation, nil
+}
+
+// MaxBatchItems bounds one batch request so a single call cannot hold the API
+// for an unbounded amount of time.
+const MaxBatchItems = 100
+
+// ErrorCode maps a store error to the code reported per batch item.
+func ErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return "NOT_FOUND"
+	case errors.Is(err, ErrConflict):
+		return "NOT_PENDING"
+	case errors.Is(err, ErrInvalid):
+		return "INVALID_INPUT"
+	default:
+		return "INTERNAL"
+	}
+}
+
+func newBatchResult(size int) BatchResult {
+	return BatchResult{Results: make([]BatchOutcome, 0, size)}
+}
+
+func (b *BatchResult) record(itemID string, err error) {
+	outcome := BatchOutcome{ReviewItemID: itemID, Status: "applied"}
+	if err != nil {
+		outcome.Status = "failed"
+		outcome.ErrorCode = ErrorCode(err)
+		b.Failed++
+	} else {
+		b.Applied++
+	}
+	b.Results = append(b.Results, outcome)
+}
+
+// BatchAnnotate applies the same reviewer's annotation to many items. Each
+// item is applied independently so one conflict does not roll back the rest.
+func (s *Store) BatchAnnotate(ctx context.Context, tenantID, annotatorID string, inputs []AnnotationInput) (BatchResult, error) {
+	if len(inputs) == 0 || len(inputs) > MaxBatchItems {
+		return BatchResult{}, ErrInvalid
+	}
+	result := newBatchResult(len(inputs))
+	for _, input := range inputs {
+		if _, err := uuid.Parse(input.ReviewItemID); err != nil {
+			result.record(input.ReviewItemID, ErrInvalid)
+			continue
+		}
+		_, err := s.Annotate(ctx, tenantID, input.ReviewItemID, annotatorID, input.Labels, input.Reason)
+		result.record(input.ReviewItemID, err)
+	}
+	return result, nil
+}
+
+// BatchAdjudicate applies one adjudicator's conclusions to many items.
+func (s *Store) BatchAdjudicate(ctx context.Context, tenantID, adjudicatorID string, inputs []AdjudicationInput) (BatchResult, error) {
+	if len(inputs) == 0 || len(inputs) > MaxBatchItems {
+		return BatchResult{}, ErrInvalid
+	}
+	result := newBatchResult(len(inputs))
+	for _, input := range inputs {
+		if _, err := uuid.Parse(input.ReviewItemID); err != nil {
+			result.record(input.ReviewItemID, ErrInvalid)
+			continue
+		}
+		_, err := s.Adjudicate(ctx, tenantID, input.ReviewItemID, adjudicatorID, input.Result, input.Reason)
+		result.record(input.ReviewItemID, err)
+	}
+	return result, nil
+}
+
+// BatchAssign assigns many items to one active tenant member.
+func (s *Store) BatchAssign(ctx context.Context, tenantID, assigneeID string, itemIDs []string) (BatchResult, error) {
+	if len(itemIDs) == 0 || len(itemIDs) > MaxBatchItems {
+		return BatchResult{}, ErrInvalid
+	}
+	if _, err := uuid.Parse(assigneeID); err != nil {
+		return BatchResult{}, ErrInvalid
+	}
+	result := newBatchResult(len(itemIDs))
+	for _, itemID := range itemIDs {
+		if _, err := uuid.Parse(itemID); err != nil {
+			result.record(itemID, ErrInvalid)
+			continue
+		}
+		result.record(itemID, s.Assign(ctx, tenantID, itemID, assigneeID))
+	}
+	return result, nil
 }

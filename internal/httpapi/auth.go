@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
+	"github.com/fengjutian/geo-intelligence-engine/internal/serviceaccounts"
 	"github.com/google/uuid"
 )
 
@@ -68,8 +69,27 @@ func newAuthMiddleware(options authOptions) func(http.Handler) http.Handler {
 				}
 			}()
 			mode := strings.ToLower(options.Mode)
+			bearer := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+			if strings.HasPrefix(bearer, "geo_") {
+				if options.DB == nil {
+					writeProblem(recorder, http.StatusUnauthorized, "AUTHENTICATION_UNAVAILABLE", "API token store is not configured", traceID(r))
+					return
+				}
+				tenantID, principalID, scopes, err := serviceaccounts.NewStore(options.DB).Authenticate(r.Context(), bearer)
+				if err != nil {
+					writeProblem(recorder, http.StatusUnauthorized, "UNAUTHENTICATED", "Valid API token is required", traceID(r))
+					return
+				}
+				clone := r.Clone(r.Context())
+				clone.Header.Set(headerTenant, tenantID)
+				clone.Header.Set(headerActor, principalID)
+				clone.Header.Set(headerRole, serviceaccounts.RoleForScopes(scopes))
+				auditRequest = clone
+				next.ServeHTTP(recorder, clone)
+				return
+			}
 			if mode == "jwt" || mode == "oidc" {
-				token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+				token := bearer
 				var claims auth.Claims
 				var err error
 				if mode == "oidc" {

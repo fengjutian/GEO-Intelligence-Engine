@@ -34,6 +34,38 @@ paths:
       security: []
       responses:
         '200': {description: Public authentication configuration for the web client, content: {application/json: {schema: {type: object, required: [mode], properties: {mode: {type: string, enum: [dev, jwt, oidc]}, issuer: {type: string}, clientId: {type: string}, audience: {type: string}, scope: {type: string}}}}}}
+  /service-accounts:
+    get:
+      tags: [Identity]
+      operationId: listServiceAccounts
+      responses:
+        '200': {description: Service accounts, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {type: object, additionalProperties: true}}}}}}}
+    post:
+      tags: [Identity]
+      operationId: createServiceAccount
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [name], properties: {name: {type: string}}}}}}
+      responses:
+        '201': {description: Service account, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /api-tokens:
+    get:
+      tags: [Identity]
+      operationId: listAPITokens
+      parameters: [{name: serviceAccountId, in: query, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: API tokens without plaintext values, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {type: object, additionalProperties: true}}}}}}}
+    post:
+      tags: [Identity]
+      operationId: createAPIToken
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [serviceAccountId, scopes], properties: {serviceAccountId: {$ref: '#/components/schemas/Id'}, scopes: {type: array, items: {type: string}}, expiresInDays: {type: integer}}}}}}
+      responses:
+        '201': {description: API token with one-time plaintext, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /api-tokens/{tokenId}:
+    delete:
+      tags: [Identity]
+      operationId: revokeAPIToken
+      parameters: [{name: tokenId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '204': {description: Token revoked}
   /tenants/{tenantId}/members:
     parameters: [{$ref: '#/components/parameters/TenantId'}]
     get:
