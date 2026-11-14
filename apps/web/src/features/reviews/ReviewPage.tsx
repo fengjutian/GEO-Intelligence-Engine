@@ -17,6 +17,9 @@ type Item = {
   disagreeCount: number
 }
 
+type BatchOutcome = { reviewItemId: string; status: string; errorCode?: string }
+type BatchResult = { applied: number; failed: number; results: BatchOutcome[] }
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
@@ -26,11 +29,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+function summarize(result: BatchResult): string {
+  if (result.failed === 0) return `批量提交完成：成功 ${result.applied} 项`
+  const codes = [...new Set(result.results.filter((item) => item.status === 'failed').map((item) => item.errorCode ?? 'UNKNOWN'))]
+  return `批量提交完成：成功 ${result.applied} 项，失败 ${result.failed} 项（${codes.join('、')}）`
+}
+
 export function ReviewPage() {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selection, setSelection] = useState<string[]>([])
   const [decision, setDecision] = useState('agree')
   const [reason, setReason] = useState('')
+  const [assignee, setAssignee] = useState('')
   const [message, setMessage] = useState('')
   const [statusFilter, setStatusFilter] = useState('pending')
   const queue = useQuery({
@@ -41,6 +52,14 @@ export function ReviewPage() {
     queryKey: ['review-stats'],
     queryFn: () => request<{ byStatus: Record<string, number>; decisions: Record<string, number>; agreementRate: number | null }>('/api/v1/review-queue/stats'),
   })
+
+  async function refresh(text: string) {
+    setMessage(text)
+    setSelection([])
+    await queryClient.invalidateQueries({ queryKey: ['review-queue'] })
+    await queryClient.invalidateQueries({ queryKey: ['review-stats'] })
+  }
+
   const annotate = useMutation({
     mutationFn: (id: string) => request(`/api/v1/review-queue/${id}/annotations`, {
       method: 'POST',
@@ -50,9 +69,7 @@ export function ReviewPage() {
     onSuccess: async () => {
       setSelectedId(null)
       setReason('')
-      setMessage('复核意见已提交')
-      await queryClient.invalidateQueries({ queryKey: ['review-queue'] })
-      await queryClient.invalidateQueries({ queryKey: ['review-stats'] })
+      await refresh('复核意见已提交')
     },
     onError: (error) => setMessage(error.message),
   })
@@ -65,16 +82,51 @@ export function ReviewPage() {
     onSuccess: async () => {
       setSelectedId(null)
       setReason('')
-      setMessage('仲裁已提交')
-      await queryClient.invalidateQueries({ queryKey: ['review-queue'] })
-      await queryClient.invalidateQueries({ queryKey: ['review-stats'] })
+      await refresh('仲裁已提交，结果已回写 Judge 判定')
     },
     onError: (error) => setMessage(error.message),
   })
+  const batchAnnotate = useMutation({
+    mutationFn: (ids: string[]) => request<BatchResult>('/api/v1/review-queue/batch-annotations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ items: ids.map((id) => ({ reviewItemId: id, labels: { decision }, reason })) }),
+    }),
+    onSuccess: (result) => refresh(summarize(result)),
+    onError: (error) => setMessage(error.message),
+  })
+  const batchAdjudicate = useMutation({
+    mutationFn: (ids: string[]) => request<BatchResult>('/api/v1/review-queue/batch-adjudications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ items: ids.map((id) => ({ reviewItemId: id, result: { decision }, reason })) }),
+    }),
+    onSuccess: (result) => refresh(summarize(result)),
+    onError: (error) => setMessage(error.message),
+  })
+  const batchAssign = useMutation({
+    mutationFn: (ids: string[]) => request<BatchResult>('/api/v1/review-queue/batch-assignments', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reviewItemIds: ids, assigneeId: assignee.trim() }),
+    }),
+    onSuccess: (result) => refresh(`已分派 ${result.applied} 项${result.failed ? `，失败 ${result.failed} 项` : ''}`),
+    onError: (error) => setMessage(error.message),
+  })
+  const recompute = useMutation({
+    mutationFn: (auditId: string) => request(`/api/v1/audits/${auditId}/metrics/recompute`, { method: 'POST' }),
+    onSuccess: () => setMessage('已按仲裁结果重算指标（metrics-v1h）'),
+    onError: (error) => setMessage(error.message),
+  })
   const selected = queue.data?.items.find((item) => item.id === selectedId)
+  const items = queue.data?.items ?? []
+  const allSelected = items.length > 0 && selection.length === items.length
+  const busy = batchAnnotate.isPending || batchAdjudicate.isPending || batchAssign.isPending
+
+  const toggle = (id: string) => setSelection((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
 
   return <section className="workspace module-workspace">
-    <div className="module-heading"><div><p className="eyebrow">HUMAN REVIEW</p><h2>复核队列</h2><p>自动进入队列的拒答与不合格回答，支持多复核人与冲突仲裁。</p></div><label className="review-filter">状态<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setSelectedId(null) }}><option value="pending">待复核</option><option value="reviewed">已复核</option><option value="conflict">冲突</option><option value="adjudicated">已仲裁</option></select></label></div>
+    <div className="module-heading"><div><p className="eyebrow">HUMAN REVIEW</p><h2>复核队列</h2><p>自动进入队列的拒答与不合格回答，支持多复核人、冲突仲裁与批量处理。</p></div><label className="review-filter">状态<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setSelectedId(null); setSelection([]) }}><option value="pending">待复核</option><option value="reviewed">已复核</option><option value="conflict">冲突</option><option value="adjudicated">已仲裁</option></select></label></div>
     {message && <p className="audit-message" role="status">{message}</p>}
     {stats.data && <div className="review-stats">
       <span>待复核 <strong>{stats.data.byStatus.pending ?? 0}</strong></span>
@@ -83,16 +135,29 @@ export function ReviewPage() {
       <span>已仲裁 <strong>{stats.data.byStatus.adjudicated ?? 0}</strong></span>
       <span>一致率 <strong>{stats.data.agreementRate == null ? '—' : `${Math.round(stats.data.agreementRate * 100)}%`}</strong></span>
     </div>}
+    <div className="review-batch">
+      <label className="review-check"><input type="checkbox" checked={allSelected} onChange={(event) => setSelection(event.target.checked ? items.map((item) => item.id) : [])} aria-label="全选" />全选</label>
+      <span>已选 <strong>{selection.length}</strong> 项</span>
+      <label>判定<select value={decision} onChange={(event) => setDecision(event.target.value)}><option value="agree">一致</option><option value="disagree">不一致</option><option value="uncertain">无法判断</option></select></label>
+      <label className="review-batch-reason">原因<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="批量操作必填" maxLength={2000} /></label>
+      <button type="button" disabled={busy || selection.length === 0 || !reason.trim()} onClick={() => batchAnnotate.mutate(selection)}>批量复核</button>
+      <button type="button" disabled={busy || selection.length === 0 || !reason.trim()} onClick={() => batchAdjudicate.mutate(selection)}>批量仲裁</button>
+      <label className="review-batch-assignee">分派给<input value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="成员 ID" /></label>
+      <button type="button" disabled={busy || selection.length === 0 || !assignee.trim()} onClick={() => batchAssign.mutate(selection)}>批量分派</button>
+    </div>
     <div className="review-layout">
       <div className="review-list">
         {queue.isLoading && <p>正在加载…</p>}
         {queue.error && <p className="error">{queue.error.message}</p>}
-        {queue.data?.items.length === 0 && <p className="empty-state">当前没有待复核项。</p>}
-        {queue.data?.items.map((item) => <button key={item.id} type="button" data-active={item.id === selectedId} onClick={() => { setSelectedId(item.id); setDecision('agree'); setReason('') }}>
-          <span data-priority={item.priority}>{item.priority}</span>
-          <strong>{item.question}</strong>
-          <small>{item.reasonCode} · {item.answerOutcome} · 标注 {item.annotationCount}（一致 {item.agreeCount}/不一致 {item.disagreeCount}）</small>
-        </button>)}
+        {items.length === 0 && <p className="empty-state">当前没有待复核项。</p>}
+        {items.map((item) => <div key={item.id} className="review-row">
+          <input type="checkbox" checked={selection.includes(item.id)} onChange={() => toggle(item.id)} aria-label={`选择 ${item.question}`} />
+          <button type="button" data-active={item.id === selectedId} onClick={() => { setSelectedId(item.id); setDecision('agree'); setReason('') }}>
+            <span data-priority={item.priority}>{item.priority}</span>
+            <strong>{item.question}</strong>
+            <small>{item.reasonCode} · {item.answerOutcome} · 标注 {item.annotationCount}（一致 {item.agreeCount}/不一致 {item.disagreeCount}）</small>
+          </button>
+        </div>)}
       </div>
       <div className="review-detail">
         {!selected && <p className="empty-state">选择左侧复核项查看详情。</p>}
@@ -112,6 +177,10 @@ export function ReviewPage() {
             <label>原因<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="说明判断依据…" maxLength={2000} /></label>
             <button type="submit" disabled={annotate.isPending || adjudicate.isPending || !reason.trim()}>{selected.status === 'reviewed' || selected.status === 'conflict' ? '提交仲裁' : '提交复核'}</button>
           </form>}
+          {selected.status === 'adjudicated' && <div className="review-writeback">
+            <p>仲裁结论已回写该回答的 Judge 判定，报告仍保留原指标快照。</p>
+            <button type="button" disabled={recompute.isPending} onClick={() => recompute.mutate(selected.auditId)}>按仲裁结果重算该审计指标</button>
+          </div>}
         </>}
       </div>
     </div>

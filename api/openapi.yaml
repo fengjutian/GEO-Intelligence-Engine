@@ -513,6 +513,79 @@ paths:
       operationId: getReviewStats
       responses:
         '200': {description: Review queue statistics, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /review-queue/batch-annotations:
+    post:
+      tags: [Evaluations]
+      operationId: batchAnnotateReviewItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [reviewItemId, labels, reason]
+                    properties:
+                      reviewItemId: {$ref: '#/components/schemas/Id'}
+                      labels: {type: object, additionalProperties: true}
+                      reason: {type: string, minLength: 1}
+      responses:
+        '200': {description: Per-item batch result, content: {application/json: {schema: {$ref: '#/components/schemas/BatchReviewResult'}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /review-queue/batch-adjudications:
+    post:
+      tags: [Evaluations]
+      operationId: batchAdjudicateReviewItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [reviewItemId, result, reason]
+                    properties:
+                      reviewItemId: {$ref: '#/components/schemas/Id'}
+                      result: {type: object, additionalProperties: true}
+                      reason: {type: string, minLength: 1}
+      responses:
+        '200': {description: Per-item batch result, content: {application/json: {schema: {$ref: '#/components/schemas/BatchReviewResult'}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /review-queue/batch-assignments:
+    post:
+      tags: [Evaluations]
+      operationId: batchAssignReviewItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reviewItemIds, assigneeId]
+              properties:
+                reviewItemIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: {$ref: '#/components/schemas/Id'}
+                assigneeId: {$ref: '#/components/schemas/Id'}
+      responses:
+        '200': {description: Per-item batch result, content: {application/json: {schema: {$ref: '#/components/schemas/BatchReviewResult'}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
   /review-queue/{reviewItemId}:
     patch:
       tags: [Evaluations]
@@ -550,6 +623,16 @@ paths:
         - {name: channel, in: query, schema: {type: string, enum: [model_api, search_api, consumer_app_capture]}}
       responses:
         '200': {description: Metrics, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MetricValue'}}}}}
+  /audits/{auditId}/metrics/recompute:
+    post:
+      tags: [Metrics]
+      operationId: recomputeAuditMetrics
+      description: Rebuilds the metrics-v1h snapshot from adjudication write-backs. The Judge snapshot metrics-v1 is never modified.
+      parameters: [{$ref: '#/components/parameters/AuditId'}]
+      responses:
+        '200': {description: Recomputed human-adjusted metrics, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MetricValue'}}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /metric-values/{metricValueId}/evidence:
     get:
       tags: [Metrics]
@@ -809,6 +892,7 @@ components:
         sentiment: {type: [string, 'null'], enum: [positive, neutral, negative, mixed, unknown, null]}
     HumanAnnotationCreate: {type: object, required: [labels, reason], properties: {labels: {type: object, additionalProperties: true}, reason: {type: string, minLength: 1}}}
     HumanAnnotation: {allOf: [{$ref: '#/components/schemas/HumanAnnotationCreate'}, {type: object, required: [id, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, createdAt: {type: string, format: date-time}}}]}
+BatchReviewResult: {type: object, required: [applied, failed, results], properties: {applied: {type: integer}, failed: {type: integer}, results: {type: array, items: {type: object, required: [reviewItemId, status], properties: {reviewItemId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [applied, failed]}, errorCode: {type: string, enum: [NOT_FOUND, NOT_PENDING, INVALID_INPUT, INTERNAL]}}}}}}
     MetricValue: {type: object, required: [metricCode, aggregationMethod, dimensions, numerator, denominator, intervalMethod], properties: {id: {$ref: '#/components/schemas/Id'}, metricCode: {type: string}, aggregationMethod: {type: string, enum: [answer_equal, question_equal, business_weighted]}, dimensions: {type: object, additionalProperties: true}, numerator: {type: [number, 'null']}, denominator: {type: [number, 'null']}, value: {type: [number, 'null']}, ciLow: {type: [number, 'null']}, ciHigh: {type: [number, 'null']}, intervalMethod: {type: string, enum: [wilson, cluster_bootstrap, weighted_cluster_bootstrap, none]}}}
     ReportCreate: {type: object, required: [metricSnapshotId, templateVersion], properties: {metricSnapshotId: {$ref: '#/components/schemas/Id'}, templateVersion: {type: string}}}
     Report: {type: object, required: [id, auditId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string, enum: [draft, generating, ready, published, failed, superseded]}, templateVersion: {type: string}, dependencyVersions: {type: object, additionalProperties: true}, sections: {type: array, items: {$ref: '#/components/schemas/ReportSection'}}, artifacts: {type: array, items: {$ref: '#/components/schemas/ReportArtifact'}}, createdAt: {type: string, format: date-time}, publishedAt: {type: [string, 'null'], format: date-time}}}

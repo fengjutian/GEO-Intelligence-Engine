@@ -281,7 +281,8 @@ func (h *auditHandler) recomputeMetrics(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, items)
 }
 
-func (h *auditHandler) getMetricEvidence(w http.ResponseWriter, r *http.Request) {	metricValueID := r.PathValue("metricValueId")
+func (h *auditHandler) getMetricEvidence(w http.ResponseWriter, r *http.Request) {
+	metricValueID := r.PathValue("metricValueId")
 	if _, err := uuid.Parse(metricValueID); err != nil {
 		writeProblem(w, http.StatusBadRequest, "INVALID_METRIC_VALUE_ID", "Metric value ID is invalid", traceID(r))
 		return
