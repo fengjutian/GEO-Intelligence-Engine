@@ -5,6 +5,7 @@ import { ModelServicesPage } from './features/models/ModelServicesPage'
 import { EvidenceDialog } from './features/crawls/EvidenceDialog'
 import { AuditDialog } from './features/audits/AuditDialog'
 import { EntitiesPage } from './features/entities/EntitiesPage'
+import { ReviewPage } from './features/reviews/ReviewPage'
 import { AppShell, type PageId } from './layout/AppShell'
 import { useAuth } from './features/auth/AuthGate'
 
@@ -294,7 +295,8 @@ export function App() {
       {activePage === 'overview' && <OverviewPage activeProjects={activeProjects} websiteCount={projects.data?.items.length ?? 0} configuredProviders={configuredProviders} onCreateProject={() => { setActivePage('projects'); setFormOpen(true) }} />}
       {activePage === 'models' && <ModelServicesPage providers={modelProviders.data?.items} checking={providerHealth.isPending} message={providerHealth.data} error={providerHealth.error?.message} onCheck={(provider) => providerHealth.mutate(provider)} />}
       {activePage === 'entities' && <EntitiesPage projects={projects.data?.items ?? []} />}
-      {!['overview', 'models', 'entities'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
+      {activePage === 'reviews' && <ReviewPage />}
+      {!['overview', 'models', 'entities', 'reviews'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
         <div className="section-heading">
           <div><p className="eyebrow">{activePage.toUpperCase()}</p><h2 id="projects-title">{workspaceTitle}</h2><p>{workspaceDescription}</p></div>
           <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>

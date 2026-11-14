@@ -459,6 +459,22 @@ paths:
       parameters: [{$ref: '#/components/parameters/ResponseId'}]
       responses:
         '200': {description: Evaluation versions, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/AnswerEvaluation'}}}}}
+  /review-queue:
+    get:
+      tags: [Evaluations]
+      operationId: listReviewQueue
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: priority, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200': {description: Review queue, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {type: object, additionalProperties: true}}}}}}}
+    post:
+      tags: [Evaluations]
+      operationId: enqueueReviewItem
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [evaluationId, reasonCode, priority], properties: {evaluationId: {$ref: '#/components/schemas/Id'}, reasonCode: {type: string}, priority: {type: string, enum: [high, medium, low]}}}}}}
+      responses:
+        '201': {description: Review item queued}
   /review-queue/{reviewItemId}/annotations:
     post:
       tags: [Evaluations]

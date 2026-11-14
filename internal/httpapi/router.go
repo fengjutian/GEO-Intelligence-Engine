@@ -15,6 +15,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
+	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
 	"github.com/fengjutian/geo-intelligence-engine/internal/tasks"
 )
 
@@ -144,6 +145,10 @@ func New(deps Dependencies) http.Handler {
 	entityHandler := newEntityHandler(entities.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/entities", projectAccess(deps.DB, entityHandler.list))
 	mux.HandleFunc("GET /api/v1/entities/{entityId}", entityHandler.get)
+	reviewHandler := newReviewHandler(reviews.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("GET /api/v1/review-queue", reviewHandler.list)
+	mux.HandleFunc("POST /api/v1/review-queue", requirePermission("edit_task", reviewHandler.enqueue))
+	mux.HandleFunc("POST /api/v1/review-queue/{reviewItemId}/annotations", requirePermission("edit_task", reviewHandler.annotate))
 	mux.HandleFunc("PATCH /api/v1/entities/{entityId}", requirePermission("edit_project", entityHandler.update))
 	mux.HandleFunc("POST /api/v1/entities:merge", requirePermission("edit_project", entityHandler.merge))
 	mux.HandleFunc("POST /api/v1/entity-merges/{mergeAction}", requirePermission("edit_project", entityHandler.undoMerge))

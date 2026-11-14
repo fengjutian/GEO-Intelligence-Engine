@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
 	"github.com/google/uuid"
 )
 
@@ -51,6 +52,17 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,NULL,?,UTC_TIMEST
 	if evaluation.Eligible {
 		if _, err := tx.ExecContext(ctx, `UPDATE audits SET eligible_count=eligible_count+1 WHERE id=UUID_TO_BIN(?)`, auditID); err != nil {
 			return fmt.Errorf("increment eligible count: %w", err)
+		}
+	}
+	reasonCode, priority := "", ""
+	if !evaluation.Eligible {
+		reasonCode, priority = "INELIGIBLE_ANSWER", "high"
+	} else if evaluation.AnswerOutcome == "refusal" {
+		reasonCode, priority = "REFUSAL", "medium"
+	}
+	if reasonCode != "" {
+		if err := reviews.Enqueue(ctx, tx, tenantID, evaluationID.String(), reasonCode, priority); err != nil {
+			return fmt.Errorf("enqueue review item: %w", err)
 		}
 	}
 	return nil
