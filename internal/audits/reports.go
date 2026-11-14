@@ -118,6 +118,11 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		limitations = append(limitations, fmt.Sprintf("有效样本仅 %d 条，比例区间较宽，不应据此做趋势结论", eligible))
 	}
 	limitations = append(limitations, "第三方引用按所有非品牌域名统计，尚未配置可信域名白名单")
+	contentQuality, err := loadContentQuality(ctx, tx, tenantID, projectID)
+	if err != nil {
+		return Report{}, err
+	}
+	severityCounts, _ := contentQuality["bySeverity"].(map[string]int)
 	sections := []struct {
 		code    string
 		content map[string]any
@@ -126,7 +131,12 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 			"auditId": auditID, "projectId": projectID, "status": auditStatus,
 			"plannedCount": planned, "completedCount": completed, "eligibleCount": eligible,
 			"budgetMicrounits": budget, "currency": currency,
-			"generatedAt": time.Now().UTC().Format(time.RFC3339),
+			"contentQuality":       contentQuality,
+			"contentQualityTotal":  contentQuality["total"],
+			"contentQualityHigh":   severityCounts["high"],
+			"contentQualityMedium": severityCounts["medium"],
+			"contentQualityLow":    severityCounts["low"],
+			"generatedAt":          time.Now().UTC().Format(time.RFC3339),
 		}},
 		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion}},
 		{"metrics", map[string]any{"metricVersion": metricVersion, "values": metrics}},
@@ -174,6 +184,43 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 		})
 	}
 	return items, rows.Err()
+}
+
+func loadContentQuality(ctx context.Context, tx *sql.Tx, tenantID, projectID string) (map[string]any, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT rule_code,severity,COUNT(*) FROM findings
+WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND rule_code LIKE 'CONTENT_%'
+GROUP BY rule_code,severity ORDER BY rule_code`, tenantID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	total := 0
+	bySeverity := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0}
+	byRule := []map[string]any{}
+	for rows.Next() {
+		var code, severity string
+		var count int
+		if err := rows.Scan(&code, &severity, &count); err != nil {
+			return nil, err
+		}
+		total += count
+		bySeverity[severity] += count
+		byRule = append(byRule, map[string]any{"ruleCode": code, "severity": severity, "count": count})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return map[string]any{"total": total, "bySeverity": bySeverity, "byRule": byRule}, nil
+}
+
+// ContentQuality returns current content-rule counts for a project.
+func (s *Store) ContentQuality(ctx context.Context, tenantID, projectID string) (map[string]any, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	return loadContentQuality(ctx, tx, tenantID, projectID)
 }
 
 func loadReportFindings(ctx context.Context, tx *sql.Tx, tenantID, projectID string) ([]map[string]any, error) {

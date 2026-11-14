@@ -315,6 +315,13 @@ paths:
       parameters: [{$ref: '#/components/parameters/ProjectId'}]
       responses:
         '201': {description: Published knowledge snapshot, content: {application/json: {schema: {type: object, required: [id, projectId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string}}}}}}
+  /projects/{projectId}/content-quality:
+    get:
+      tags: [Entities]
+      operationId: getContentQuality
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      responses:
+        '200': {description: Content rule counts, content: {application/json: {schema: {type: object, required: [total, bySeverity, byRule], properties: {total: {type: integer}, bySeverity: {type: object, additionalProperties: {type: integer}}, byRule: {type: array, items: {type: object, additionalProperties: true}}}}}}}
   /projects/{projectId}/measurement-protocols:
     get:
       tags: [Audits]
