@@ -21,20 +21,22 @@
 
 ## 2. 功能清单
 
-| 编号 | 功能文档 | PRD 需求 | 主要交付物 |
-|---|---|---|---|
-| FEAT-01 | [组织、租户与权限](./01-tenant-identity-rbac.md) | P0 横切要求 | 登录上下文、成员、RBAC、审计日志 |
-| FEAT-02 | [项目、品牌与竞品档案](./02-project-brand-profile.md) | PRJ-001～005 | 项目向导、品牌/产品/竞品配置 |
-| FEAT-03 | [网站抓取与技术审计](./03-website-crawl-audit.md) | DIS-001～006 | Crawl Run、页面内容、技术 Findings |
-| FEAT-04 | [实体知识与一致性](./04-entity-knowledge.md) | ENT-001～005 | 实体、关系、Schema、冲突 |
-| FEAT-05 | [买家问题与问题空间](./05-buyer-question-space.md) | QRY-001～003 | 问题生成、导入、版本、聚类 |
-| FEAT-06 | [测量协议与审计编排](./06-audit-orchestration.md) | MOD-002～005 | 协议冻结、采样计划、审计状态 |
-| FEAT-07 | [Model Gateway 与预算](./07-model-gateway-budget.md) | MOD-001、002、003、004、006 | 供应商适配、成本、限流、幂等 |
-| FEAT-08 | [Answer Judge 与人工复核](./08-answer-judge-review.md) | MOD-005、JDG-001～007 | 有效性、提及、推荐、情感、引用 |
-| FEAT-09 | [可见度指标与分析](./09-visibility-metrics.md) | MET-001～006 | 指标、区间、切片和证据集合 |
-| FEAT-10 | [内容结构与证据质量](./10-content-quality.md) | CON-001～002 | Answer First、结构和证据 Findings |
-| FEAT-11 | [GEO Audit 报告与导出](./11-audit-reporting.md) | RPT-001～004 | 报告、证据下钻、PDF/CSV |
-| FEAT-12 | [优化任务管理](./12-optimization-task.md) | TSK-001～002 | 从 Finding 建任务、状态机和审计 |
+| 编号 | 功能文档 | 层级 | PRD 需求 | 主要交付物 |
+|---|---|---|---|---|
+| FEAT-01 | [组织、租户与权限](./01-tenant-identity-rbac.md) | P0-C（最小）/ P0-S（完整） | P0 横切要求 | 登录上下文、成员、RBAC、审计日志 |
+| FEAT-02 | [项目、品牌与竞品档案](./02-project-brand-profile.md) | P0-C | PRJ-001～005 | 项目向导、品牌/产品/竞品配置 |
+| FEAT-03 | [网站抓取与技术审计](./03-website-crawl-audit.md) | P0-C | DIS-001～006 | Crawl Run、页面内容、技术 Findings |
+| FEAT-04 | [实体知识与一致性](./04-entity-knowledge.md) | P0-S | ENT-001～005 | 实体、关系、Schema、冲突 |
+| FEAT-05 | [买家问题与问题空间](./05-buyer-question-space.md) | P0-C | QRY-001～003 | 问题生成、导入、版本、聚类 |
+| FEAT-06 | [测量协议与审计编排](./06-audit-orchestration.md) | P0-C | MOD-002～005 | 协议冻结、采样计划、审计状态 |
+| FEAT-07 | [Model Gateway 与预算](./07-model-gateway-budget.md) | P0-C | MOD-001、002、003、004、006 | 供应商适配、成本、限流、幂等 |
+| FEAT-08 | [Answer Judge 与人工复核](./08-answer-judge-review.md) | P0-C（自动）/ P0-S（人工） | MOD-005、JDG-001～007 | 有效性、提及、推荐、情感、引用 |
+| FEAT-09 | [可见度指标与分析](./09-visibility-metrics.md) | P0-C | MET-001～006 | 指标、区间、切片和证据集合 |
+| FEAT-10 | [内容结构与证据质量](./10-content-quality.md) | P0-S | CON-001～002 | Answer First、结构和证据 Findings |
+| FEAT-11 | [GEO Audit 报告与导出](./11-audit-reporting.md) | P0-C | RPT-001～004 | 报告、证据下钻、PDF/CSV |
+| FEAT-12 | [优化任务管理](./12-optimization-task.md) | P0-S | TSK-001～002 | 从 Finding 建任务、状态机和审计 |
+
+> 层级含义：P0-C 为核心闭环，P0-S 为 P0 发布前必须补齐的支撑能力。完整判定规则、当前状态与非核心冻结清单见 [功能优先级规划](../FEATURE-PLAN.md)。
 
 ## 3. 需求覆盖
 
@@ -61,14 +63,23 @@ P0 功能需求共 46 条，全部由上述 Feature Spec 覆盖。MOD-002～005 
 
 ## 5. 推荐开发顺序
 
+开发顺序以 [功能优先级规划](../FEATURE-PLAN.md) 为准，按三个层级推进：
+
 ```text
-FEAT-01 → FEAT-02 → FEAT-03 → FEAT-04 → FEAT-05
-                         ↓
-FEAT-07 → FEAT-06 → FEAT-08 → FEAT-09 → FEAT-11
-                                      ↘ FEAT-10
-                                            ↓
-                                         FEAT-12
+P0-C 核心闭环：
+FEAT-02 → FEAT-03 → FEAT-05 → FEAT-07 → FEAT-06 → FEAT-08（自动）
+      → FEAT-09 → FEAT-11        + FEAT-01（最小身份）
+
+P0-S 支撑（核心门禁通过后）：
+FEAT-04 → FEAT-08（人工复核） → FEAT-10 → FEAT-01（完整权限） → FEAT-12 收尾
+
+N1+ 非核心：冻结，P0 发布后重新评估
 ```
 
-FEAT-01、02 和公共任务框架是所有功能的基础；FEAT-07 可与抓取功能并行开发；报告必须在指标和内容分析稳定后验收。
+规则：
+
+1. 核心门禁未通过前，不开发 P0-S；P0-S 未完成前，不启动非核心。
+2. FEAT-02 与 FEAT-01 最小身份是所有功能的基础；FEAT-07 可与抓取并行。
+3. 报告必须在指标和内容分析稳定后验收。
+4. 非核心需求插入必须经产品负责人批准，并调整发布范围。
 

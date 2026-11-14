@@ -13,6 +13,7 @@ GEO Intelligence Engine 的 P0 工程基线。实现与 V1.0 文档基线对齐�
 - `db/migrations`：MySQL 版本化迁移
 - `api/openapi.yaml`：HTTP API 契约
 - `docs`：V1.0 产品、架构、功能与验收文档
+- 功能优先级：[docs/FEATURE-PLAN.md](docs/FEATURE-PLAN.md)，区分核心 P0-C、支撑 P0-S 与冻结的非核心能力
 - `tests/golden`：内容质量黄金测试集
 
 当前已实现项目与品牌档案的创建、列表、详情、乐观锁编辑、归档和不可变配置发布。创建项目会在同一数据库事务中写入项目、主品牌和官方网站；编辑与归档要求 `If-Match` 版本，防止覆盖并发修改。配置发布包含 SHA-256 内容寻址，相同内容重复发布保持幂等。
