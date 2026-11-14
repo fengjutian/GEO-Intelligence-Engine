@@ -247,6 +247,58 @@ func createKnowledgeSnapshot(ctx context.Context, tx *sql.Tx, tenantID, projectI
 	}
 	rows.Close()
 	snapshot["competitors"] = competitors
+	entities := []map[string]any{}
+	rows, err = tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),entity_type,canonical_name,status FROM entities WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND status<>'merged' ORDER BY entity_type,normalized_name,id`, tenantID, projectID)
+	if err != nil {
+		return "", 0, err
+	}
+	type entityRow struct{ id, entityType, name, status string }
+	entityRows := []entityRow{}
+	for rows.Next() {
+		var row entityRow
+		if err := rows.Scan(&row.id, &row.entityType, &row.name, &row.status); err != nil {
+			rows.Close()
+			return "", 0, err
+		}
+		entityRows = append(entityRows, row)
+	}
+	rows.Close()
+	for _, row := range entityRows {
+		aliases := []string{}
+		aliasRows, err := tx.QueryContext(ctx, `SELECT alias FROM entity_aliases WHERE tenant_id=UUID_TO_BIN(?) AND entity_id=UUID_TO_BIN(?) ORDER BY alias`, tenantID, row.id)
+		if err != nil {
+			return "", 0, err
+		}
+		for aliasRows.Next() {
+			var alias string
+			if err := aliasRows.Scan(&alias); err != nil {
+				aliasRows.Close()
+				return "", 0, err
+			}
+			aliases = append(aliases, alias)
+		}
+		aliasRows.Close()
+		entities = append(entities, map[string]any{"id": row.id, "type": row.entityType, "canonicalName": row.name, "status": row.status, "aliases": aliases})
+	}
+	snapshot["entities"] = entities
+	relations := []map[string]any{}
+	rows, err = tx.QueryContext(ctx, `SELECT s.canonical_name,r.predicate,o.canonical_name,r.status
+FROM entity_relations r JOIN entities s ON s.id=r.subject_id JOIN entities o ON o.id=r.object_id
+WHERE r.tenant_id=UUID_TO_BIN(?) AND s.project_id=UUID_TO_BIN(?) AND o.project_id=UUID_TO_BIN(?)
+ORDER BY s.canonical_name,r.predicate,o.canonical_name`, tenantID, projectID, projectID)
+	if err != nil {
+		return "", 0, err
+	}
+	for rows.Next() {
+		var subject, predicate, object, status string
+		if err := rows.Scan(&subject, &predicate, &object, &status); err != nil {
+			rows.Close()
+			return "", 0, err
+		}
+		relations = append(relations, map[string]any{"subject": subject, "predicate": predicate, "object": object, "status": status})
+	}
+	rows.Close()
+	snapshot["relations"] = relations
 	content, err := json.Marshal(snapshot)
 	if err != nil {
 		return "", 0, err
@@ -263,6 +315,29 @@ func createKnowledgeSnapshot(ctx context.Context, tx *sql.Tx, tenantID, projectI
 		return "", 0, err
 	}
 	return id.String(), nextVersion, nil
+}
+
+func (s *Store) PublishKnowledgeSnapshot(ctx context.Context, tenantID, projectID string) (map[string]any, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var status string
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM projects WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, projectID).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	id, version, err := createKnowledgeSnapshot(ctx, tx, tenantID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "projectId": projectID, "version": version, "status": "published"}, nil
 }
 
 func hashRequest(parts ...string) []byte {

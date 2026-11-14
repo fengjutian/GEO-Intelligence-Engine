@@ -22,6 +22,8 @@ export function EntitiesPage({ projects }: Props) {
   const queryClient = useQueryClient()
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [lastMergeId, setLastMergeId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const entities = useQuery({
     queryKey: ['entities', projectId],
@@ -46,6 +48,31 @@ export function EntitiesPage({ projects }: Props) {
     },
     onError: (error) => setMessage(error.message),
   })
+  const merge = useMutation({
+    mutationFn: () => request<{ id: string }>('/api/v1/entities:merge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sourceEntityId: selectedId, targetEntityId: mergeTargetId, reason: '实体页面人工合并' }),
+    }),
+    onSuccess: async (result) => {
+      setLastMergeId(result.id)
+      setSelectedId(null)
+      setMergeTargetId('')
+      await queryClient.invalidateQueries({ queryKey: ['entities', projectId] })
+      setMessage('实体已合并，可撤销最近一次合并')
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const undo = useMutation({
+    mutationFn: () => request(`/api/v1/entity-merges/${lastMergeId}:undo`, { method: 'POST' }),
+    onSuccess: async () => {
+      setLastMergeId(null)
+      await queryClient.invalidateQueries({ queryKey: ['entities', projectId] })
+      setMessage('合并已撤销')
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const mergeTargets = entities.data?.items.filter((item) => item.id !== selectedId && item.entityType === detail.data?.entityType) ?? []
 
   return <section className="workspace module-workspace">
     <div className="section-heading">
@@ -73,6 +100,14 @@ export function EntitiesPage({ projects }: Props) {
           <div className="entity-actions">
             <button type="button" disabled={update.isPending} onClick={() => update.mutate('confirmed')}>确认</button>
             <button type="button" className="danger" disabled={update.isPending} onClick={() => update.mutate('rejected')}>拒绝</button>
+          </div>
+          <div className="entity-merge">
+            <select value={mergeTargetId} onChange={(event) => setMergeTargetId(event.target.value)}>
+              <option value="">选择同类型目标实体…</option>
+              {mergeTargets.map((item) => <option key={item.id} value={item.id}>{item.canonicalName}</option>)}
+            </select>
+            <button type="button" disabled={!mergeTargetId || merge.isPending} onClick={() => merge.mutate()}>合并</button>
+            {lastMergeId && <button type="button" disabled={undo.isPending} onClick={() => undo.mutate()}>撤销最近合并</button>}
           </div>
           <h4>别名</h4>
           <p className="entity-aliases">{detail.data.aliases.length ? detail.data.aliases.join('、') : '无'}</p>

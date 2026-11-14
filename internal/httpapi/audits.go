@@ -34,6 +34,7 @@ type auditStore interface {
 	CreateExport(ctx context.Context, tenantID, reportID, format, reportDir string) (audits.ReportArtifact, error)
 	GetArtifactPath(ctx context.Context, tenantID, reportID, artifactID string) (string, string, error)
 	RecordReportAccess(ctx context.Context, tenantID, actorID, reportID, action string) error
+	PublishKnowledgeSnapshot(ctx context.Context, tenantID, projectID string) (map[string]any, error)
 }
 
 type auditHandler struct {
@@ -295,6 +296,20 @@ func (h *auditHandler) createReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, report)
+}
+
+func (h *auditHandler) publishKnowledgeSnapshot(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	snapshot, err := h.store.PublishKnowledgeSnapshot(r.Context(), h.tenant(r), projectID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, snapshot)
 }
 
 func (h *auditHandler) getReport(w http.ResponseWriter, r *http.Request) {

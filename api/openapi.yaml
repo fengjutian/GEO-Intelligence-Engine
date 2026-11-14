@@ -308,6 +308,13 @@ paths:
       responses:
         '200': {description: Undone merge event, content: {application/json: {schema: {$ref: '#/components/schemas/EntityMerge'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
+  /projects/{projectId}/knowledge-snapshots:
+    post:
+      tags: [Entities]
+      operationId: publishKnowledgeSnapshot
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      responses:
+        '201': {description: Published knowledge snapshot, content: {application/json: {schema: {type: object, required: [id, projectId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string}}}}}}
   /projects/{projectId}/measurement-protocols:
     get:
       tags: [Audits]

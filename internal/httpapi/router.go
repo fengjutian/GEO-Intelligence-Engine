@@ -98,6 +98,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-sets", projectAccess(deps.DB, auditHandler.listQuestionSets))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/measurement-protocols", projectAccess(deps.DB, auditHandler.listProtocols))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/measurement-protocols", projectAccess(deps.DB, auditHandler.createProtocol))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/knowledge-snapshots", requirePermission("edit_project", projectAccess(deps.DB, auditHandler.publishKnowledgeSnapshot)))
 	mux.HandleFunc("POST /api/v1/measurement-protocols/{protocolAction}", auditHandler.publishProtocol)
 	mux.HandleFunc("POST /api/v1/audits:estimate", auditHandler.estimateAudit)
 	mux.HandleFunc("POST /api/v1/audits", requirePermission("run_audit", auditHandler.createAudit))
