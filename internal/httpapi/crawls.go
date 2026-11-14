@@ -29,6 +29,8 @@ type crawlStore interface {
 	ListFindings(ctx context.Context, tenantID, runID string) ([]crawls.Finding, error)
 	GetRobotsEvidence(ctx context.Context, tenantID, runID string) ([]crawls.RobotsEvidence, error)
 	ListSitemapEvidence(ctx context.Context, tenantID, runID string) ([]crawls.SitemapEvidence, error)
+	RunContentAnalysis(ctx context.Context, tenantID, runID string) (crawls.ContentAnalysisRun, error)
+	GetContentAnalysisRun(ctx context.Context, tenantID, analysisID string) (crawls.ContentAnalysisRun, error)
 }
 
 type crawlHandler struct {
@@ -283,6 +285,42 @@ func (h *crawlHandler) complete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *crawlHandler) runContentAnalysis(w http.ResponseWriter, r *http.Request) {
+	runID := r.PathValue("crawlRunId")
+	if _, err := uuid.Parse(runID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CRAWL_RUN_ID", "Crawl run ID is invalid", traceID(r))
+		return
+	}
+	run, err := h.store.RunContentAnalysis(r.Context(), h.tenantID(r), runID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
+func (h *crawlHandler) getContentAnalysisRun(w http.ResponseWriter, r *http.Request) {
+	analysisID := r.PathValue("analysisRunId")
+	if _, err := uuid.Parse(analysisID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_ANALYSIS_RUN_ID", "Analysis run ID is invalid", traceID(r))
+		return
+	}
+	run, err := h.store.GetContentAnalysisRun(r.Context(), h.tenantID(r), analysisID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, run)
+}
+
+func (h *crawlHandler) tenantID(r *http.Request) string {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		tenantID = h.devTenantID
+	}
+	return tenantID
+}
+
 func (h *crawlHandler) fail(w http.ResponseWriter, r *http.Request) {
 	if !h.authorizeWorker(w, r) {
 		return
@@ -366,6 +404,8 @@ func (h *crawlHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_START_URL", "Crawl start URL is invalid", traceID(r))
 	case errors.Is(err, crawls.ErrInvalidState):
 		writeProblem(w, http.StatusConflict, "INVALID_CRAWL_STATE", "Crawl action is not allowed in the current state", traceID(r))
+	case errors.Is(err, crawls.ErrNoContentSnapshot):
+		writeProblem(w, http.StatusUnprocessableEntity, "NO_CONTENT_SNAPSHOT", "Crawl run has no content snapshots to analyze", traceID(r))
 	default:
 		h.logger.Error("crawl operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))

@@ -34,6 +34,18 @@ type Counts struct {
 	Blocked    uint32 `json:"blocked"`
 }
 
+// ContentAnalysisRun is one deterministic content-rules execution over a crawl run.
+type ContentAnalysisRun struct {
+	ID              string     `json:"id"`
+	CrawlRunID      string     `json:"crawlRunId"`
+	AnalyzerVersion string     `json:"analyzerVersion"`
+	Status          string     `json:"status"`
+	Pages           int        `json:"pages"`
+	Findings        int        `json:"findings"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	FinishedAt      *time.Time `json:"finishedAt"`
+}
+
 type Claim struct {
 	RunID      string `json:"runId"`
 	CrawlURLID string `json:"crawlUrlId"`

@@ -222,6 +222,21 @@ paths:
       parameters: [{$ref: '#/components/parameters/CrawlRunId'}]
       responses:
         '200': {description: Versioned technical findings, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/TechnicalFinding'}}}}}}}
+  /crawl-runs/{crawlRunId}/content-analysis-runs:
+    post:
+      tags: [Crawls]
+      operationId: runContentAnalysis
+      parameters: [{name: crawlRunId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '201': {description: Content analysis run, content: {application/json: {schema: {type: object, required: [id, status], properties: {id: {$ref: '#/components/schemas/Id'}, crawlRunId: {$ref: '#/components/schemas/Id'}, analyzerVersion: {type: string}, status: {type: string}, pages: {type: integer}, findings: {type: integer}}}}}}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /content-analysis-runs/{analysisRunId}:
+    get:
+      tags: [Crawls]
+      operationId: getContentAnalysisRun
+      parameters: [{name: analysisRunId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: Content analysis run, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
   /crawl-runs/{crawlRunId}/robots:
     get:
       tags: [Crawls]

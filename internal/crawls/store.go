@@ -22,6 +22,7 @@ var ErrNoWork = errors.New("no crawl work available")
 var ErrProjectArchived = errors.New("project is archived")
 var ErrInvalidState = errors.New("crawl run state does not allow this action")
 var ErrInvalidStartURL = errors.New("crawl start URL is invalid")
+var ErrNoContentSnapshot = errors.New("crawl run has no content snapshots")
 
 type Store struct{ db *sql.DB }
 
@@ -197,6 +198,108 @@ WHERE u.state='queued' AND r.status IN ('queued','running') ORDER BY u.priority 
 	return claim, nil
 }
 
+func (s *Store) RunContentAnalysis(ctx context.Context, tenantID, runID string) (ContentAnalysisRun, error) {
+	var projectID, runStatus string
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(project_id),status FROM crawl_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, runID).Scan(&projectID, &runStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ContentAnalysisRun{}, ErrNotFound
+	}
+	if err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	version := "content-rules-v1"
+	configHash := sha256.Sum256([]byte(version))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	defer tx.Rollback()
+	analysisID := uuid.NewString()
+	_, err = tx.ExecContext(ctx, `INSERT INTO content_analysis_runs (id,tenant_id,crawl_run_id,analyzer_version,config_hash,status,created_at,finished_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?, 'running',UTC_TIMESTAMP(6),NULL)
+ON DUPLICATE KEY UPDATE status='running',finished_at=NULL`, analysisID, tenantID, runID, version, configHash[:])
+	if err != nil {
+		return ContentAnalysisRun{}, fmt.Errorf("upsert content analysis run: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM content_analysis_runs WHERE crawl_run_id=UUID_TO_BIN(?) AND analyzer_version=? AND config_hash=?`, runID, version, configHash[:]).Scan(&analysisID); err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),content_json FROM page_contents WHERE tenant_id=UUID_TO_BIN(?) AND crawl_run_id=UUID_TO_BIN(?) AND content_json IS NOT NULL ORDER BY id`, tenantID, runID)
+	if err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	type pageSnapshot struct {
+		contentID string
+		content   []byte
+	}
+	pages := []pageSnapshot{}
+	for rows.Next() {
+		var page pageSnapshot
+		if err := rows.Scan(&page.contentID, &page.content); err != nil {
+			rows.Close()
+			return ContentAnalysisRun{}, err
+		}
+		pages = append(pages, page)
+	}
+	rows.Close()
+	if len(pages) == 0 {
+		return ContentAnalysisRun{}, ErrNoContentSnapshot
+	}
+	totalFindings := 0
+	for _, page := range pages {
+		var completion Completion
+		if err := json.Unmarshal(page.content, &completion); err != nil {
+			continue
+		}
+		rules := contentFindings(completion)
+		if completion.TextLength < 200 {
+			rules = append(rules, technicalFinding{"CONTENT_THIN", "medium", "Extracted page text is below the minimum useful length", map[string]any{"url": completion.FinalURL, "textLength": completion.TextLength, "threshold": 200}})
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE findings SET status='superseded',updated_at=UTC_TIMESTAMP(6)
+WHERE tenant_id=UUID_TO_BIN(?) AND source_type='page_content' AND source_id=UUID_TO_BIN(?) AND source_version='content-rules-v1' AND status='open'`, tenantID, page.contentID); err != nil {
+			return ContentAnalysisRun{}, err
+		}
+		for _, rule := range rules {
+			findingID := uuid.NewString()
+			evidence, _ := json.Marshal(rule.evidence)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO findings (id,tenant_id,project_id,source_type,source_id,source_version,rule_code,severity,confidence,status,summary,evidence_json,created_at,updated_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'page_content',UUID_TO_BIN(?),'content-rules-v1',?,?,1.0,'open',?,CAST(? AS JSON),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
+				findingID, tenantID, projectID, page.contentID, rule.code, rule.severity, rule.summary, evidence); err != nil {
+				return ContentAnalysisRun{}, fmt.Errorf("insert re-run finding: %w", err)
+			}
+			signalID := uuid.NewString()
+			value, _ := json.Marshal(map[string]any{"severity": rule.severity, "summary": rule.summary, "evidence": rule.evidence})
+			if _, err := tx.ExecContext(ctx, `INSERT INTO content_signals (id,tenant_id,analysis_run_id,page_content_id,rule_code,value_json,confidence,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS JSON),1.0,UTC_TIMESTAMP(6))`,
+				signalID, tenantID, analysisID, page.contentID, rule.code, value); err != nil {
+				return ContentAnalysisRun{}, fmt.Errorf("insert content signal: %w", err)
+			}
+			totalFindings++
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE content_analysis_runs SET status='succeeded',finished_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, analysisID); err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	return s.GetContentAnalysisRun(ctx, tenantID, analysisID)
+}
+
+func (s *Store) GetContentAnalysisRun(ctx context.Context, tenantID, analysisID string) (ContentAnalysisRun, error) {
+	var run ContentAnalysisRun
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(crawl_run_id),analyzer_version,status,created_at,finished_at
+FROM content_analysis_runs WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, analysisID).Scan(&run.ID, &run.CrawlRunID, &run.AnalyzerVersion, &run.Status, &run.CreatedAt, &run.FinishedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ContentAnalysisRun{}, ErrNotFound
+	}
+	if err != nil {
+		return ContentAnalysisRun{}, err
+	}
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT page_content_id),COUNT(*) FROM content_signals WHERE tenant_id=UUID_TO_BIN(?) AND analysis_run_id=UUID_TO_BIN(?)`, tenantID, analysisID).Scan(&run.Pages, &run.Findings)
+	return run, nil
+}
+
 func (s *Store) Complete(ctx context.Context, completion Completion) error {
 	contentHash, err := hex.DecodeString(completion.ContentHash)
 	if err != nil || len(contentHash) != sha256.Size {
@@ -235,8 +338,8 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UTC_TIMESTAMP(6)) ON DU
 	if err != nil {
 		return fmt.Errorf("read website page: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO page_contents (id,tenant_id,page_id,crawl_run_id,http_status,final_url,title,language,content_hash,parser_version,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,UTC_TIMESTAMP(6))`, contentID.String(), tenantID, pageID.String(), completion.RunID, completion.HTTPStatus, completion.FinalURL, completion.Title, completion.Language, contentHash, completion.ParserVersion)
+	_, err = tx.ExecContext(ctx, `INSERT INTO page_contents (id,tenant_id,page_id,crawl_run_id,http_status,final_url,title,language,content_hash,parser_version,content_json,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,CAST(? AS JSON),UTC_TIMESTAMP(6))`, contentID.String(), tenantID, pageID.String(), completion.RunID, completion.HTTPStatus, completion.FinalURL, completion.Title, completion.Language, contentHash, completion.ParserVersion, completionSnapshot(completion))
 	if err != nil {
 		return fmt.Errorf("insert page content: %w", err)
 	}
@@ -297,6 +400,17 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),1,'succeeded',?,JSON_OBJECT
 		return fmt.Errorf("commit crawl completion: %w", err)
 	}
 	return nil
+}
+
+func completionSnapshot(completion Completion) string {
+	content, _ := json.Marshal(map[string]any{
+		"finalUrl": completion.FinalURL, "httpStatus": completion.HTTPStatus, "title": completion.Title,
+		"language": completion.Language, "canonicalUrl": completion.CanonicalURL, "links": completion.Links,
+		"noIndex": completion.NoIndex, "textLength": completion.TextLength, "headings": completion.Headings,
+		"textSample": completion.TextSample, "author": completion.Author, "publishedAt": completion.PublishedAt,
+		"faq": completion.FAQ, "terms": completion.Terms,
+	})
+	return string(content)
 }
 
 func enqueueDiscoveredLinks(ctx context.Context, tx *sql.Tx, tenantID string, completion Completion, configJSON []byte, baseURL string) error {
