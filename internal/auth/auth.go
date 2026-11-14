@@ -133,6 +133,8 @@ func Can(role, action string) bool {
 	case "approve_task":
 		return role == "owner" || role == "project_admin" || role == "approver"
 	case "manage_members", "manage_keys":
+		return role == "owner"
+	case "read_members":
 		return role == "owner" || role == "project_admin"
 	case "export_report":
 		return role != "viewer"

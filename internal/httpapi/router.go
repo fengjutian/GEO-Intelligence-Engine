@@ -10,6 +10,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
+	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
@@ -118,6 +119,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}/events", taskHandler.listEvents)
 	mux.HandleFunc("POST /api/v1/audits/{auditAction}", requirePermission("run_audit", auditHandler.cancelAudit))
 	mux.HandleFunc("GET /api/v1/me", meHandler)
+	memberHandler := newMemberHandler(members.NewStore(deps.DB))
+	mux.HandleFunc("GET /api/v1/tenants/{tenantId}/members", requirePermission("read_members", memberHandler.list))
+	mux.HandleFunc("POST /api/v1/tenants/{tenantId}/invitations", requirePermission("manage_members", memberHandler.invite))
+	mux.HandleFunc("PATCH /api/v1/tenants/{tenantId}/members/{memberId}", requirePermission("manage_members", memberHandler.update))
 
 	var oidcVerifier *auth.OIDCVerifier
 	if strings.EqualFold(deps.AuthMode, "oidc") {
