@@ -24,6 +24,9 @@ type Config struct {
 	ModelConcurrency int
 	JudgeURL         string
 	ReportDir        string
+	AuthMode         string
+	AuthSecret       string
+	DevRole          string
 	LogLevel         slog.Level
 }
 
@@ -44,6 +47,9 @@ func FromEnv() (Config, error) {
 		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
 		JudgeURL:         envOr("GEO_JUDGE_URL", "http://127.0.0.1:8081"),
 		ReportDir:        envOr("GEO_REPORT_DIR", ".run/reports"),
+		AuthMode:         envOr("GEO_AUTH_MODE", "dev"),
+		AuthSecret:       strings.TrimSpace(os.Getenv("GEO_AUTH_SECRET")),
+		DevRole:          envOr("GEO_DEV_ROLE", "owner"),
 		LogLevel:         slog.LevelInfo,
 	}
 	if cfg.DatabaseDSN == "" {

@@ -90,6 +90,10 @@ func (h *taskHandler) transition(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
+	if (input.TargetState == "done" || input.TargetState == "changes_requested") && !hasPermission(r, "approve_task") {
+		deny(w, r, "approve_task")
+		return
+	}
 	task, err := h.store.Transition(r.Context(), h.tenant(r), h.actor(r), taskID, version, input)
 	if err != nil {
 		h.writeError(w, r, err)

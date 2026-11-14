@@ -22,6 +22,9 @@ type Dependencies struct {
 	WorkerToken  string
 	ModelGateway *modelgateway.Gateway
 	ReportDir    string
+	AuthMode     string
+	AuthSecret   string
+	DevRole      string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -47,21 +50,21 @@ func New(deps Dependencies) http.Handler {
 	})
 	projectHandler := newProjectHandler(projects.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects", projectHandler.list)
-	mux.HandleFunc("POST /api/v1/projects", projectHandler.create)
+	mux.HandleFunc("POST /api/v1/projects", requirePermission("edit_project", projectHandler.create))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}", projectHandler.get)
-	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", projectHandler.update)
-	mux.HandleFunc("POST /api/v1/projects/{projectAction}", projectHandler.archiveAction)
-	mux.HandleFunc("POST /api/v1/projects/{projectId}/config-versions", projectHandler.publishConfig)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", requirePermission("edit_project", projectHandler.update))
+	mux.HandleFunc("POST /api/v1/projects/{projectAction}", requirePermission("edit_project", projectHandler.archiveAction))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/config-versions", requirePermission("edit_project", projectHandler.publishConfig))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/brand-profile", projectHandler.getBrandProfile)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/brand-aliases", projectHandler.createAlias)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}/brand-aliases/{aliasId}", projectHandler.setAliasEnabled)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/products", projectHandler.createProduct)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/competitors", projectHandler.createCompetitor)
 	crawlHandler := newCrawlHandler(crawls.NewStore(deps.DB), deps.DevTenantID, deps.WorkerToken, deps.Logger)
-	mux.HandleFunc("POST /api/v1/projects/{projectId}/crawl-runs", crawlHandler.create)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/crawl-runs", requirePermission("manage_crawl", crawlHandler.create))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/crawl-runs", crawlHandler.listProjectRuns)
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}", crawlHandler.get)
-	mux.HandleFunc("POST /api/v1/crawl-runs/{runAction}", crawlHandler.controlAction)
+	mux.HandleFunc("POST /api/v1/crawl-runs/{runAction}", requirePermission("manage_crawl", crawlHandler.controlAction))
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/pages", crawlHandler.listPages)
 	mux.HandleFunc("GET /api/v1/page-contents/{contentId}", crawlHandler.getPageContent)
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/findings", crawlHandler.listFindings)
@@ -89,7 +92,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/measurement-protocols", auditHandler.createProtocol)
 	mux.HandleFunc("POST /api/v1/measurement-protocols/{protocolAction}", auditHandler.publishProtocol)
 	mux.HandleFunc("POST /api/v1/audits:estimate", auditHandler.estimateAudit)
-	mux.HandleFunc("POST /api/v1/audits", auditHandler.createAudit)
+	mux.HandleFunc("POST /api/v1/audits", requirePermission("run_audit", auditHandler.createAudit))
 	mux.HandleFunc("GET /api/v1/audits/{auditId}", auditHandler.getAudit)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/samples", auditHandler.listSamples)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/metrics", auditHandler.getMetrics)
@@ -97,18 +100,19 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/audits/{auditId}/reports", auditHandler.createReport)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}", auditHandler.getReport)
 	mux.HandleFunc("POST /api/v1/reports/{reportAction}", auditHandler.publishReport)
-	mux.HandleFunc("POST /api/v1/reports/{reportId}/exports", auditHandler.createReportExport)
+	mux.HandleFunc("POST /api/v1/reports/{reportId}/exports", requirePermission("export_report", auditHandler.createReportExport))
 	mux.HandleFunc("GET /api/v1/reports/{reportId}/artifacts/{artifactId}", auditHandler.downloadReportArtifact)
 	taskHandler := newTaskHandler(tasks.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
-	mux.HandleFunc("POST /api/v1/findings/{findingId}/optimization-tasks", taskHandler.createFromFinding)
+	mux.HandleFunc("POST /api/v1/findings/{findingId}/optimization-tasks", requirePermission("edit_task", taskHandler.createFromFinding))
 	mux.HandleFunc("GET /api/v1/optimization-tasks", taskHandler.list)
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}", taskHandler.get)
-	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}", taskHandler.update)
-	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskAction}", taskHandler.transition)
-	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}/acceptance-items/{itemId}", taskHandler.updateAcceptance)
-	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskId}/comments", taskHandler.addComment)
+	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}", requirePermission("edit_task", taskHandler.update))
+	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskAction}", requirePermission("edit_task", taskHandler.transition))
+	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}/acceptance-items/{itemId}", requirePermission("edit_task", taskHandler.updateAcceptance))
+	mux.HandleFunc("POST /api/v1/optimization-tasks/{taskId}/comments", requirePermission("edit_task", taskHandler.addComment))
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}/events", taskHandler.listEvents)
-	mux.HandleFunc("POST /api/v1/audits/{auditAction}", auditHandler.cancelAudit)
+	mux.HandleFunc("POST /api/v1/audits/{auditAction}", requirePermission("run_audit", auditHandler.cancelAudit))
+	mux.HandleFunc("GET /api/v1/me", meHandler)
 
-	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(mux)))
+	return requestContext(deps.Logger, recoverer(deps.Logger, securityHeaders(newAuthMiddleware(deps.AuthMode, deps.AuthSecret, deps.DevRole, deps.DevTenantID, deps.DevActorID)(mux))))
 }
