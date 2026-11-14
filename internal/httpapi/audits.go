@@ -36,6 +36,8 @@ type auditStore interface {
 	GetArtifactPath(ctx context.Context, tenantID, reportID, artifactID string) (string, string, error)
 	RecordReportAccess(ctx context.Context, tenantID, actorID, reportID, action string) error
 	PublishKnowledgeSnapshot(ctx context.Context, tenantID, projectID string) (map[string]any, error)
+	ListKnowledgeSnapshots(ctx context.Context, tenantID, projectID string) ([]audits.KnowledgeSnapshot, error)
+	CompareKnowledgeSnapshots(ctx context.Context, tenantID, projectID, fromID, toID string) (audits.SnapshotDiff, error)
 	ContentQuality(ctx context.Context, tenantID, projectID string) (map[string]any, error)
 }
 
@@ -328,6 +330,44 @@ func (h *auditHandler) publishKnowledgeSnapshot(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSON(w, http.StatusCreated, snapshot)
+}
+
+func (h *auditHandler) listKnowledgeSnapshots(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	snapshots, err := h.store.ListKnowledgeSnapshots(r.Context(), h.tenant(r), projectID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": snapshots})
+}
+
+func (h *auditHandler) compareKnowledgeSnapshots(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	fromID := strings.TrimSpace(r.URL.Query().Get("from"))
+	toID := strings.TrimSpace(r.URL.Query().Get("to"))
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(fromID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_SNAPSHOT_ID", "From snapshot ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(toID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_SNAPSHOT_ID", "To snapshot ID is invalid", traceID(r))
+		return
+	}
+	diff, err := h.store.CompareKnowledgeSnapshots(r.Context(), h.tenant(r), projectID, fromID, toID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, diff)
 }
 
 func (h *auditHandler) getContentQuality(w http.ResponseWriter, r *http.Request) {

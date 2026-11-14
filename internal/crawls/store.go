@@ -352,6 +352,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,
 	if err := entities.Extract(ctx, tx, tenantID, projectID, contentID.String(), completion.StructuredData); err != nil {
 		return fmt.Errorf("extract entities: %w", err)
 	}
+	if err := entities.ExtractText(ctx, tx, tenantID, projectID, contentID.String(), completion.TextSample); err != nil {
+		return fmt.Errorf("extract text entity candidates: %w", err)
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE website_pages SET latest_content_id=UUID_TO_BIN(?) WHERE id=UUID_TO_BIN(?)`, contentID.String(), pageID.String())
 	if err != nil {
 		return fmt.Errorf("set latest page content: %w", err)

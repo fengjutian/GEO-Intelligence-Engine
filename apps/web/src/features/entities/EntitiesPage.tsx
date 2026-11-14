@@ -6,6 +6,9 @@ type Entity = { id: string; entityType: string; canonicalName: string; status: s
 type Evidence = { id: string; quote: string; locator: string; sourceType: string }
 type Relation = { id: string; predicate: string; subjectName: string; objectName: string }
 type Detail = Entity & { aliases: string[]; evidence: Evidence[]; relations: Relation[] }
+type Snapshot = { id: string; version: number; contentHash: string; publishedAt: string }
+type SnapshotChange = { added: Array<Record<string, unknown>>; removed: Array<Record<string, unknown>>; changed: Array<Record<string, unknown>> }
+type SnapshotDiff = { from: Snapshot; to: Snapshot; entities: SnapshotChange; relations: SnapshotChange; summary: Record<string, number> }
 
 type Props = { projects: ProjectOption[] }
 
@@ -25,6 +28,8 @@ export function EntitiesPage({ projects }: Props) {
   const [mergeTargetId, setMergeTargetId] = useState('')
   const [lastMergeId, setLastMergeId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [fromSnapshotId, setFromSnapshotId] = useState('')
+  const [toSnapshotId, setToSnapshotId] = useState('')
   const entities = useQuery({
     queryKey: ['entities', projectId],
     queryFn: () => request<{ items: Entity[] }>(`/api/v1/projects/${projectId}/entities`),
@@ -96,11 +101,33 @@ export function EntitiesPage({ projects }: Props) {
     onError: (error) => setMessage(error.message),
   })
   const mergeTargets = entities.data?.items.filter((item) => item.id !== selectedId && item.entityType === detail.data?.entityType) ?? []
+  const snapshots = useQuery({
+    queryKey: ['knowledge-snapshots', projectId],
+    queryFn: () => request<{ items: Snapshot[] }>(`/api/v1/projects/${projectId}/knowledge-snapshots`),
+    enabled: Boolean(projectId),
+  })
+  const snapshotItems = snapshots.data?.items ?? []
+  const effectiveFrom = fromSnapshotId || snapshotItems[1]?.id || ''
+  const effectiveTo = toSnapshotId || snapshotItems[0]?.id || ''
+  const diff = useQuery({
+    queryKey: ['snapshot-diff', projectId, effectiveFrom, effectiveTo],
+    queryFn: () => request<SnapshotDiff>(`/api/v1/projects/${projectId}/knowledge-snapshots/diff?from=${effectiveFrom}&to=${effectiveTo}`),
+    enabled: Boolean(projectId && effectiveFrom && effectiveTo && effectiveFrom !== effectiveTo),
+  })
+  const publishSnapshot = useMutation({
+    mutationFn: () => request<{ id: string; version: number }>(`/api/v1/projects/${projectId}/knowledge-snapshots`, { method: 'POST' }),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-snapshots', projectId] })
+      setMessage(`已发布知识快照 v${result.version}`)
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const label = (value: Record<string, unknown>) => String(value.canonicalName ?? (value.subject ? `${value.subject} ${value.predicate ?? ''} ${value.object ?? ''}` : value.id ?? ''))
 
   return <section className="workspace module-workspace">
     <div className="section-heading">
       <div><p className="eyebrow">ENTITY INTELLIGENCE</p><h2>实体知识</h2><p>来自页面 JSON-LD 的品牌、组织、产品与软件实体，人工确认后进入知识图谱。</p></div>
-      <label className="entity-project">项目<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setSelectedId(null) }}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+      <label className="entity-project">项目<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setSelectedId(null); setFromSnapshotId(''); setToSnapshotId('') }}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
     </div>
     {message && <p className="audit-message" role="status">{message}</p>}
     {quality.data && <div className="content-quality-card">
@@ -117,6 +144,27 @@ export function EntitiesPage({ projects }: Props) {
         <button type="button" disabled={reviewFinding.isPending} onClick={() => reviewFinding.mutate({ id: finding.id, status: 'dismissed' })}>忽略</button>
       </div>)}
     </div>}
+    <div className="snapshot-panel">
+      <div className="snapshot-controls">
+        <strong>知识快照对比</strong>
+        <label>基线<select value={effectiveFrom} onChange={(event) => setFromSnapshotId(event.target.value)} disabled={snapshotItems.length === 0}>{snapshotItems.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>v{snapshot.version} · {new Date(snapshot.publishedAt).toLocaleString()}</option>)}</select></label>
+        <label>对比<select value={effectiveTo} onChange={(event) => setToSnapshotId(event.target.value)} disabled={snapshotItems.length === 0}>{snapshotItems.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>v{snapshot.version} · {new Date(snapshot.publishedAt).toLocaleString()}</option>)}</select></label>
+        <button type="button" disabled={publishSnapshot.isPending} onClick={() => publishSnapshot.mutate()}>发布新快照</button>
+      </div>
+      {snapshotItems.length < 2 && <p className="empty-state">至少发布两个知识快照后才能对比变化。</p>}
+      {diff.data && <div className="snapshot-diff">
+        <p className="snapshot-summary">v{diff.data.from.version} → v{diff.data.to.version}：实体 +{diff.data.summary.entitiesAdded} / -{diff.data.summary.entitiesRemoved} / ~{diff.data.summary.entitiesChanged}，关系 +{diff.data.summary.relationsAdded} / -{diff.data.summary.relationsRemoved}</p>
+        <div className="snapshot-columns">
+          <div><h4>新增实体 {diff.data.entities.added.length}</h4><ul>{diff.data.entities.added.map((item, index) => <li key={`add-${index}`}>{label(item)}</li>)}</ul></div>
+          <div><h4>移除实体 {diff.data.entities.removed.length}</h4><ul>{diff.data.entities.removed.map((item, index) => <li key={`rem-${index}`}>{label(item)}</li>)}</ul></div>
+          <div><h4>变更实体 {diff.data.entities.changed.length}</h4><ul>{diff.data.entities.changed.map((item, index) => <li key={`chg-${index}`}>{label(item)}</li>)}</ul></div>
+        </div>
+        <div className="snapshot-relations">
+          <span>新增关系 {diff.data.relations.added.length}</span>
+          <span>移除关系 {diff.data.relations.removed.length}</span>
+        </div>
+      </div>}
+    </div>
     <div className="entity-layout">
       <div className="entity-list">
         {entities.isLoading && <p>正在加载…</p>}

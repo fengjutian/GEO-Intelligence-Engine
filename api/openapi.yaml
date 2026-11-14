@@ -376,12 +376,29 @@ paths:
         '200': {description: Undone merge event, content: {application/json: {schema: {$ref: '#/components/schemas/EntityMerge'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
   /projects/{projectId}/knowledge-snapshots:
+    get:
+      tags: [Entities]
+      operationId: listKnowledgeSnapshots
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      responses:
+        '200': {description: Published snapshots newest first, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/KnowledgeSnapshot'}}}}}}}
     post:
       tags: [Entities]
       operationId: publishKnowledgeSnapshot
       parameters: [{$ref: '#/components/parameters/ProjectId'}]
       responses:
         '201': {description: Published knowledge snapshot, content: {application/json: {schema: {type: object, required: [id, projectId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string}}}}}}
+  /projects/{projectId}/knowledge-snapshots/diff:
+    get:
+      tags: [Entities]
+      operationId: compareKnowledgeSnapshots
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: from, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}
+        - {name: to, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      responses:
+        '200': {description: Structural snapshot difference, content: {application/json: {schema: {$ref: '#/components/schemas/SnapshotDiff'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /projects/{projectId}/content-quality:
     get:
       tags: [Entities]
@@ -892,7 +909,10 @@ components:
         sentiment: {type: [string, 'null'], enum: [positive, neutral, negative, mixed, unknown, null]}
     HumanAnnotationCreate: {type: object, required: [labels, reason], properties: {labels: {type: object, additionalProperties: true}, reason: {type: string, minLength: 1}}}
     HumanAnnotation: {allOf: [{$ref: '#/components/schemas/HumanAnnotationCreate'}, {type: object, required: [id, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, createdAt: {type: string, format: date-time}}}]}
-BatchReviewResult: {type: object, required: [applied, failed, results], properties: {applied: {type: integer}, failed: {type: integer}, results: {type: array, items: {type: object, required: [reviewItemId, status], properties: {reviewItemId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [applied, failed]}, errorCode: {type: string, enum: [NOT_FOUND, NOT_PENDING, INVALID_INPUT, INTERNAL]}}}}}}
+    BatchReviewResult: {type: object, required: [applied, failed, results], properties: {applied: {type: integer}, failed: {type: integer}, results: {type: array, items: {type: object, required: [reviewItemId, status], properties: {reviewItemId: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [applied, failed]}, errorCode: {type: string, enum: [NOT_FOUND, NOT_PENDING, INVALID_INPUT, INTERNAL]}}}}}}
+    KnowledgeSnapshot: {type: object, required: [id, version, contentHash, publishedAt], properties: {id: {$ref: '#/components/schemas/Id'}, version: {type: integer}, contentHash: {type: string}, publishedAt: {type: string, format: date-time}}}
+    SnapshotChange: {type: object, required: [added, removed], properties: {added: {type: array, items: {type: object, additionalProperties: true}}, removed: {type: array, items: {type: object, additionalProperties: true}}, changed: {type: array, items: {type: object, additionalProperties: true}}}}
+    SnapshotDiff: {type: object, required: [from, to, entities, relations, summary], properties: {from: {$ref: '#/components/schemas/KnowledgeSnapshot'}, to: {$ref: '#/components/schemas/KnowledgeSnapshot'}, entities: {$ref: '#/components/schemas/SnapshotChange'}, relations: {$ref: '#/components/schemas/SnapshotChange'}, summary: {type: object, additionalProperties: {type: integer}}}}
     MetricValue: {type: object, required: [metricCode, aggregationMethod, dimensions, numerator, denominator, intervalMethod], properties: {id: {$ref: '#/components/schemas/Id'}, metricCode: {type: string}, aggregationMethod: {type: string, enum: [answer_equal, question_equal, business_weighted]}, dimensions: {type: object, additionalProperties: true}, numerator: {type: [number, 'null']}, denominator: {type: [number, 'null']}, value: {type: [number, 'null']}, ciLow: {type: [number, 'null']}, ciHigh: {type: [number, 'null']}, intervalMethod: {type: string, enum: [wilson, cluster_bootstrap, weighted_cluster_bootstrap, none]}}}
     ReportCreate: {type: object, required: [metricSnapshotId, templateVersion], properties: {metricSnapshotId: {$ref: '#/components/schemas/Id'}, templateVersion: {type: string}}}
     Report: {type: object, required: [id, auditId, version, status], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, version: {type: integer}, status: {type: string, enum: [draft, generating, ready, published, failed, superseded]}, templateVersion: {type: string}, dependencyVersions: {type: object, additionalProperties: true}, sections: {type: array, items: {$ref: '#/components/schemas/ReportSection'}}, artifacts: {type: array, items: {$ref: '#/components/schemas/ReportArtifact'}}, createdAt: {type: string, format: date-time}, publishedAt: {type: [string, 'null'], format: date-time}}}
