@@ -25,3 +25,13 @@ it('extracts author, published date and FAQ answers', () => {
   expect(page.publishedAt).toBe('2026-01-02T00:00:00Z')
   expect(page.faq).toEqual([{ question: 'What is GEO?', answer: 'GEO is AI visibility analytics.' }])
 })
+
+it('flags repeated undefined acronyms', () => {
+  const page = parseHTML('<html><body>GEO tools improve GEO results. GEO matters.</body></html>', 'https://example.com')
+  expect(page.terms).toEqual([{ term: 'GEO', count: 3, defined: false }])
+})
+
+it('recognizes a defined acronym near its first use', () => {
+  const page = parseHTML('<html><body>Generative Engine Optimization (GEO) is useful. GEO improves GEO results.</body></html>', 'https://example.com')
+  expect(page.terms[0]).toMatchObject({ term: 'GEO', count: 3, defined: true })
+})

@@ -78,3 +78,19 @@ func TestContentFindingsFAQAndFreshness(t *testing.T) {
 		}
 	}
 }
+
+func TestContentFindingsTermsAndAbsoluteClaims(t *testing.T) {
+	completion := Completion{
+		FinalURL:    "https://example.com/terms",
+		TextLength:  600,
+		Headings:    []Heading{{Level: 1, Text: "Terms"}},
+		TextSample:  "GEO is the best way to improve AI visibility.",
+		Author:      "Acme Team",
+		PublishedAt: time.Now().UTC().Format(time.RFC3339),
+		Terms:       []TermSignal{{Term: "GEO", Count: 4, Defined: false}},
+	}
+	codes := findingCodes(contentFindings(completion))
+	if !codes["CONTENT_TERM_UNDEFINED"] || !codes["CONTENT_ABSOLUTE_CLAIM"] {
+		t.Fatalf("missing term/claim findings: %+v", codes)
+	}
+}

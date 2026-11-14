@@ -62,6 +62,14 @@ type Completion struct {
 	Author         string            `json:"author,omitempty"`
 	PublishedAt    string            `json:"publishedAt,omitempty"`
 	FAQ            []FAQItem         `json:"faq,omitempty"`
+	Terms          []TermSignal      `json:"terms,omitempty"`
+}
+
+// TermSignal is one repeated acronym and whether a definition was found near it.
+type TermSignal struct {
+	Term    string `json:"term"`
+	Count   int    `json:"count"`
+	Defined bool   `json:"defined"`
 }
 
 // FAQItem is one question/answer pair from FAQPage structured data.

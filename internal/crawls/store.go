@@ -827,7 +827,7 @@ var statisticPattern = regexp.MustCompile(`(?i)\d+(\.\d+)?\s*(%|percent|倍)|\d{
 
 func findingVersion(code string) string {
 	switch code {
-	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE", "CONTENT_AUTHOR_MISSING", "CONTENT_PUBLISHED_DATE_MISSING", "CONTENT_PUBLISHED_DATE_INVALID", "CONTENT_STALE_CONTENT", "CONTENT_FAQ_ANSWER_MISSING", "CONTENT_FAQ_DUPLICATE":
+	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE", "CONTENT_AUTHOR_MISSING", "CONTENT_PUBLISHED_DATE_MISSING", "CONTENT_PUBLISHED_DATE_INVALID", "CONTENT_STALE_CONTENT", "CONTENT_FAQ_ANSWER_MISSING", "CONTENT_FAQ_DUPLICATE", "CONTENT_TERM_UNDEFINED", "CONTENT_ABSOLUTE_CLAIM":
 		return "content-rules-v1"
 	default:
 		return "technical-rules-v1"
@@ -902,7 +902,31 @@ func contentFindings(completion Completion) []technicalFinding {
 		}
 		seenQuestions[normalized] = true
 	}
+	for _, term := range completion.Terms {
+		if !term.Defined && term.Count >= 3 {
+			findings = append(findings, technicalFinding{"CONTENT_TERM_UNDEFINED", "low", "Repeated acronym has no nearby definition", map[string]any{"term": term.Term, "count": term.Count}})
+		}
+	}
+	if sample != "" {
+		if phrase := absoluteClaim(sample); phrase != "" {
+			findings = append(findings, technicalFinding{"CONTENT_ABSOLUTE_CLAIM", "low", "Page contains an absolute claim without qualification", map[string]any{"phrase": phrase}})
+		}
+	}
 	return findings
+}
+
+var absolutePattern = regexp.MustCompile(`(?i)\b(best|always|never|guaranteed|100%)\b`)
+
+func absoluteClaim(sample string) string {
+	for _, phrase := range []string{"绝对", "唯一", "最好", "一定"} {
+		if strings.Contains(sample, phrase) {
+			return phrase
+		}
+	}
+	if match := absolutePattern.FindString(sample); match != "" {
+		return match
+	}
+	return ""
 }
 
 func parsePublishedDate(value string) (time.Time, error) {
