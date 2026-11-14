@@ -89,6 +89,13 @@ func newAuthMiddleware(options authOptions) func(http.Handler) http.Handler {
 				authenticatedRequest.Header.Set(headerTenant, claims.TenantID)
 				authenticatedRequest.Header.Set(headerActor, claims.Subject)
 				auditRequest = authenticatedRequest
+				if strings.HasPrefix(path, "/api/v1/invitations/") {
+					// Invitees are authenticated but not members yet; the handler verifies the
+					// invitation email against the authenticated user before creating membership.
+					authenticatedRequest.Header.Set(headerRole, "viewer")
+					next.ServeHTTP(recorder, authenticatedRequest)
+					return
+				}
 				principal, err := resolvePrincipal(r.Context(), options.DB, claims)
 				if err != nil {
 					writeProblem(recorder, http.StatusForbidden, "NOT_A_TENANT_MEMBER", "Principal is not an active tenant member", traceID(r))
@@ -176,6 +183,48 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 		"role":          role,
 		"authenticated": true,
 	})
+}
+
+// projectAccess enforces optional project-level membership: when a user has any
+// project memberships in the tenant, they may only access projects they are a
+// member of. Owners/ProjectAdmins always pass; users without project rows keep
+// tenant-wide access for backward compatibility.
+func projectAccess(db *sql.DB, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		role := r.Header.Get(headerRole)
+		if auth.NormalizeRole(role) == "owner" || auth.NormalizeRole(role) == "project_admin" || db == nil {
+			next(w, r)
+			return
+		}
+		projectID := r.PathValue("projectId")
+		if projectID == "" {
+			projectID = strings.SplitN(r.PathValue("projectAction"), ":", 2)[0]
+		}
+		if _, err := uuid.Parse(projectID); err != nil {
+			writeProblem(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project was not found", traceID(r))
+			return
+		}
+		tenantID := r.Header.Get(headerTenant)
+		userID := r.Header.Get(headerActor)
+		var total, scoped int
+		if err := db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM project_memberships WHERE tenant_id=UUID_TO_BIN(?) AND user_id=UUID_TO_BIN(?)`, tenantID, userID).Scan(&total); err != nil {
+			writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
+			return
+		}
+		if total == 0 {
+			next(w, r)
+			return
+		}
+		if err := db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM project_memberships WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND user_id=UUID_TO_BIN(?)`, tenantID, projectID, userID).Scan(&scoped); err != nil {
+			writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
+			return
+		}
+		if scoped == 0 {
+			writeProblem(w, http.StatusForbidden, "PROJECT_FORBIDDEN", "Project membership is required", traceID(r))
+			return
+		}
+		next(w, r)
+	}
 }
 
 func hasPermission(r *http.Request, action string) bool {

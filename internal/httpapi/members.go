@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ type memberStore interface {
 	List(ctx context.Context, tenantID string) ([]members.Member, error)
 	Invite(ctx context.Context, tenantID, actorID string, input members.InviteInput) (members.Invitation, error)
 	Update(ctx context.Context, tenantID, actorID, memberID string, input members.UpdateInput) (members.Member, error)
+	Accept(ctx context.Context, token, actorID string) (members.Member, error)
 }
 
 type memberHandler struct {
@@ -90,6 +92,21 @@ func (h *memberHandler) update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, member)
 }
 
+func (h *memberHandler) accept(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("invitationAction")
+	separator := strings.LastIndexByte(raw, ':')
+	if separator < 1 || raw[separator+1:] != "accept" {
+		writeProblem(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route was not found", traceID(r))
+		return
+	}
+	member, err := h.store.Accept(r.Context(), raw[:separator], r.Header.Get(headerActor))
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, member)
+}
+
 func (h *memberHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, members.ErrNotFound):
@@ -98,6 +115,8 @@ func (h *memberHandler) writeError(w http.ResponseWriter, r *http.Request, err e
 		writeProblem(w, http.StatusConflict, "MEMBER_CONFLICT", "Member change would remove the last owner", traceID(r))
 	case errors.Is(err, members.ErrInvalid):
 		writeProblem(w, http.StatusUnprocessableEntity, "MEMBER_INPUT_INVALID", "Member input is invalid", traceID(r))
+	case errors.Is(err, members.ErrForbidden):
+		writeProblem(w, http.StatusForbidden, "INVITATION_EMAIL_MISMATCH", "Invitation does not belong to the current user", traceID(r))
 	default:
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
 	}

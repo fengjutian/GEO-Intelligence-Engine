@@ -48,6 +48,15 @@ paths:
         '200': {description: Updated member, content: {application/json: {schema: {$ref: '#/components/schemas/Member'}}}}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /invitations/{invitationAction}:
+    post:
+      tags: [Identity]
+      operationId: acceptInvitation
+      parameters: [{name: invitationAction, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Membership created or activated, content: {application/json: {schema: {$ref: '#/components/schemas/Member'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /tenants/{tenantId}/invitations:
     parameters: [{$ref: '#/components/parameters/TenantId'}]
     post:

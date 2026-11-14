@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("member resource not found")
-	ErrConflict = errors.New("member state conflict")
-	ErrInvalid  = errors.New("member input is invalid")
+	ErrNotFound  = errors.New("member resource not found")
+	ErrConflict  = errors.New("member state conflict")
+	ErrInvalid   = errors.New("member input is invalid")
+	ErrForbidden = errors.New("member action is forbidden")
 )
 
 var validRoles = map[string]bool{"owner": true, "project_admin": true, "analyst": true, "editor": true, "approver": true, "viewer": true}
@@ -138,6 +139,62 @@ func (s *Store) Update(ctx context.Context, tenantID, actorID, memberID string, 
 		return Member{}, err
 	}
 	return s.get(ctx, tenantID, memberID, userID)
+}
+
+// Accept consumes an invitation token for the authenticated user whose email matches.
+func (s *Store) Accept(ctx context.Context, token, actorID string) (Member, error) {
+	tokenHash := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Member{}, err
+	}
+	defer tx.Rollback()
+	var invitationID, tenantID, email, role, status string
+	var expiresAt time.Time
+	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(tenant_id),email_normalized,role,status,expires_at
+FROM invitations WHERE token_hash=? FOR UPDATE`, tokenHash[:]).Scan(&invitationID, &tenantID, &email, &role, &status, &expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Member{}, ErrNotFound
+	}
+	if err != nil {
+		return Member{}, err
+	}
+	if status != "pending" || time.Now().UTC().After(expiresAt) {
+		return Member{}, ErrConflict
+	}
+	var actorEmail, actorSubject string
+	if err := tx.QueryRowContext(ctx, `SELECT email_normalized,oidc_subject FROM users WHERE id=UUID_TO_BIN(?) AND status='active'`, actorID).Scan(&actorEmail, &actorSubject); err != nil {
+		return Member{}, ErrForbidden
+	}
+	if !strings.EqualFold(actorEmail, email) {
+		return Member{}, ErrForbidden
+	}
+	var membershipID string
+	err = tx.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id) FROM memberships WHERE tenant_id=UUID_TO_BIN(?) AND user_id=UUID_TO_BIN(?)`, tenantID, actorID).Scan(&membershipID)
+	if errors.Is(err, sql.ErrNoRows) {
+		membershipID = uuid.NewString()
+		if _, err := tx.ExecContext(ctx, `INSERT INTO memberships (id,tenant_id,user_id,role,status,created_at,updated_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,'active',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`, membershipID, tenantID, actorID, roleLabel(role)); err != nil {
+			return Member{}, err
+		}
+	} else if err != nil {
+		return Member{}, err
+	} else {
+		if _, err := tx.ExecContext(ctx, `UPDATE memberships SET role=?,status='active',updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, roleLabel(role), membershipID); err != nil {
+			return Member{}, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE invitations SET status='accepted' WHERE id=UUID_TO_BIN(?)`, invitationID); err != nil {
+		return Member{}, err
+	}
+	payload, _ := json.Marshal(map[string]any{"invitationId": invitationID, "email": email, "role": role})
+	if err := s.auditTx(ctx, tx, tenantID, actorID, "member.joined", membershipID, payload); err != nil {
+		return Member{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Member{}, err
+	}
+	return s.get(ctx, tenantID, membershipID, actorID)
 }
 
 func (s *Store) get(ctx context.Context, tenantID, memberID, userID string) (Member, error) {
