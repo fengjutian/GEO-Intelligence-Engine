@@ -870,6 +870,81 @@ ORDER BY sm.fetched_at,sm.url`, tenantID, runID)
 	return items, rows.Err()
 }
 
+func (s *Store) ListProjectFindings(ctx context.Context, tenantID, projectID, rulePrefix, status string, limit int) ([]Finding, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	query := `SELECT BIN_TO_UUID(id),rule_code,severity,status,summary,evidence_json,created_at
+FROM findings WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?)`
+	args := []any{tenantID, projectID}
+	if rulePrefix != "" {
+		query += " AND rule_code LIKE ?"
+		args = append(args, rulePrefix+"%")
+	}
+	if status != "" {
+		query += " AND status=?"
+		args = append(args, status)
+	}
+	query += " ORDER BY FIELD(severity,'critical','high','medium','low'),created_at DESC,id LIMIT ?"
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query project findings: %w", err)
+	}
+	defer rows.Close()
+	findings := []Finding{}
+	for rows.Next() {
+		var finding Finding
+		var evidence []byte
+		if err := rows.Scan(&finding.ID, &finding.RuleCode, &finding.Severity, &finding.Status, &finding.Summary, &evidence, &finding.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan project finding: %w", err)
+		}
+		_ = json.Unmarshal(evidence, &finding.Evidence)
+		findings = append(findings, finding)
+	}
+	return findings, rows.Err()
+}
+
+func (s *Store) UpdateFindingStatus(ctx context.Context, tenantID, findingID, status, actorID, reason string) (Finding, error) {
+	switch status {
+	case "open", "confirmed", "dismissed", "accepted_risk", "resolved":
+	default:
+		return Finding{}, ErrInvalidState
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Finding{}, err
+	}
+	defer tx.Rollback()
+	var previous string
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM findings WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, findingID).Scan(&previous); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Finding{}, ErrNotFound
+		}
+		return Finding{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE findings SET status=?,updated_at=UTC_TIMESTAMP(6) WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, status, tenantID, findingID); err != nil {
+		return Finding{}, err
+	}
+	payload, _ := json.Marshal(map[string]any{"before": previous, "after": status, "reason": reason})
+	auditID := uuid.NewString()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_logs (id,tenant_id,actor_type,actor_id,action,resource_type,resource_id,result,payload_summary,occurred_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),'user',UUID_TO_BIN(?),'finding.updated','finding',UUID_TO_BIN(?),'succeeded',CAST(? AS JSON),UTC_TIMESTAMP(6))`,
+		auditID, tenantID, actorID, findingID, payload); err != nil {
+		return Finding{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Finding{}, err
+	}
+	var finding Finding
+	var evidence []byte
+	if err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),rule_code,severity,status,summary,evidence_json,created_at FROM findings WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, findingID).Scan(&finding.ID, &finding.RuleCode, &finding.Severity, &finding.Status, &finding.Summary, &evidence, &finding.CreatedAt); err != nil {
+		return Finding{}, err
+	}
+	_ = json.Unmarshal(evidence, &finding.Evidence)
+	return finding, nil
+}
+
 func (s *Store) ListFindings(ctx context.Context, tenantID, runID string) ([]Finding, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT BIN_TO_UUID(f.id),f.rule_code,f.severity,f.status,f.summary,f.evidence_json,f.created_at

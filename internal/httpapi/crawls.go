@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
@@ -31,6 +32,8 @@ type crawlStore interface {
 	ListSitemapEvidence(ctx context.Context, tenantID, runID string) ([]crawls.SitemapEvidence, error)
 	RunContentAnalysis(ctx context.Context, tenantID, runID string) (crawls.ContentAnalysisRun, error)
 	GetContentAnalysisRun(ctx context.Context, tenantID, analysisID string) (crawls.ContentAnalysisRun, error)
+	ListProjectFindings(ctx context.Context, tenantID, projectID, rulePrefix, status string, limit int) ([]crawls.Finding, error)
+	UpdateFindingStatus(ctx context.Context, tenantID, findingID, status, actorID, reason string) (crawls.Finding, error)
 }
 
 type crawlHandler struct {
@@ -319,6 +322,47 @@ func (h *crawlHandler) tenantID(r *http.Request) string {
 		tenantID = h.devTenantID
 	}
 	return tenantID
+}
+
+func (h *crawlHandler) listProjectFindings(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	items, err := h.store.ListProjectFindings(r.Context(), h.tenantID(r), projectID, strings.TrimSpace(r.URL.Query().Get("rulePrefix")), strings.TrimSpace(r.URL.Query().Get("status")), limit)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *crawlHandler) updateFinding(w http.ResponseWriter, r *http.Request) {
+	findingID := r.PathValue("findingId")
+	if _, err := uuid.Parse(findingID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_FINDING_ID", "Finding ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		Status string `json:"status"`
+		Reason string `json:"reason"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	finding, err := h.store.UpdateFindingStatus(r.Context(), h.tenantID(r), findingID, strings.TrimSpace(input.Status), r.Header.Get(headerActor), input.Reason)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, finding)
 }
 
 func (h *crawlHandler) fail(w http.ResponseWriter, r *http.Request) {

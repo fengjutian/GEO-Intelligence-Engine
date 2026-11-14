@@ -40,6 +40,24 @@ export function EntitiesPage({ projects }: Props) {
     queryFn: () => request<{ total: number; bySeverity: Record<string, number> }>(`/api/v1/projects/${projectId}/content-quality`),
     enabled: Boolean(projectId),
   })
+  const findings = useQuery({
+    queryKey: ['content-findings', projectId],
+    queryFn: () => request<{ items: Array<{ id: string; ruleCode: string; severity: string; summary: string; status: string }> }>(`/api/v1/projects/${projectId}/findings?rulePrefix=CONTENT_&status=open&limit=20`),
+    enabled: Boolean(projectId),
+  })
+  const reviewFinding = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => request(`/api/v1/findings/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status, reason: '内容质量人工复核' }),
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['content-quality', projectId] })
+      await queryClient.invalidateQueries({ queryKey: ['content-findings', projectId] })
+      setMessage('内容问题状态已更新')
+    },
+    onError: (error) => setMessage(error.message),
+  })
   const update = useMutation({
     mutationFn: (status: string) => request<Entity>(`/api/v1/entities/${selectedId}`, {
       method: 'PATCH',
@@ -90,6 +108,14 @@ export function EntitiesPage({ projects }: Props) {
       <span data-severity="high">高 {quality.data.bySeverity.high ?? 0}</span>
       <span data-severity="medium">中 {quality.data.bySeverity.medium ?? 0}</span>
       <span data-severity="low">低 {quality.data.bySeverity.low ?? 0}</span>
+    </div>}
+    {findings.data && findings.data.items.length > 0 && <div className="content-findings">
+      {findings.data.items.map((finding) => <div key={finding.id} className="content-finding">
+        <span data-severity={finding.severity}>{finding.severity}</span>
+        <div><strong>{finding.ruleCode}</strong><small>{finding.summary}</small></div>
+        <button type="button" disabled={reviewFinding.isPending} onClick={() => reviewFinding.mutate({ id: finding.id, status: 'confirmed' })}>确认</button>
+        <button type="button" disabled={reviewFinding.isPending} onClick={() => reviewFinding.mutate({ id: finding.id, status: 'dismissed' })}>忽略</button>
+      </div>)}
     </div>}
     <div className="entity-layout">
       <div className="entity-list">
