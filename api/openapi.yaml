@@ -10,6 +10,7 @@ security:
 tags:
   - {name: Identity}
   - {name: Projects}
+  - {name: Entities}
   - {name: Crawls}
   - {name: Questions}
   - {name: Audits}
@@ -266,6 +267,31 @@ paths:
       responses:
         '201': {description: Immutable published version, content: {application/json: {schema: {type: object, required: [id, version, questionCount], properties: {id: {$ref: '#/components/schemas/Id'}, version: {type: integer}, questionCount: {type: integer}}}}}}
         '409': {$ref: '#/components/responses/Conflict'}
+  /projects/{projectId}/entities:
+    get:
+      tags: [Entities]
+      operationId: listProjectEntities
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: type, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Extracted entities, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Entity'}}}}}}}
+  /entities/{entityId}:
+    get:
+      tags: [Entities]
+      operationId: getEntity
+      parameters: [{name: entityId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: Entity with aliases, evidence and relations, content: {application/json: {schema: {$ref: '#/components/schemas/EntityDetail'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Entities]
+      operationId: updateEntityStatus
+      parameters: [{name: entityId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {type: string, enum: [proposed, confirmed, rejected]}}}}}}
+      responses:
+        '200': {description: Updated entity, content: {application/json: {schema: {$ref: '#/components/schemas/Entity'}}}}
   /projects/{projectId}/measurement-protocols:
     get:
       tags: [Audits]
@@ -562,6 +588,12 @@ components:
     MemberPage: {type: object, required: [items, page], properties: {items: {type: array, items: {$ref: '#/components/schemas/Member'}}, page: {$ref: '#/components/schemas/PageMeta'}}}
     InvitationCreate: {type: object, required: [email, role], properties: {email: {type: string, format: email}, role: {type: string, enum: [ProjectAdmin, Analyst, Editor, Approver, Viewer]}, projectIds: {type: array, items: {$ref: '#/components/schemas/Id'}}}}
     Invitation: {allOf: [{$ref: '#/components/schemas/InvitationCreate'}, {type: object, required: [id, status, expiresAt], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string}, expiresAt: {type: string, format: date-time}}}]}
+    Entity:
+      type: object
+      required: [id, projectId, entityType, canonicalName, status]
+      properties: {id: {$ref: '#/components/schemas/Id'}, projectId: {$ref: '#/components/schemas/Id'}, entityType: {type: string, enum: [Organization, Brand, Product, SoftwareApplication]}, canonicalName: {type: string}, normalizedName: {type: string}, status: {type: string, enum: [proposed, confirmed, rejected]}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}
+    EntityDetail:
+      allOf: [{$ref: '#/components/schemas/Entity'}, {type: object, properties: {aliases: {type: array, items: {type: string}}, evidence: {type: array, items: {type: object, additionalProperties: true}}, relations: {type: array, items: {type: object, additionalProperties: true}}}}]
     ProjectCreate:
       type: object
       required: [name, brandName, officialUrl, locale, region, timezone]

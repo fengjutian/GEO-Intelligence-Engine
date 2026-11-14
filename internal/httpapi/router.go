@@ -10,6 +10,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
+	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
@@ -134,6 +135,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/tenants/{tenantId}/invitations", requirePermission("manage_members", memberHandler.invite))
 	mux.HandleFunc("PATCH /api/v1/tenants/{tenantId}/members/{memberId}", requirePermission("manage_members", memberHandler.update))
 	mux.HandleFunc("POST /api/v1/invitations/{invitationAction}", memberHandler.accept)
+	entityHandler := newEntityHandler(entities.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/entities", projectAccess(deps.DB, entityHandler.list))
+	mux.HandleFunc("GET /api/v1/entities/{entityId}", entityHandler.get)
+	mux.HandleFunc("PATCH /api/v1/entities/{entityId}", requirePermission("edit_project", entityHandler.update))
 
 	var oidcVerifier *auth.OIDCVerifier
 	if strings.EqualFold(deps.AuthMode, "oidc") {

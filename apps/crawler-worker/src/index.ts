@@ -273,7 +273,7 @@ async function processClaim(claim: Claim) {
     let canonicalUrl: string | null = null
     try { if (parsed.canonical) canonicalUrl = new URL(parsed.canonical, finalUrl).href } catch { canonicalUrl = null }
     const links = [...new Set(parsed.links.filter((link) => link.startsWith('http://') || link.startsWith('https://')))].slice(0, 100)
-    const completion = { crawlUrlId: claim.crawlUrlId, finalUrl, httpStatus: response.status, title: parsed.title, language: parsed.language ?? null, contentHash, parserVersion: 'cheerio-v1', canonicalUrl, links, noIndex: parsed.robots.includes('noindex'), textLength: parsed.text.length }
+    const completion = { crawlUrlId: claim.crawlUrlId, finalUrl, httpStatus: response.status, title: parsed.title, language: parsed.language ?? null, contentHash, parserVersion: 'cheerio-v1', canonicalUrl, links, noIndex: parsed.robots.includes('noindex'), textLength: parsed.text.length, structuredData: parsed.structuredData }
     const result = await api(`/internal/crawler/v1/runs/${claim.runId}/complete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(completion) })
     if (!result.ok) throw new Error(`COMPLETE_API_${result.status}`)
     process.stdout.write(JSON.stringify({ level: 'info', message: 'crawl completed', runId: claim.runId, url: finalUrl, status: response.status }) + '\n')

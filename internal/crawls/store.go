@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/google/uuid"
 )
 
@@ -236,6 +237,12 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UTC_TIMESTAMP(6)) ON DU
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,UTC_TIMESTAMP(6))`, contentID.String(), tenantID, pageID.String(), completion.RunID, completion.HTTPStatus, completion.FinalURL, completion.Title, completion.Language, contentHash, completion.ParserVersion)
 	if err != nil {
 		return fmt.Errorf("insert page content: %w", err)
+	}
+	if len(completion.StructuredData) > 20 {
+		completion.StructuredData = completion.StructuredData[:20]
+	}
+	if err := entities.Extract(ctx, tx, tenantID, projectID, contentID.String(), completion.StructuredData); err != nil {
+		return fmt.Errorf("extract entities: %w", err)
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE website_pages SET latest_content_id=UUID_TO_BIN(?) WHERE id=UUID_TO_BIN(?)`, contentID.String(), pageID.String())
 	if err != nil {

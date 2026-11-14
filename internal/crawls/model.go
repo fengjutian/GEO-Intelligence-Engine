@@ -44,18 +44,19 @@ type Claim struct {
 }
 
 type Completion struct {
-	RunID         string   `json:"runId"`
-	CrawlURLID    string   `json:"crawlUrlId"`
-	FinalURL      string   `json:"finalUrl"`
-	HTTPStatus    int      `json:"httpStatus"`
-	Title         string   `json:"title"`
-	Language      *string  `json:"language"`
-	ContentHash   string   `json:"contentHash"`
-	ParserVersion string   `json:"parserVersion"`
-	CanonicalURL  *string  `json:"canonicalUrl"`
-	Links         []string `json:"links"`
-	NoIndex       bool     `json:"noIndex"`
-	TextLength    int      `json:"textLength"`
+	RunID          string            `json:"runId"`
+	CrawlURLID     string            `json:"crawlUrlId"`
+	FinalURL       string            `json:"finalUrl"`
+	HTTPStatus     int               `json:"httpStatus"`
+	Title          string            `json:"title"`
+	Language       *string           `json:"language"`
+	ContentHash    string            `json:"contentHash"`
+	ParserVersion  string            `json:"parserVersion"`
+	CanonicalURL   *string           `json:"canonicalUrl"`
+	Links          []string          `json:"links"`
+	NoIndex        bool              `json:"noIndex"`
+	TextLength     int               `json:"textLength"`
+	StructuredData []json.RawMessage `json:"structuredData,omitempty"`
 }
 
 type Failure struct {
