@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
@@ -800,6 +801,7 @@ func insertTechnicalFindings(ctx context.Context, tx *sql.Tx, tenantID, projectI
 	if completion.TextLength < 200 {
 		findings = append(findings, technicalFinding{"CONTENT_THIN", "medium", "Extracted page text is below the minimum useful length", map[string]any{"url": completion.FinalURL, "textLength": completion.TextLength, "threshold": 200}})
 	}
+	findings = append(findings, contentFindings(completion)...)
 	for _, finding := range findings {
 		id, err := uuid.NewV7()
 		if err != nil {
@@ -811,11 +813,86 @@ func insertTechnicalFindings(ctx context.Context, tx *sql.Tx, tenantID, projectI
 		}
 		_, err = tx.ExecContext(ctx, `
 INSERT INTO findings (id,tenant_id,project_id,source_type,source_id,source_version,rule_code,severity,confidence,status,summary,evidence_json,created_at,updated_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'page_content',UUID_TO_BIN(?),'technical-rules-v1',?,?,1.0,'open',?,CAST(? AS JSON),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
-			id.String(), tenantID, projectID, contentID, finding.code, finding.severity, finding.summary, evidence)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'page_content',UUID_TO_BIN(?),?,?,?,1.0,'open',?,CAST(? AS JSON),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
+			id.String(), tenantID, projectID, contentID, findingVersion(finding.code), finding.code, finding.severity, finding.summary, evidence)
 		if err != nil {
 			return fmt.Errorf("insert technical finding: %w", err)
 		}
 	}
 	return nil
+}
+
+var statisticPattern = regexp.MustCompile(`(?i)\d+(\.\d+)?\s*(%|percent|倍)|\d{4}\s*年`)
+
+func findingVersion(code string) string {
+	switch code {
+	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE":
+		return "content-rules-v1"
+	default:
+		return "technical-rules-v1"
+	}
+}
+
+// contentFindings applies deterministic P0 content-structure and evidence rules.
+func contentFindings(completion Completion) []technicalFinding {
+	findings := []technicalFinding{}
+	h1Count := 0
+	for _, heading := range completion.Headings {
+		if heading.Level == 1 {
+			h1Count++
+		}
+	}
+	if len(completion.Headings) == 0 {
+		if completion.TextLength >= 300 {
+			findings = append(findings, technicalFinding{"CONTENT_HEADINGS_MISSING", "high", "Page has substantial text but no semantic headings", map[string]any{"textLength": completion.TextLength}})
+		}
+	} else if h1Count == 0 {
+		findings = append(findings, technicalFinding{"CONTENT_H1_MISSING", "high", "Page does not contain an H1 heading", map[string]any{"headingCount": len(completion.Headings)}})
+	}
+	if h1Count > 1 {
+		findings = append(findings, technicalFinding{"CONTENT_H1_MULTIPLE", "medium", "Page contains multiple H1 headings", map[string]any{"h1Count": h1Count}})
+	}
+	previousLevel := 0
+	for _, heading := range completion.Headings {
+		if previousLevel > 0 && heading.Level > previousLevel+1 {
+			findings = append(findings, technicalFinding{"CONTENT_HEADING_SKIP", "medium", "Heading levels skip a level", map[string]any{"fromLevel": previousLevel, "toLevel": heading.Level, "heading": heading.Text}})
+			break
+		}
+		previousLevel = heading.Level
+	}
+	sample := strings.TrimSpace(completion.TextSample)
+	if sample != "" && completion.TextLength >= 300 {
+		firstSentence := sample
+		for _, separator := range []string{".", "。", "!", "！", "?", "？"} {
+			if index := strings.Index(sample, separator); index > 0 && index < 200 {
+				firstSentence = sample[:index+len(separator)]
+				break
+			}
+		}
+		if len([]rune(firstSentence)) < 40 {
+			findings = append(findings, technicalFinding{"CONTENT_ANSWER_FIRST", "medium", "Opening text does not provide a direct answer", map[string]any{"opening": firstSentence, "threshold": 40}})
+		}
+		if statisticPattern.MatchString(sample) && externalLinkCount(completion) == 0 {
+			findings = append(findings, technicalFinding{"CONTENT_NO_EVIDENCE", "medium", "Page contains statistics without external evidence links", map[string]any{"opening": firstSentence}})
+		}
+	}
+	return findings
+}
+
+func externalLinkCount(completion Completion) int {
+	base, err := url.Parse(completion.FinalURL)
+	if err != nil || base.Host == "" {
+		return 0
+	}
+	count := 0
+	for _, raw := range completion.Links {
+		link, err := url.Parse(raw)
+		if err != nil || link.Host == "" {
+			continue
+		}
+		if !strings.EqualFold(link.Host, base.Host) {
+			count++
+		}
+	}
+	return count
 }

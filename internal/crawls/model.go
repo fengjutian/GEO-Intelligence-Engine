@@ -57,6 +57,14 @@ type Completion struct {
 	NoIndex        bool              `json:"noIndex"`
 	TextLength     int               `json:"textLength"`
 	StructuredData []json.RawMessage `json:"structuredData,omitempty"`
+	Headings       []Heading         `json:"headings,omitempty"`
+	TextSample     string            `json:"textSample,omitempty"`
+}
+
+// Heading is one semantic page heading with its level.
+type Heading struct {
+	Level int    `json:"level"`
+	Text  string `json:"text"`
 }
 
 type Failure struct {
