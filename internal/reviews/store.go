@@ -69,7 +69,7 @@ func (s *Store) List(ctx context.Context, tenantID, status, priority string, lim
 	}
 	query := `SELECT BIN_TO_UUID(r.id),BIN_TO_UUID(r.evaluation_id),BIN_TO_UUID(s.audit_id),q.text_value,
 r.reason_code,r.priority,r.status,COALESCE(ae.answer_outcome,''),COALESCE(ae.content_validity,''),
-COALESCE(ae.recommendation_label,''),r.created_at
+COALESCE(ae.recommendation_label,''),r.assignee_id,r.created_at
 FROM review_queue_items r
 JOIN answer_evaluations ae ON ae.id=r.evaluation_id
 JOIN ai_responses resp ON resp.id=ae.response_id
@@ -95,12 +95,127 @@ WHERE r.tenant_id=UUID_TO_BIN(?)`
 	items := []Item{}
 	for rows.Next() {
 		var item Item
-		if err := rows.Scan(&item.ID, &item.EvaluationID, &item.AuditID, &item.Question, &item.ReasonCode, &item.Priority, &item.Status, &item.AnswerOutcome, &item.ContentValidity, &item.Recommendation, &item.CreatedAt); err != nil {
+		var assignee []byte
+		if err := rows.Scan(&item.ID, &item.EvaluationID, &item.AuditID, &item.Question, &item.ReasonCode, &item.Priority, &item.Status, &item.AnswerOutcome, &item.ContentValidity, &item.Recommendation, &assignee, &item.CreatedAt); err != nil {
 			return nil, err
+		}
+		if len(assignee) > 0 {
+			value := string(assignee)
+			item.AssigneeID = &value
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (s *Store) Assign(ctx context.Context, tenantID, itemID, assigneeID string) error {
+	var active int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM memberships WHERE tenant_id=UUID_TO_BIN(?) AND user_id=UUID_TO_BIN(?) AND status='active'`, tenantID, assigneeID).Scan(&active); err != nil {
+		return err
+	}
+	if active == 0 {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE review_queue_items SET assignee_id=UUID_TO_BIN(?),updated_at=UTC_TIMESTAMP(6) WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, assigneeID, tenantID, itemID)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) Adjudicate(ctx context.Context, tenantID, itemID, adjudicatorID string, result map[string]any, reason string) (Adjudication, error) {
+	reason = strings.TrimSpace(reason)
+	if len(result) == 0 || reason == "" {
+		return Adjudication{}, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Adjudication{}, err
+	}
+	defer tx.Rollback()
+	var status string
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM review_queue_items WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, tenantID, itemID).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Adjudication{}, ErrNotFound
+		}
+		return Adjudication{}, err
+	}
+	if status != "reviewed" {
+		return Adjudication{}, ErrConflict
+	}
+	resultJSON, _ := json.Marshal(result)
+	adjudication := Adjudication{ID: uuid.NewString(), ReviewItemID: itemID, AdjudicatorID: adjudicatorID, Result: result, Reason: reason, CreatedAt: time.Now().UTC()}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO adjudications (id,tenant_id,review_item_id,adjudicator_id,result_json,reason,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),CAST(? AS JSON),?,UTC_TIMESTAMP(6))`,
+		adjudication.ID, tenantID, itemID, adjudicatorID, resultJSON, reason); err != nil {
+		return Adjudication{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE review_queue_items SET status='adjudicated',updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, itemID); err != nil {
+		return Adjudication{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Adjudication{}, err
+	}
+	return adjudication, nil
+}
+
+func (s *Store) Stats(ctx context.Context, tenantID string) (map[string]any, error) {
+	byStatus := map[string]int{"pending": 0, "reviewed": 0, "adjudicated": 0}
+	rows, err := s.db.QueryContext(ctx, `SELECT status,COUNT(*) FROM review_queue_items WHERE tenant_id=UUID_TO_BIN(?) GROUP BY status`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		byStatus[status] = count
+	}
+	rows.Close()
+	byPriority := map[string]int{"high": 0, "medium": 0, "low": 0}
+	rows, err = s.db.QueryContext(ctx, `SELECT priority,COUNT(*) FROM review_queue_items WHERE tenant_id=UUID_TO_BIN(?) GROUP BY priority`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var priority string
+		var count int
+		if err := rows.Scan(&priority, &count); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		byPriority[priority] = count
+	}
+	rows.Close()
+	decisions := map[string]int{}
+	rows, err = s.db.QueryContext(ctx, `SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(labels_json,'$.decision')),'unknown'),COUNT(*)
+FROM human_annotations WHERE tenant_id=UUID_TO_BIN(?) GROUP BY 1`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var decision string
+		var count int
+		if err := rows.Scan(&decision, &count); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		decisions[decision] = count
+	}
+	rows.Close()
+	agreed, disagreed := decisions["agree"], decisions["disagree"]
+	agreementRate := any(nil)
+	if agreed+disagreed > 0 {
+		agreementRate = float64(agreed) / float64(agreed+disagreed)
+	}
+	return map[string]any{"byStatus": byStatus, "byPriority": byPriority, "decisions": decisions, "agreementRate": agreementRate}, nil
 }
 
 func (s *Store) Annotate(ctx context.Context, tenantID, itemID, annotatorID string, labels map[string]any, reason string) (Annotation, error) {

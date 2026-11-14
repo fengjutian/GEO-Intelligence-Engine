@@ -32,6 +32,10 @@ export function ReviewPage() {
     queryKey: ['review-queue'],
     queryFn: () => request<{ items: Item[] }>('/api/v1/review-queue?status=pending&limit=50'),
   })
+  const stats = useQuery({
+    queryKey: ['review-stats'],
+    queryFn: () => request<{ byStatus: Record<string, number>; decisions: Record<string, number>; agreementRate: number | null }>('/api/v1/review-queue/stats'),
+  })
   const annotate = useMutation({
     mutationFn: (id: string) => request(`/api/v1/review-queue/${id}/annotations`, {
       method: 'POST',
@@ -43,6 +47,7 @@ export function ReviewPage() {
       setReason('')
       setMessage('复核意见已提交')
       await queryClient.invalidateQueries({ queryKey: ['review-queue'] })
+      await queryClient.invalidateQueries({ queryKey: ['review-stats'] })
     },
     onError: (error) => setMessage(error.message),
   })
@@ -51,6 +56,12 @@ export function ReviewPage() {
   return <section className="workspace module-workspace">
     <div className="module-heading"><div><p className="eyebrow">HUMAN REVIEW</p><h2>复核队列</h2><p>自动进入队列的拒答与不合格回答，人工判定后标记为已复核。</p></div><span>{queue.data?.items.length ?? 0} 待复核</span></div>
     {message && <p className="audit-message" role="status">{message}</p>}
+    {stats.data && <div className="review-stats">
+      <span>待复核 <strong>{stats.data.byStatus.pending ?? 0}</strong></span>
+      <span>已复核 <strong>{stats.data.byStatus.reviewed ?? 0}</strong></span>
+      <span>已仲裁 <strong>{stats.data.byStatus.adjudicated ?? 0}</strong></span>
+      <span>一致率 <strong>{stats.data.agreementRate == null ? '—' : `${Math.round(stats.data.agreementRate * 100)}%`}</strong></span>
+    </div>}
     <div className="review-layout">
       <div className="review-list">
         {queue.isLoading && <p>正在加载…</p>}

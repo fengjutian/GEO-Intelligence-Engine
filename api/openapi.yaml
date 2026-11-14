@@ -475,6 +475,30 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [evaluationId, reasonCode, priority], properties: {evaluationId: {$ref: '#/components/schemas/Id'}, reasonCode: {type: string}, priority: {type: string, enum: [high, medium, low]}}}}}}
       responses:
         '201': {description: Review item queued}
+  /review-queue/stats:
+    get:
+      tags: [Evaluations]
+      operationId: getReviewStats
+      responses:
+        '200': {description: Review queue statistics, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /review-queue/{reviewItemId}:
+    patch:
+      tags: [Evaluations]
+      operationId: assignReviewItem
+      parameters: [{$ref: '#/components/parameters/ReviewItemId'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [assigneeId], properties: {assigneeId: {$ref: '#/components/schemas/Id'}}}}}}
+      responses:
+        '204': {description: Assignee updated}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /review-queue/{reviewItemId}/adjudications:
+    post:
+      tags: [Evaluations]
+      operationId: adjudicateReviewItem
+      parameters: [{$ref: '#/components/parameters/ReviewItemId'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [result, reason], properties: {result: {type: object, additionalProperties: true}, reason: {type: string, minLength: 1}}}}}}
+      responses:
+        '201': {description: Adjudication, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
   /review-queue/{reviewItemId}/annotations:
     post:
       tags: [Evaluations]

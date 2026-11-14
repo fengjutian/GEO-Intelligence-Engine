@@ -16,6 +16,9 @@ type reviewStore interface {
 	List(ctx context.Context, tenantID, status, priority string, limit int) ([]reviews.Item, error)
 	Annotate(ctx context.Context, tenantID, itemID, annotatorID string, labels map[string]any, reason string) (reviews.Annotation, error)
 	EnqueueManual(ctx context.Context, tenantID, evaluationID, reasonCode, priority string) error
+	Assign(ctx context.Context, tenantID, itemID, assigneeID string) error
+	Adjudicate(ctx context.Context, tenantID, itemID, adjudicatorID string, result map[string]any, reason string) (reviews.Adjudication, error)
+	Stats(ctx context.Context, tenantID string) (map[string]any, error)
 }
 
 type reviewHandler struct {
@@ -68,6 +71,59 @@ func (h *reviewHandler) enqueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *reviewHandler) assign(w http.ResponseWriter, r *http.Request) {
+	itemID := r.PathValue("reviewItemId")
+	if _, err := uuid.Parse(itemID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REVIEW_ITEM_ID", "Review item ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		AssigneeID string `json:"assigneeId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if _, err := uuid.Parse(input.AssigneeID); err != nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "REVIEW_INPUT_INVALID", "Assignee ID is invalid", traceID(r))
+		return
+	}
+	if err := h.store.Assign(r.Context(), h.tenant(r), itemID, input.AssigneeID); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *reviewHandler) adjudicate(w http.ResponseWriter, r *http.Request) {
+	itemID := r.PathValue("reviewItemId")
+	if _, err := uuid.Parse(itemID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REVIEW_ITEM_ID", "Review item ID is invalid", traceID(r))
+		return
+	}
+	var input struct {
+		Result map[string]any `json:"result"`
+		Reason string         `json:"reason"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	adjudication, err := h.store.Adjudicate(r.Context(), h.tenant(r), itemID, r.Header.Get(headerActor), input.Result, input.Reason)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, adjudication)
+}
+
+func (h *reviewHandler) stats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.store.Stats(r.Context(), h.tenant(r))
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (h *reviewHandler) annotate(w http.ResponseWriter, r *http.Request) {
