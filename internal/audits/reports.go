@@ -137,6 +137,21 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		return Report{}, err
 	}
 	geoSummary, competitiveLandscape, contentTrust := buildGeoInsights(metrics, shareValues, factChecks, contentQuality)
+	if citations, citationErr := s.Citations(ctx, tenantID, auditID, "", ""); citationErr == nil {
+		topDomains := []map[string]any{}
+		for index, domain := range citations.Domains {
+			if index >= 5 {
+				break
+			}
+			topDomains = append(topDomains, map[string]any{"domain": domain.Domain, "count": domain.Count})
+		}
+		contentTrust["citations"] = map[string]any{
+			"total": citations.Total, "official": citations.Official, "thirdParty": citations.ThirdParty,
+			"brandDomain": citations.BrandDomain, "brandDomainCount": citations.BrandDomainCount,
+			"brandDomainCoverage": citations.BrandDomainCoverage, "topDomains": topDomains,
+		}
+		geoSummary["citationCoverage"] = citations.BrandDomainCoverage
+	}
 	sections := []struct {
 		code    string
 		content map[string]any
@@ -262,6 +277,7 @@ func buildGeoInsights(metrics, shares, facts []map[string]any, quality map[strin
 		"contentQualityHigh":  severity["high"],
 		"factChecks":          factCounts,
 		"entityCount":         len(entities),
+		"generatedAt":         time.Now().UTC().Format(time.RFC3339),
 	}
 	if len(entities) > 0 {
 		geoSummary["leader"] = entities[0]

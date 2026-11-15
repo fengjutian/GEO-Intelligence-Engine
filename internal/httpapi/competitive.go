@@ -39,6 +39,23 @@ func newCompetitiveHandler(store competitiveStore, devTenantID string) *competit
 	return &competitiveHandler{store: store, devTenantID: devTenantID}
 }
 
+type shareMatch struct {
+	share      float64
+	mention    float64
+	positive   int
+	negative   int
+	entityType string
+}
+
+func matchShareEntity(byName map[string]shareMatch, name string, aliases []string) shareMatch {
+	for _, term := range append([]string{name}, aliases...) {
+		if value, ok := byName[strings.ToLower(strings.TrimSpace(term))]; ok {
+			return value
+		}
+	}
+	return shareMatch{}
+}
+
 func (h *competitiveHandler) get(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectId")
 	if _, err := uuid.Parse(projectID); err != nil {
@@ -56,30 +73,14 @@ func (h *competitiveHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 	share, shareErr := h.store.LatestShareOfVoice(r.Context(), tenantID, projectID)
 	aliases, _ := h.store.CompetitorAliases(r.Context(), tenantID, projectID)
-	type shareProjection struct {
-		share      float64
-		mention    float64
-		positive   int
-		negative   int
-		entityType string
-	}
-	byName := map[string]shareProjection{}
+	byName := map[string]shareMatch{}
 	for _, entity := range share.Entities {
 		key := strings.ToLower(strings.TrimSpace(entity.Name))
-		byName[key] = shareProjection{share: entity.Share, mention: entity.MentionShare, positive: entity.Positive, negative: entity.Negative, entityType: entity.Type}
-	}
-	lookup := func(competitorID, name string) shareProjection {
-		terms := append([]string{name}, aliases[competitorID]...)
-		for _, term := range terms {
-			if value, ok := byName[strings.ToLower(strings.TrimSpace(term))]; ok {
-				return value
-			}
-		}
-		return shareProjection{}
+		byName[key] = shareMatch{share: entity.Share, mention: entity.MentionShare, positive: entity.Positive, negative: entity.Negative, entityType: entity.Type}
 	}
 	rows := []competitiveRow{}
 	for _, competitor := range coverage.Competitors {
-		value := lookup(competitor.ID, competitor.Name)
+		value := matchShareEntity(byName, competitor.Name, aliases[competitor.ID])
 		questionShare := 0.0
 		if coverage.Total > 0 {
 			questionShare = float64(competitor.Mentions) / float64(coverage.Total)

@@ -9,7 +9,7 @@ import (
 )
 
 type citationStore interface {
-	Citations(ctx context.Context, tenantID, auditID string) (audits.AuditCitations, error)
+	Citations(ctx context.Context, tenantID, auditID, engineConfigID, questionID string) (audits.AuditCitations, error)
 }
 
 type citationHandler struct {
@@ -31,7 +31,7 @@ func (h *citationHandler) get(w http.ResponseWriter, r *http.Request) {
 	if tenantID == "" {
 		tenantID = h.devTenantID
 	}
-	result, err := h.store.Citations(r.Context(), tenantID, auditID)
+	result, err := h.store.Citations(r.Context(), tenantID, auditID, r.URL.Query().Get("engineConfigId"), r.URL.Query().Get("questionId"))
 	if err != nil {
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
 		return

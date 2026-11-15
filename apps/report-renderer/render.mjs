@@ -114,9 +114,11 @@ function renderGeoSummary(geo) {
 function renderTrust(trust) {
   const facts = trust.factChecks ?? {}
   const quality = trust.contentQuality ?? {}
+  const citations = trust.citations ?? {}
   return `<table><tbody>
     <tr><th>事实核验</th><td>总计 ${escapeHtml(facts.total ?? 0)} · supported ${escapeHtml(facts.supported ?? 0)} · unsupported ${escapeHtml(facts.unsupported ?? 0)} · unknown ${escapeHtml(facts.unknown ?? 0)} · pending ${escapeHtml(facts.pending ?? 0)}</td></tr>
     <tr><th>内容质量</th><td>页面 ${escapeHtml(quality.total ?? 0)} · 高风险 ${escapeHtml((quality.bySeverity ?? {}).high ?? 0)}</td></tr>
+    <tr><th>引用来源</th><td>总计 ${escapeHtml(citations.total ?? 0)} · 官方 ${escapeHtml(citations.official ?? 0)} · 第三方 ${escapeHtml(citations.thirdParty ?? 0)} · 品牌官网覆盖 ${percent(citations.brandDomainCoverage)}</td></tr>
     <tr><th>口径</th><td>${escapeHtml(trust.scope ?? '')}</td></tr>
   </tbody></table>`
 }
@@ -139,6 +141,19 @@ function renderReport(report) {
     .filter(([, value]) => value !== undefined && value !== null && typeof value !== 'object')
     .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(value)}</td></tr>`)
     .join('')
+  const headerCards = summary.plannedCount != null
+    ? `<div class="cards">
+    <div class="card"><span>计划样本</span><strong>${escapeHtml(summary.plannedCount)}</strong></div>
+    <div class="card"><span>完成样本</span><strong>${escapeHtml(summary.completedCount ?? '—')}</strong></div>
+    <div class="card"><span>有效回答</span><strong>${escapeHtml(summary.eligibleCount ?? '—')}</strong></div>
+    <div class="card"><span>审计状态</span><strong>${escapeHtml(summary.status ?? '—')}</strong></div>
+  </div>`
+    : `<div class="cards">
+    <div class="card"><span>品牌份额</span><strong>${percent(geo.brandShare)}</strong></div>
+    <div class="card"><span>提及率</span><strong>${percent(geo.mentionRate)}</strong></div>
+    <div class="card"><span>推荐率</span><strong>${percent(geo.recommendationRate)}</strong></div>
+    <div class="card"><span>内容高风险</span><strong>${escapeHtml(geo.contentQualityHigh ?? 0)}</strong></div>
+  </div>`
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>GEO Audit Report</title>
 <style>
@@ -162,16 +177,10 @@ ul { margin:6px 0; padding-left:18px; }
 <body>
 <p class="eyebrow">GEO Audit Report · ${TEMPLATE_VERSION}</p>
 <h1>${escapeHtml(report.projectId ?? 'GEO Audit')}</h1>
-<p class="meta">Audit ${escapeHtml(report.auditId)} · 报告 v${escapeHtml(report.version)} · ${escapeHtml(summary.generatedAt ?? '')}</p>
-<div class="cards">
-  <div class="card"><span>计划样本</span><strong>${escapeHtml(summary.plannedCount ?? '—')}</strong></div>
-  <div class="card"><span>完成样本</span><strong>${escapeHtml(summary.completedCount ?? '—')}</strong></div>
-  <div class="card"><span>有效回答</span><strong>${escapeHtml(summary.eligibleCount ?? '—')}</strong></div>
-  <div class="card"><span>审计状态</span><strong>${escapeHtml(summary.status ?? '—')}</strong></div>
-</div>
+<p class="meta">Audit ${escapeHtml(report.auditId)} · 报告 v${escapeHtml(report.version)} · ${escapeHtml(summary.generatedAt ?? geo.generatedAt ?? '')}</p>
+${headerCards}
 
-<h2>数据范围与版本</h2>
-<table>${scopeRows}</table>
+${scopeRows ? `<h2>数据范围与版本</h2><table>${scopeRows}</table>` : ''}
 
 <h2>GEO 总览</h2>
 ${renderGeoSummary(geo)}

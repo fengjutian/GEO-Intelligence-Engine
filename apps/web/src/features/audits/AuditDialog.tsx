@@ -32,7 +32,7 @@ type ShareEntity = { name: string; type: string; mentions: number; answers: numb
 type ShareOfVoice = { totalAnswers: number; brandShare: number; entities: ShareEntity[] }
 type CitationDomain = { domain: string; count: number; official: number; thirdParty: number; answers: number }
 type CitationItem = { url: string; domain: string; sourceType: string; supportLabel: string; question: string; confidence: number }
-type AuditCitations = { total: number; official: number; thirdParty: number; domains: CitationDomain[]; items: CitationItem[] }
+type AuditCitations = { total: number; official: number; thirdParty: number; brandDomain: string; brandDomainCount: number; brandDomainCoverage: number; domains: CitationDomain[]; byEngine: Array<{ key: string; label: string; total: number; official: number; thirdParty: number }>; byQuestion: Array<{ questionId: string; text: string; total: number; official: number; thirdParty: number }>; items: CitationItem[] }
 type StoredAnswer = { id: string; question: string; provider: string; model: string; content: string; contentValidity: string; answerOutcome: string; eligible: boolean }
 type ShareTrendEntity = { entity: string; entityType: string; share: number | null; delta: number | null }
 type ShareTrendPoint = { auditId: string; finishedAt: string | null; entities: ShareTrendEntity[] }
@@ -411,6 +411,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       </section>}
       {citations.data && citations.data.total > 0 && <section className="audit-metrics audit-citations">
         <h3>引用来源 · {citations.data.total} 次（官方 {citations.data.official} / 第三方 {citations.data.thirdParty}）</h3>
+        <div className="citation-coverage">品牌官网 {citations.data.brandDomain || '—'} · {citations.data.brandDomainCount} 次 · 覆盖率 {Math.round(citations.data.brandDomainCoverage * 100)}%</div>
         <div className="metric-table">
           <div className="metric-row metric-head"><span>域名</span><span>引用</span><span>官方</span><span>第三方</span><span>回答</span></div>
           {citations.data.domains.slice(0, 10).map((item) => <div className="metric-row" key={item.domain}>
@@ -420,6 +421,10 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{item.thirdParty}</span>
             <span>{item.answers}</span>
           </div>)}
+        </div>
+        <div className="citation-slices">
+          <div><h4>按引擎</h4>{citations.data.byEngine.map((item) => <div key={item.key}><span>{item.label}</span><em>{item.total} · 官 {item.official} / 三 {item.thirdParty}</em></div>)}</div>
+          <div><h4>按问题</h4>{citations.data.byQuestion.slice(0, 8).map((item) => <div key={item.questionId}><span>{item.text}</span><em>{item.total} · 官 {item.official} / 三 {item.thirdParty}</em></div>)}</div>
         </div>
         <details className="citation-items"><summary>最近引用明细</summary>
           {citations.data.items.slice(0, 10).map((item, index) => <div key={`${item.url}-${index}`}><a href={item.url} target="_blank" rel="noreferrer">{item.domain || item.url}</a><span>{item.sourceType} · {item.supportLabel || '未标注'} · {Math.round(item.confidence * 100)}%</span></div>)}
