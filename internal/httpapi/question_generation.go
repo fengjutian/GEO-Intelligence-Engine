@@ -94,6 +94,25 @@ func (h *questionHandler) updateQuestion(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, question)
 }
 
+func (h *questionHandler) cloneVersion(w http.ResponseWriter, r *http.Request) {
+	questionSetID := r.PathValue("questionSetId")
+	sourceVersionID := r.PathValue("versionId")
+	if _, err := uuid.Parse(questionSetID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_QUESTION_SET_ID", "Question set ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(sourceVersionID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_VERSION_ID", "Version ID is invalid", traceID(r))
+		return
+	}
+	result, err := h.store.CloneVersion(r.Context(), h.tenantID, questionSetID, sourceVersionID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
 func (h *questionHandler) diffVersions(w http.ResponseWriter, r *http.Request) {
 	questionSetID := r.PathValue("questionSetId")
 	if _, err := uuid.Parse(questionSetID); err != nil {
@@ -322,6 +341,8 @@ func (h *questionHandler) writeError(w http.ResponseWriter, r *http.Request, err
 		writeProblem(w, http.StatusNotFound, "QUESTION_NOT_FOUND", "Question was not found", traceID(r))
 	case errors.Is(err, questions.ErrQuestionLocked):
 		writeProblem(w, http.StatusConflict, "QUESTION_VERSION_LOCKED", "Question version is not editable", traceID(r))
+	case errors.Is(err, questions.ErrDraftNotEmpty):
+		writeProblem(w, http.StatusConflict, "QUESTION_DRAFT_NOT_EMPTY", "Current draft already contains questions", traceID(r))
 	case errors.Is(err, questions.ErrInvalidStatus):
 		writeProblem(w, http.StatusUnprocessableEntity, "QUESTION_STATUS_INVALID", "Question status transition is invalid", traceID(r))
 	default:

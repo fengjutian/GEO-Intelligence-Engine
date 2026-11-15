@@ -86,6 +86,16 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
       await queryClient.invalidateQueries({ queryKey: ['question-coverage', projectId] })
     },
   })
+  const cloneDraft = useMutation({
+    mutationFn: () => request<{ version: number; questionCount: number }>(`/api/v1/question-sets/${diffSet}/versions/${fromId}/clone`, { method: 'POST' }),
+    onSuccess: async (value) => {
+      setReviewNote(`已克隆 ${value.questionCount} 条问题到 draft v${value.version}`)
+      await queryClient.invalidateQueries({ queryKey: ['question-sets', projectId] })
+      await queryClient.invalidateQueries({ queryKey: ['question-list', projectId] })
+      await queryClient.invalidateQueries({ queryKey: ['question-diff', diffSet] })
+    },
+    onError: (error) => setReviewNote(error.message),
+  })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
@@ -224,6 +234,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
           <select value={fromId} onChange={(event) => setFromVersion(event.target.value)}>{activeSet.versions.map((version) => <option key={version.id} value={version.id}>v{version.version} · {version.questionCount} 条</option>)}</select>
           <span>→</span>
           <select value={toId} onChange={(event) => setToVersion(event.target.value)}><option value={activeSet.draftVersionId}>draft v{activeSet.draftVersion}</option>{activeSet.versions.map((version) => <option key={version.id} value={version.id}>v{version.version}</option>)}</select>
+          <button type="button" disabled={!fromId || cloneDraft.isPending} onClick={() => cloneDraft.mutate()}>{cloneDraft.isPending ? '克隆中…' : '克隆到草稿'}</button>
         </div>
         {diff.data && <div className="version-diff-result">
           <span data-kind="added">新增 {diff.data.added.length}</span>

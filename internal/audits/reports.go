@@ -29,7 +29,7 @@ var (
 // CreateReport snapshots one audit into a versioned, ready-to-read report.
 func (s *Store) CreateReport(ctx context.Context, tenantID, auditID string, metricSnapshotID, templateVersion string) (Report, error) {
 	if templateVersion == "" {
-		templateVersion = "report-v1"
+		templateVersion = "report-v2"
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -162,6 +162,16 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		{"findings", map[string]any{"items": findings}},
 		{"priorities", map[string]any{"items": priorities, "version": PriorityVersion}},
 		{"limitations", map[string]any{"items": limitations}},
+	}
+	if templateVersion == "report-v2" {
+		allowed := map[string]bool{"geo_summary": true, "competitive_landscape": true, "content_trust": true, "metrics": true}
+		filtered := sections[:0]
+		for _, section := range sections {
+			if allowed[section.code] {
+				filtered = append(filtered, section)
+			}
+		}
+		sections = filtered
 	}
 	for _, section := range sections {
 		content, _ := json.Marshal(section.content)

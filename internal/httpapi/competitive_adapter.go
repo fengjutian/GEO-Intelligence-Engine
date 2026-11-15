@@ -19,3 +19,7 @@ func (a competitiveStoreAdapter) CompetitorCoverage(ctx context.Context, tenantI
 func (a competitiveStoreAdapter) LatestShareOfVoice(ctx context.Context, tenantID, projectID string) (audits.ShareOfVoice, error) {
 	return a.audits.LatestShareOfVoice(ctx, tenantID, projectID)
 }
+
+func (a competitiveStoreAdapter) CompetitorAliases(ctx context.Context, tenantID, projectID string) (map[string][]string, error) {
+	return a.questions.CompetitorAliases(ctx, tenantID, projectID)
+}

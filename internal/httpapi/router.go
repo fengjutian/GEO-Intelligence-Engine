@@ -107,6 +107,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", projectAccess(deps.DB, questionHandler.create))
 	mux.HandleFunc("PATCH /api/v1/questions/{questionId}", requirePermission("edit_project", questionHandler.updateQuestion))
 	mux.HandleFunc("GET /api/v1/question-sets/{questionSetId}/versions/diff", requirePermission("edit_project", questionHandler.diffVersions))
+	mux.HandleFunc("POST /api/v1/question-sets/{questionSetId}/versions/{versionId}/clone", requirePermission("edit_project", questionHandler.cloneVersion))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-generation-runs", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.generateQuestions)))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions:import", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.importQuestions)))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-clusters:rebuild", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.rebuildClusters)))

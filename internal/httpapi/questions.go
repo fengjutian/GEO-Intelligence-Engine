@@ -33,6 +33,8 @@ type questionStore interface {
 	CompetitorCoverage(context.Context, string, string) (questions.QuestionCompetitorCoverage, error)
 	Update(context.Context, string, string, questions.UpdateInput) (questions.Question, error)
 	DiffVersions(context.Context, string, string, string, string) (questions.VersionDiff, error)
+	CloneVersion(context.Context, string, string, string) (questions.CloneResult, error)
+	CompetitorAliases(context.Context, string, string) (map[string][]string, error)
 }
 
 type questionHandler struct {

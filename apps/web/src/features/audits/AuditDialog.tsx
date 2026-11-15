@@ -222,7 +222,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       const created = await request<Report>(`/api/v1/audits/${auditId}/reports`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ templateVersion: 'report-v1' }),
+        body: JSON.stringify({ templateVersion: 'report-v2' }),
       })
       setReport(created)
       setMessage(`报告 v${created.version} 已生成`)
