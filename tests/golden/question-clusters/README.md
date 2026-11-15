@@ -6,6 +6,8 @@
 - 53 `same=false`: related but distinct topics that should not share a cluster.
 - Newer rows include `annotatorA` / `annotatorB`; older rows default both to `same`.
 - `same` is the adjudicated label used for precision/recall/F1.
+- `category` / `weight` encode a business-prior distribution; `cmd/cluster-eval` reports weighted and unweighted metrics.
+- `expert-review.json` is the 106-pair template for a real business expert; fill `expert` and rerun to get expert agreement.
 
 Coverage includes brand understanding, products, competitors, pricing, deployment, security, integrations, metrics, reports, operations, review, and English paraphrases.
 

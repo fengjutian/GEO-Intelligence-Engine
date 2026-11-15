@@ -2,623 +2,835 @@
   {
     "a": "AI 搜索可见度怎么提升？",
     "b": "生成式引擎可见性如何提高？",
-    "same": true
+    "same": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "Acme GEO 是什么？",
     "b": "Acme GEO 是什么品牌？",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "Acme GEO 靠谱吗？",
     "b": "Acme GEO 值得信任吗？",
-    "same": true
+    "same": true,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme Insight 是做什么的？",
     "b": "Acme Insight 是什么产品？",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "Acme Insight 和 Acme Insight Pro 有什么区别？",
     "b": "Acme Insight Pro 与 Acme Insight 有什么不同？",
-    "same": true
+    "same": true,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "如何提升品牌在 AI 回答中的可见度？",
     "b": "怎样提高品牌在生成式搜索中的曝光？",
-    "same": true
+    "same": true,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "有哪些 GEO 分析工具？",
     "b": "GEO 工具推荐哪些？",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "AI 回答中官网引用率怎么算？",
     "b": "官网被 AI 引用的比例如何计算？",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "品牌主动推荐率是什么？",
     "b": "AI 主动推荐品牌的比例怎么定义？",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 适合什么团队？",
     "b": "哪些企业适合使用 Acme GEO？",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "采购 Acme GEO 前需要了解什么？",
     "b": "选择 Acme GEO 前要确认哪些信息？",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "Acme GEO 和竞品相比怎么样？",
     "b": "Acme GEO 与竞争对手有什么区别？",
-    "same": true
+    "same": true,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "GEO 优化有哪些步骤？",
     "b": "如何落地 GEO 优化？",
-    "same": true
+    "same": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "内容质量分析能发现什么问题？",
     "b": "内容审计会检查哪些问题？",
-    "same": true
+    "same": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "审计报告包含哪些内容？",
     "b": "GEO 报告有哪些章节？",
-    "same": true
+    "same": true,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 是什么？",
     "b": "如何选择 CRM 系统？",
-    "same": false
+    "same": false,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "官网引用率是多少？",
     "b": "品牌主动推荐率是多少？",
-    "same": false
+    "same": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "技术审计检查什么？",
     "b": "内容质量分析检查什么？",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "如何提升提及率？",
     "b": "如何降低拒答率？",
-    "same": false
+    "same": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "抓取失败怎么办？",
     "b": "报告如何导出 PDF？",
-    "same": false
+    "same": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 的价格是多少？",
     "b": "Acme GEO 支持哪些语言？",
-    "same": false
+    "same": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "如何配置 DeepSeek？",
     "b": "如何创建审计任务？",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "实体合并怎么撤销？",
     "b": "知识快照怎么发布？",
-    "same": false
+    "same": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "复核队列有哪些状态？",
     "b": "审计预算如何结算？",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "GEO 和 SEO 有什么区别？",
     "b": "GEO 报告怎么生成？",
-    "same": false
+    "same": false,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "问题集如何发布版本？",
     "b": "如何导入 CSV 问题？",
-    "same": false
+    "same": false,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "品牌别名在哪里维护？",
     "b": "官网 URL 在哪里修改？",
-    "same": false
+    "same": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "指标置信区间怎么计算？",
     "b": "报告优先级如何排序？",
-    "same": false
+    "same": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "MiniMax 配额错误怎么处理？",
     "b": "DeepSeek 调用超时怎么办？",
-    "same": false
+    "same": false,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "如何创建优化任务？",
     "b": "如何查看任务看板？",
-    "same": false
+    "same": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "What is Acme GEO?",
     "b": "What kind of product is Acme GEO?",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "Is Acme GEO trustworthy?",
     "b": "Can I trust Acme GEO?",
-    "same": true
+    "same": true,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "How do I improve AI search visibility?",
     "b": "How can I increase visibility in generative engines?",
-    "same": true
+    "same": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "What are the best GEO tools?",
     "b": "Which GEO tools do you recommend?",
-    "same": true
+    "same": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "How is official citation rate calculated?",
     "b": "How do you compute the official website citation ratio?",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "What is recommendation rate?",
     "b": "How is brand recommendation rate defined?",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "Who should use Acme GEO?",
     "b": "Which teams are a good fit for Acme GEO?",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "What should I know before buying Acme GEO?",
     "b": "What to check before choosing Acme GEO?",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "How does Acme GEO compare with competitors?",
     "b": "What makes Acme GEO different from alternatives?",
-    "same": true
+    "same": true,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "What are the steps for GEO optimization?",
     "b": "How do I implement GEO optimization?",
-    "same": true
+    "same": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "What does content quality analysis detect?",
     "b": "What issues does content auditing find?",
-    "same": true
+    "same": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "What sections are in the audit report?",
     "b": "What does a GEO report include?",
-    "same": true
+    "same": true,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "Acme Insight 和 Acme Insight Pro 哪个更适合小团队？",
     "b": "小团队应该选 Acme Insight 还是 Acme Insight Pro？",
-    "same": true
+    "same": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "如何查看审计指标？",
     "b": "审计指标在哪里看？",
-    "same": true
+    "same": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "报告可以导出哪些格式？",
     "b": "报告支持 CSV 和 PDF 导出吗？",
-    "same": true
+    "same": true,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "What is Acme GEO?",
     "b": "How do I choose a CRM?",
-    "same": false
+    "same": false,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "How do I improve mention rate?",
     "b": "How do I reduce refusal rate?",
-    "same": false
+    "same": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "What does technical audit check?",
     "b": "What does content quality analysis check?",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "How do I configure DeepSeek?",
     "b": "How do I create an audit?",
-    "same": false
+    "same": false,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "How do I undo an entity merge?",
     "b": "How do I publish a knowledge snapshot?",
-    "same": false
+    "same": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "What statuses does the review queue have?",
     "b": "How is the audit budget settled?",
-    "same": false
+    "same": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "What is GEO?",
     "b": "How do I export a report?",
-    "same": false
+    "same": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "How do I publish a question set?",
     "b": "How do I import CSV questions?",
-    "same": false
+    "same": false,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "Where do I maintain brand aliases?",
     "b": "Where do I edit the official URL?",
-    "same": false
+    "same": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "How are confidence intervals calculated?",
     "b": "How are report priorities sorted?",
-    "same": false
+    "same": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "How do I handle MiniMax quota errors?",
     "b": "How do I debug DeepSeek timeouts?",
-    "same": false
+    "same": false,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "How do I create an optimization task?",
     "b": "How do I view the task board?",
-    "same": false
+    "same": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "Acme GEO 支持中文吗？",
     "b": "Acme GEO 的价格是多少？",
-    "same": false
+    "same": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "内容质量分析支持哪些规则？",
     "b": "技术审计支持哪些规则？",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "如何重跑内容分析？",
     "b": "如何重建问题聚类？",
-    "same": false
+    "same": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "Acme GEO 支持私有化部署吗？",
     "b": "Acme GEO 可以本地部署吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 的数据存储在哪里？",
     "b": "Acme GEO 的数据存放在哪个区域？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 如何收费？",
     "b": "Acme GEO 的计费方式是怎样的？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 有免费试用吗？",
     "b": "可以免费试用 Acme GEO 吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 支持哪些模型？",
     "b": "Acme GEO 可以接入哪些大模型？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "如何联系 Acme GEO 销售？",
     "b": "Acme GEO 的销售联系方式是什么？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "product",
+    "weight": 2.5
   },
   {
     "a": "Acme GEO 是否符合 GDPR？",
     "b": "Acme GEO 满足 GDPR 合规要求吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 支持单点登录吗？",
     "b": "Acme GEO 是否支持 SAML SSO？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "如何导入现有问题库？",
     "b": "可以把已有问题批量导入吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "报告支持定时发送吗？",
     "b": "能否定期自动发送审计报告？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "如何设置预算上限？",
     "b": "审计预算在哪里配置上限？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "如何添加项目成员？",
     "b": "在哪里给项目添加成员？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "如何撤销 API Token？",
     "b": "API Token 怎么禁用？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "知识快照可以回滚吗？",
     "b": "如何恢复到之前的知识快照？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "内容分析支持哪些语言？",
     "b": "内容质量分析能处理哪些语言？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "审计失败会退款吗？",
     "b": "审计失败预算会返还吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "如何查看历史审计？",
     "b": "在哪里查看过去的审计记录？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "Acme GEO 和 Profound 有什么区别？",
     "b": "Acme GEO 与 Profound 相比有什么优势？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "如何提升官网引用率？",
     "b": "怎样提高官网被 AI 引用的比例？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "如何降低拒答率？",
     "b": "怎样减少 AI 拒答？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "支持导出原始回答吗？",
     "b": "可以导出 AI 原始回答内容吗？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "如何配置告警通知？",
     "b": "审计异常怎么通知？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "Acme GEO 支持多因素认证吗？",
     "b": "Acme GEO 是否支持 MFA？",
     "same": true,
     "annotatorA": true,
-    "annotatorB": true
+    "annotatorB": true,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 支持私有化部署吗？",
     "b": "Acme GEO 支持哪些语言？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "如何导入问题？",
     "b": "如何导出台账？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "如何提升提及率？",
     "b": "如何计算置信区间？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "如何撤销 API Token？",
     "b": "如何创建服务账号？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "报告支持 PDF 吗？",
     "b": "报告支持定时发送吗？",
     "same": false,
     "annotatorA": true,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "如何设置预算上限？",
     "b": "如何设置审计频率？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "如何添加项目成员？",
     "b": "如何修改品牌别名？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "知识快照可以回滚吗？",
     "b": "如何重建问题聚类？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "operations",
+    "weight": 1.0
   },
   {
     "a": "内容分析支持哪些语言？",
     "b": "技术审计支持哪些语言？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "如何查看历史审计？",
     "b": "如何查看复核队列？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "content",
+    "weight": 2.0
   },
   {
     "a": "Acme GEO 和 Profound 有什么区别？",
     "b": "Acme GEO 和 CRM 有什么区别？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "competitor",
+    "weight": 2.5
   },
   {
     "a": "如何提升官网引用率？",
     "b": "如何提升推荐率？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "如何降低拒答率？",
     "b": "如何降低内容错误率？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "metrics",
+    "weight": 3.0
   },
   {
     "a": "支持导出原始回答吗？",
     "b": "支持导出报告 PDF 吗？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "report",
+    "weight": 1.5
   },
   {
     "a": "如何配置告警通知？",
     "b": "如何配置模型供应商？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 支持单点登录吗？",
     "b": "Acme GEO 支持多因素认证吗？",
     "same": false,
     "annotatorA": true,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 的数据存储在哪里？",
     "b": "Acme GEO 的日志保留多久？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "Acme GEO 如何收费？",
     "b": "Acme GEO 支持哪些支付方式？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 有免费试用吗？",
     "b": "Acme GEO 有开源版本吗？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "brand",
+    "weight": 3.0
   },
   {
     "a": "Acme GEO 支持哪些模型？",
     "b": "Acme GEO 支持哪些 embedding 模型？",
     "same": false,
     "annotatorA": true,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "integration",
+    "weight": 1.5
   },
   {
     "a": "如何联系销售？",
     "b": "如何提交工单？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "unknown",
+    "weight": 1.0
   },
   {
     "a": "Acme GEO 是否符合 GDPR？",
     "b": "Acme GEO 是否符合 SOC 2？",
     "same": false,
     "annotatorA": false,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "security",
+    "weight": 1.5
   },
   {
     "a": "如何导入现有问题库？",
     "b": "如何导入品牌实体？",
     "same": false,
     "annotatorA": true,
-    "annotatorB": false
+    "annotatorB": false,
+    "category": "brand",
+    "weight": 3.0
   }
 ]
