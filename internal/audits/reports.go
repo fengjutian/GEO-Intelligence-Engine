@@ -130,6 +130,10 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 			shareValues = append(shareValues, metric)
 		}
 	}
+	factChecks, err := loadFactChecks(ctx, tx, tenantID, projectID)
+	if err != nil {
+		return Report{}, err
+	}
 	sections := []struct {
 		code    string
 		content map[string]any
@@ -148,6 +152,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion}},
 		{"metrics", map[string]any{"metricVersion": metricVersion, "values": metrics}},
 		{"share_of_voice", map[string]any{"metricVersion": metricVersion, "values": shareValues}},
+		{"fact_checks", map[string]any{"items": factChecks}},
 		{"findings", map[string]any{"items": findings}},
 		{"priorities", map[string]any{"items": priorities, "version": PriorityVersion}},
 		{"limitations", map[string]any{"items": limitations}},
@@ -190,6 +195,25 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 			"numerator": nullFloat(numerator), "denominator": nullFloat(denominator),
 			"value": nullFloat(value), "ciLow": nullFloat(ciLow), "ciHigh": nullFloat(ciHigh), "intervalMethod": interval,
 		})
+	}
+	return items, rows.Err()
+}
+
+func loadFactChecks(ctx context.Context, tx *sql.Tx, tenantID, projectID string) ([]map[string]any, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT claim,verdict,confidence,COALESCE(evidence,''),status
+FROM fact_checks WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY created_at DESC LIMIT 50`, tenantID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var claim, verdict, evidence, status string
+		var confidence float64
+		if err := rows.Scan(&claim, &verdict, &confidence, &evidence, &status); err != nil {
+			return nil, err
+		}
+		items = append(items, map[string]any{"claim": claim, "verdict": verdict, "confidence": confidence, "evidence": evidence, "status": status})
 	}
 	return items, rows.Err()
 }

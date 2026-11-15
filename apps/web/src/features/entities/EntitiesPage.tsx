@@ -50,6 +50,27 @@ export function EntitiesPage({ projects }: Props) {
     queryFn: () => request<{ items: Array<{ id: string; ruleCode: string; severity: string; summary: string; status: string }> }>(`/api/v1/projects/${projectId}/findings?rulePrefix=CONTENT_&status=open&limit=20`),
     enabled: Boolean(projectId),
   })
+  const factChecks = useQuery({
+    queryKey: ['fact-checks', projectId],
+    queryFn: () => request<{ items: Array<{ id: string; claim: string; verdict: string; confidence: number; evidence: string; status: string }> }>(`/api/v1/projects/${projectId}/fact-checks?limit=20`),
+    enabled: Boolean(projectId),
+  })
+  const runFactChecks = useMutation({
+    mutationFn: () => request<{ checks: unknown[] }>(`/api/v1/projects/${projectId}/fact-checks`, { method: 'POST' }),
+    onSuccess: async () => {
+      setMessage('事实核验已完成，请确认或忽略结果')
+      await queryClient.invalidateQueries({ queryKey: ['fact-checks', projectId] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const updateFactCheck = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => request(`/api/v1/fact-checks/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) }),
+    onSuccess: async () => {
+      setMessage('事实核验状态已更新')
+      await queryClient.invalidateQueries({ queryKey: ['fact-checks', projectId] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
   const reviewFinding = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => request(`/api/v1/findings/${id}`, {
       method: 'PATCH',
@@ -137,6 +158,15 @@ export function EntitiesPage({ projects }: Props) {
       <span data-severity="low">低 {quality.data.bySeverity.low ?? 0}</span>
       {quality.data.review && <span>已复核 {quality.data.review.reviewed} · 确认率 {quality.data.review.confirmRate == null ? '—' : `${Math.round(quality.data.review.confirmRate * 100)}%`}</span>}
     </div>}
+    <div className="fact-checks">
+      <div className="fact-check-head"><h3>语义事实核验</h3><button type="button" disabled={runFactChecks.isPending} onClick={() => runFactChecks.mutate()}>{runFactChecks.isPending ? '核验中…' : '运行事实核验'}</button></div>
+      {factChecks.data?.items.length === 0 && <p className="settings-hint">暂无事实核验结果。运行后由模型按页面文本判断 supported / unsupported / unknown。</p>}
+      {factChecks.data?.items.map((check) => <div className="fact-check" key={check.id} data-status={check.status}>
+        <span data-verdict={check.verdict}>{check.verdict}</span>
+        <div><strong>{check.claim}</strong><small>{check.evidence || '无证据片段'} · 置信度 {Math.round(check.confidence * 100)}% · {check.status}</small></div>
+        {check.status === 'pending' && <div className="fact-check-actions"><button type="button" onClick={() => updateFactCheck.mutate({ id: check.id, status: 'confirmed' })}>确认</button><button type="button" onClick={() => updateFactCheck.mutate({ id: check.id, status: 'dismissed' })}>忽略</button></div>}
+      </div>)}
+    </div>
     {findings.data && findings.data.items.length > 0 && <div className="content-findings">
       {findings.data.items.map((finding) => <div key={finding.id} className="content-finding">
         <span data-severity={finding.severity}>{finding.severity}</span>

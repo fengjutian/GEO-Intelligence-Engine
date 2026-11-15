@@ -7,6 +7,8 @@ type ClusterMember = { questionId: string; text: string; similarity: number; man
 type Cluster = { id: string; name: string; algorithmVersion: string; representativeQuestionId: string; locked: boolean; members: ClusterMember[] }
 type Coverage = { total: number; branded: number; nonBranded: number; clusters: number; byType: Record<string, number>; missingTypes: string[]; missingStages: string[] }
 type CompetitorCoverage = { total: number; branded: number; competitors: Array<{ id: string; name: string; mentions: number; comparisonCount: number }>; uncovered: string[]; noComparison: string[] }
+type QuestionTrendPoint = { auditId: string; finishedAt: string | null; total: number; eligible: number; recommendations: number; refusals: number }
+type QuestionTrend = { questionId: string; text: string; points: QuestionTrendPoint[] }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -51,6 +53,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const coverage = useQuery({ queryKey: ['question-coverage', projectId], queryFn: () => request<Coverage>(`/api/v1/projects/${projectId}/question-coverage`) })
   const competitorCoverage = useQuery({ queryKey: ['competitor-question-coverage', projectId], queryFn: () => request<CompetitorCoverage>(`/api/v1/projects/${projectId}/competitor-question-coverage`) })
+  const questionTrends = useQuery({ queryKey: ['question-trends', projectId], queryFn: () => request<{ items: QuestionTrend[] }>(`/api/v1/projects/${projectId}/question-trends?limit=12`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
@@ -143,6 +146,13 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
           <CompetitorAliases competitorId={item.id} />
         </details>)}
       </div>}
+      {questionTrends.data && questionTrends.data.items.length > 0 && <details className="question-trends">
+        <summary>问题趋势 · {questionTrends.data.items.length} 个问题</summary>
+        <ul>{questionTrends.data.items.slice(0, 8).map((trend) => {
+          const latest = trend.points[trend.points.length - 1]
+          return <li key={trend.questionId}><span>{trend.text}</span><em>{trend.points.length} 次 · 推荐 {latest?.recommendations ?? 0} · 拒答 {latest?.refusals ?? 0}</em></li>
+        })}</ul>
+      </details>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>
         <summary>{cluster.name}<small>{cluster.members.length} 条 · {cluster.locked ? '已锁定' : cluster.algorithmVersion}<button type="button" className="cluster-lock" onClick={(event) => { event.preventDefault(); lock.mutate({ id: cluster.id, locked: !cluster.locked }) }}>{cluster.locked ? '解锁' : '锁定'}</button></small></summary>

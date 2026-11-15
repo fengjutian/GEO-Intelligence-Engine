@@ -13,6 +13,7 @@ import (
 
 type factCheckStore interface {
 	Verify(ctx context.Context, tenantID, analysisRunID string) (factcheck.Run, error)
+	VerifyLatest(ctx context.Context, tenantID, projectID string) (factcheck.Run, error)
 	ListChecks(ctx context.Context, tenantID, projectID, status string, limit int) ([]factcheck.Check, error)
 	UpdateCheckStatus(ctx context.Context, tenantID, checkID, status string) (factcheck.Check, error)
 }
@@ -45,6 +46,28 @@ func (h *factCheckHandler) verify(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, factcheck.ErrNotFound):
 			writeProblem(w, http.StatusNotFound, "ANALYSIS_RUN_NOT_FOUND", "Content analysis run was not found", traceID(r))
+		case errors.Is(err, factcheck.ErrNoContent):
+			writeProblem(w, http.StatusUnprocessableEntity, "NO_CONTENT_TO_VERIFY", "No page text is available for fact checking", traceID(r))
+		default:
+			h.logger.Error("fact check failed", "error", err, "trace_id", traceID(r))
+			writeProblem(w, http.StatusInternalServerError, "FACT_CHECK_FAILED", "Fact check request failed", traceID(r))
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
+func (h *factCheckHandler) verifyLatest(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	run, err := h.store.VerifyLatest(r.Context(), h.tenant(r), projectID)
+	if err != nil {
+		switch {
+		case errors.Is(err, factcheck.ErrNotFound):
+			writeProblem(w, http.StatusNotFound, "ANALYSIS_RUN_NOT_FOUND", "No succeeded content analysis run was found", traceID(r))
 		case errors.Is(err, factcheck.ErrNoContent):
 			writeProblem(w, http.StatusUnprocessableEntity, "NO_CONTENT_TO_VERIFY", "No page text is available for fact checking", traceID(r))
 		default:

@@ -138,6 +138,7 @@ func New(deps Dependencies) http.Handler {
 	factCheckHandler := newFactCheckHandler(factcheck.NewStore(deps.DB, deps.ModelGateway), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("POST /api/v1/content-analysis-runs/{analysisRunId}/fact-checks", requirePermission("edit_project", factCheckHandler.verify))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/fact-checks", projectAccess(deps.DB, factCheckHandler.list))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/fact-checks", requirePermission("edit_project", projectAccess(deps.DB, factCheckHandler.verifyLatest)))
 	mux.HandleFunc("PATCH /api/v1/fact-checks/{checkId}", requirePermission("edit_project", factCheckHandler.update))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)

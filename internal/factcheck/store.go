@@ -179,6 +179,22 @@ func truncate(value string, limit int) string {
 	return string(runes[:limit])
 }
 
+// VerifyLatest verifies the latest succeeded content analysis run for a project.
+func (s *Store) VerifyLatest(ctx context.Context, tenantID, projectID string) (Run, error) {
+	var analysisRunID string
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(a.id) FROM content_analysis_runs a
+JOIN crawl_runs c ON c.id=a.crawl_run_id
+WHERE a.tenant_id=UUID_TO_BIN(?) AND c.project_id=UUID_TO_BIN(?) AND a.status='succeeded'
+ORDER BY a.created_at DESC,a.id DESC LIMIT 1`, tenantID, projectID).Scan(&analysisRunID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Run{}, ErrNotFound
+	}
+	if err != nil {
+		return Run{}, err
+	}
+	return s.Verify(ctx, tenantID, analysisRunID)
+}
+
 // ListChecks returns fact checks for a project, optionally filtered by status.
 func (s *Store) ListChecks(ctx context.Context, tenantID, projectID, status string, limit int) ([]Check, error) {
 	if limit < 1 || limit > 200 {
