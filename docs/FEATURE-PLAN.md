@@ -48,7 +48,7 @@
 | FEAT-02 项目、品牌与竞品 | P0-C | 已完成 | 项目、品牌、产品、竞品、配置版本可用 | 保持回归 |
 | FEAT-03 网站抓取与技术审计 | P0-C | 已完成 | robots/sitemap/多页抓取/技术 Findings | 保持回归 |
 | FEAT-04 实体知识与一致性 | P0-S | 功能完成 | JSON-LD 抽取、正文候选 `text-v1`、实体/别名/关系/证据、确认、合并/撤销、知识快照与快照对比已实现；缺 Microdata 解析 | 补 Microdata（可选） |
-| FEAT-05 买家问题空间 | P0-C | 功能完成 | 问题、问题集、版本发布、模板/LLM 生成、CSV 两阶段导入、semantic-v2/embedding-v1 聚类、可配阈值、人工锁定/拆分/合并与 UI 已实现；Qwen non-flash 选型完成 | 建质量标注集 |
+| FEAT-05 买家问题空间 | P0-C | 功能完成 | 问题、问题集、版本发布、模板/LLM 生成、CSV 两阶段导入、semantic-v2/embedding-v1 聚类、可配阈值、人工锁定/拆分/合并与 UI 已实现；Qwen non-flash 选型与 30 对标注评估完成 | 扩大标注集 |
 | FEAT-06 审计编排 | P0-C | 已完成 | 协议冻结、样本展开、Worker 认领、状态机 | 保持回归 |
 | FEAT-07 Model Gateway 与预算 | P0-C | 已完成 | 双供应商、RPM/并发、重试、预算预留与结算 | 用真实密钥验收 |
 | FEAT-08 Answer Judge | P0-C（自动） / P0-S（人工） | 功能完成 | Judge、复核队列、分派、多复核人冲突、仲裁、批量操作、仲裁回写与指标重算已实现 | 保持回归 |

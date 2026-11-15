@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -34,6 +35,23 @@ func New(baseURL, apiKey, model string) *Client {
 
 func (c *Client) Enabled() bool {
 	return c != nil && c.BaseURL != "" && c.Model != ""
+}
+
+// Cosine returns cosine similarity for two equal-length vectors.
+func Cosine(left, right []float64) float64 {
+	if len(left) == 0 || len(left) != len(right) {
+		return 0
+	}
+	dot, leftNorm, rightNorm := 0.0, 0.0, 0.0
+	for index := range left {
+		dot += left[index] * right[index]
+		leftNorm += left[index] * left[index]
+		rightNorm += right[index] * right[index]
+	}
+	if leftNorm == 0 || rightNorm == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(leftNorm) * math.Sqrt(rightNorm))
 }
 
 // Embed returns one vector per input text in the same order.
