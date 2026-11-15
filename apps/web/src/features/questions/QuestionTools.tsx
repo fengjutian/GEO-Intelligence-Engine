@@ -25,6 +25,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({})
   const [algorithm, setAlgorithm] = useState('semantic-v2')
   const [threshold, setThreshold] = useState('0.75')
+  const [reviewNote, setReviewNote] = useState('')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
@@ -43,8 +44,11 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
     onSuccess: async (value) => { setResult(value); if (value.committed) onChanged() },
   })
   const rebuild = useMutation({
-    mutationFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters:rebuild?algorithm=${algorithm}${algorithm === 'embedding-v1' ? `&threshold=${threshold}` : ''}`, { method: 'POST' }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['question-clusters', projectId] }) },
+    mutationFn: () => request<{ items: Cluster[]; algorithmVersion: string; threshold: number; reviewRequired?: boolean; reviewNote?: string }>(`/api/v1/projects/${projectId}/question-clusters:rebuild?algorithm=${algorithm}${algorithm === 'embedding-v1' ? `&threshold=${threshold}` : ''}`, { method: 'POST' }),
+    onSuccess: async (value) => {
+      setReviewNote(value.reviewRequired ? (value.reviewNote ?? '低阈值聚类，需人工复核') : '')
+      await queryClient.invalidateQueries({ queryKey: ['question-clusters', projectId] })
+    },
   })
   const lock = useMutation({
     mutationFn: ({ id, locked }: { id: string; locked: boolean }) => request(`/api/v1/projects/${projectId}/question-clusters/${id}`, {
@@ -80,6 +84,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
       {generate.data && <span>{generate.data.mode === 'llm' ? 'LLM' : '模板'}生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条{generate.data.warning ? `（${generate.data.warning}）` : ''}</span>}
     </div>
     {(generate.error || rebuild.error) && <p className="error" role="alert">{(generate.error ?? rebuild.error)?.message}</p>}
+    {reviewNote && <p className="review-warning" role="status">{reviewNote}</p>}
     {(lock.error || split.error || merge.error) && <p className="error" role="alert">{(lock.error ?? split.error ?? merge.error)?.message}</p>}
     <details className="question-import">
       <summary>CSV 批量导入（两阶段）</summary>

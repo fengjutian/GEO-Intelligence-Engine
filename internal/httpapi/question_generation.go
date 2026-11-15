@@ -108,6 +108,11 @@ func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request
 		version = questions.ClusterAlgorithm
 	}
 	response := map[string]any{"items": items, "algorithmVersion": version, "threshold": effectiveThreshold}
+	reviewRequired := algorithm == questions.ClusterAlgorithmEmbedding && effectiveThreshold < 0.75
+	if reviewRequired {
+		response["reviewRequired"] = true
+		response["reviewNote"] = "threshold below 0.75: manually split or merge low-confidence clusters before publishing"
+	}
 	if warning != "" {
 		response["warning"] = warning
 	}
