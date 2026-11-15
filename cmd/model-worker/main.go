@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -81,22 +83,42 @@ func main() {
 		logger.Warn("no model provider is configured; audit samples will not be claimed until keys are set")
 	}
 
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = server.Shutdown(shutdownCtx)
-			return
-		case <-ticker.C:
-			if !anyConfigured {
-				continue
-			}
-			processOne(ctx, store, gateway, judgeClient, logger, workerID, configured)
-		}
+	workers := cfg.WorkerConcurrency
+	if workers < 1 {
+		workers = 1
 	}
+	if workers > 16 {
+		workers = 16
+	}
+	var wait sync.WaitGroup
+	for slot := 0; slot < workers; slot++ {
+		wait.Add(1)
+		go func(slot int) {
+			defer wait.Done()
+			slotID := workerID
+			if workers > 1 {
+				slotID = fmt.Sprintf("%s-%02d", workerID, slot)
+			}
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if !anyConfigured {
+						continue
+					}
+					processOne(ctx, store, gateway, judgeClient, logger, slotID, configured)
+				}
+			}
+		}(slot)
+	}
+	logger.Info("model workers started", "workers", workers)
+	wait.Wait()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = server.Shutdown(shutdownCtx)
 }
 
 func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.Gateway, judgeClient *judge.Client, logger *slog.Logger, workerID string, configured map[string]bool) {
