@@ -113,3 +113,4 @@ body{background:#f4f6f5}
 .question-toolbar input[type=number]{width:4rem;border:1px solid #cbd7d0;border-radius:.35rem;padding:.25rem .3rem;font-size:.62rem}
 .review-warning{margin:0;padding:.4rem .55rem;border:1px solid #e2c98f;border-radius:.4rem;background:#fff8e8;color:#6f5314;font-size:.66rem}
 .coverage-strip{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;padding:.4rem .5rem;border:1px solid var(--line);border-radius:.4rem;background:#fbfcfb}.coverage-strip span{color:var(--muted);font-size:.62rem}.coverage-strip em{color:#8b3029;font-style:normal;font-size:.62rem}
+.coverage-strip span[data-missing=true]{color:#8b3029;font-weight:700}

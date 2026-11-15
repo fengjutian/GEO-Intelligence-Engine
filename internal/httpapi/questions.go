@@ -30,6 +30,7 @@ type questionStore interface {
 	SplitCluster(context.Context, string, string, string, []string, string) (questions.Cluster, error)
 	MergeClusters(context.Context, string, string, string, string) (questions.Cluster, error)
 	Coverage(context.Context, string, string) (questions.Coverage, error)
+	CompetitorCoverage(context.Context, string, string) (questions.QuestionCompetitorCoverage, error)
 }
 
 type questionHandler struct {

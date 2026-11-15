@@ -6,6 +6,7 @@ type ImportResult = { committed: boolean; total: number; valid: number; invalid:
 type ClusterMember = { questionId: string; text: string; similarity: number; manuallyLocked: boolean }
 type Cluster = { id: string; name: string; algorithmVersion: string; representativeQuestionId: string; locked: boolean; members: ClusterMember[] }
 type Coverage = { total: number; branded: number; nonBranded: number; clusters: number; byType: Record<string, number>; missingTypes: string[]; missingStages: string[] }
+type CompetitorCoverage = { total: number; branded: number; competitors: Array<{ name: string; mentions: number; comparisonCount: number }>; uncovered: string[]; noComparison: string[] }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -29,6 +30,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [reviewNote, setReviewNote] = useState('')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const coverage = useQuery({ queryKey: ['question-coverage', projectId], queryFn: () => request<Coverage>(`/api/v1/projects/${projectId}/question-coverage`) })
+  const competitorCoverage = useQuery({ queryKey: ['competitor-question-coverage', projectId], queryFn: () => request<CompetitorCoverage>(`/api/v1/projects/${projectId}/competitor-question-coverage`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
@@ -109,6 +111,11 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
         <span>聚类 {coverage.data.clusters}</span>
         {coverage.data.missingTypes?.length > 0 && <em>缺类型：{coverage.data.missingTypes.join(' / ')}</em>}
         {coverage.data.missingStages?.length > 0 && <em>缺阶段：{coverage.data.missingStages.join(' / ')}</em>}
+      </div>}
+      {competitorCoverage.data && competitorCoverage.data.competitors.length > 0 && <div className="coverage-strip">
+        <span>竞品问题覆盖</span>
+        {competitorCoverage.data.competitors.map((item) => <span key={item.name} data-missing={item.mentions === 0}>{item.name} {item.mentions}/{item.comparisonCount}</span>)}
+        {competitorCoverage.data.uncovered.length > 0 && <em>未覆盖：{competitorCoverage.data.uncovered.join(' / ')}</em>}
       </div>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>
