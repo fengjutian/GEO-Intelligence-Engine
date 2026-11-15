@@ -10,6 +10,7 @@ import (
 
 // CompetitorQuestionCoverage describes how often competitors appear in the draft questions.
 type CompetitorQuestionCoverage struct {
+	ID              string `json:"id"`
 	Name            string `json:"name"`
 	Domain          string `json:"domain,omitempty"`
 	Mentions        int    `json:"mentions"`
@@ -31,13 +32,13 @@ func (s *Store) CompetitorCoverage(ctx context.Context, tenantID, projectID stri
 	var brandName string
 	_ = s.db.QueryRowContext(ctx, `SELECT canonical_name FROM brands WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY created_at,id LIMIT 1`, tenantID, projectID).Scan(&brandName)
 	competitors := []CompetitorQuestionCoverage{}
-	rows, err := s.db.QueryContext(ctx, `SELECT name,COALESCE(domain,'') FROM competitors WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND status='active' ORDER BY name`, tenantID, projectID)
+	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),name,COALESCE(domain,'') FROM competitors WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND status='active' ORDER BY name`, tenantID, projectID)
 	if err != nil {
 		return result, err
 	}
 	for rows.Next() {
 		var item CompetitorQuestionCoverage
-		if err := rows.Scan(&item.Name, &item.Domain); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Domain); err != nil {
 			rows.Close()
 			return result, err
 		}

@@ -6,7 +6,7 @@ type ImportResult = { committed: boolean; total: number; valid: number; invalid:
 type ClusterMember = { questionId: string; text: string; similarity: number; manuallyLocked: boolean }
 type Cluster = { id: string; name: string; algorithmVersion: string; representativeQuestionId: string; locked: boolean; members: ClusterMember[] }
 type Coverage = { total: number; branded: number; nonBranded: number; clusters: number; byType: Record<string, number>; missingTypes: string[]; missingStages: string[] }
-type CompetitorCoverage = { total: number; branded: number; competitors: Array<{ name: string; mentions: number; comparisonCount: number }>; uncovered: string[]; noComparison: string[] }
+type CompetitorCoverage = { total: number; branded: number; competitors: Array<{ id: string; name: string; mentions: number; comparisonCount: number }>; uncovered: string[]; noComparison: string[] }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -17,6 +17,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(problem.title ?? `请求失败 (${response.status})`)
   }
   return response.json() as Promise<T>
+}
+
+function CompetitorAliases({ competitorId }: { competitorId: string }) {
+  const queryClient = useQueryClient()
+  const [alias, setAlias] = useState('')
+  const aliases = useQuery({ queryKey: ['competitor-aliases', competitorId], queryFn: () => request<{ items: Array<{ id: string; alias: string }> }>(`/api/v1/competitors/${competitorId}/aliases`) })
+  const add = useMutation({
+    mutationFn: () => request(`/api/v1/competitors/${competitorId}/aliases`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ alias }) }),
+    onSuccess: async () => { setAlias(''); await queryClient.invalidateQueries({ queryKey: ['competitor-aliases', competitorId] }) },
+  })
+  const remove = useMutation({
+    mutationFn: (id: string) => request(`/api/v1/competitors/${competitorId}/aliases/${id}`, { method: 'DELETE' }),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['competitor-aliases', competitorId] }) },
+  })
+  return <div className="alias-editor">
+    {aliases.data?.items.map((item) => <span key={item.id}>{item.alias}<button type="button" onClick={() => remove.mutate(item.id)}>×</button></span>)}
+    <input value={alias} onChange={(event) => setAlias(event.target.value)} placeholder="添加别名" />
+    <button type="button" disabled={!alias.trim() || add.isPending} onClick={() => add.mutate()}>添加</button>
+    {(add.error || remove.error) && <small>{(add.error ?? remove.error)?.message}</small>}
+  </div>
 }
 
 export function QuestionTools({ projectId, locale, onChanged }: { projectId: string; locale: string; onChanged: () => void }) {
@@ -116,6 +136,12 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
         <span>竞品问题覆盖</span>
         {competitorCoverage.data.competitors.map((item) => <span key={item.name} data-missing={item.mentions === 0}>{item.name} {item.mentions}/{item.comparisonCount}</span>)}
         {competitorCoverage.data.uncovered.length > 0 && <em>未覆盖：{competitorCoverage.data.uncovered.join(' / ')}</em>}
+      </div>}
+      {competitorCoverage.data && competitorCoverage.data.competitors.length > 0 && <div className="alias-manager">
+        {competitorCoverage.data.competitors.map((item) => <details key={item.id}>
+          <summary>{item.name} · 别名</summary>
+          <CompetitorAliases competitorId={item.id} />
+        </details>)}
       </div>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>
