@@ -14,9 +14,10 @@ const ClusterAlgorithm = "jaccard-v1"
 
 // ClusterMember is one question grouped under a representative.
 type ClusterMember struct {
-	QuestionID string  `json:"questionId"`
-	Text       string  `json:"text"`
-	Similarity float64 `json:"similarity"`
+	QuestionID     string  `json:"questionId"`
+	Text           string  `json:"text"`
+	Similarity     float64 `json:"similarity"`
+	ManuallyLocked bool    `json:"manuallyLocked"`
 }
 
 // Cluster is one semantic question group.
@@ -25,6 +26,7 @@ type Cluster struct {
 	Name                     string          `json:"name"`
 	AlgorithmVersion         string          `json:"algorithmVersion"`
 	RepresentativeQuestionID string          `json:"representativeQuestionId"`
+	Locked                   bool            `json:"locked"`
 	Members                  []ClusterMember `json:"members"`
 }
 
@@ -63,10 +65,27 @@ WHERE qs.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.statu
 		items = append(items, item)
 	}
 	rows.Close()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM cluster_members WHERE cluster_id IN (SELECT id FROM query_clusters WHERE tenant_id=UUID_TO_BIN(?) AND question_version_id=UUID_TO_BIN(?))`, tenantID, versionID); err != nil {
+	lockedQuestions := map[string]bool{}
+	lockedRows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(cm.question_id) FROM cluster_members cm
+JOIN query_clusters qc ON qc.id=cm.cluster_id
+WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND qc.locked=TRUE`, tenantID, versionID)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM query_clusters WHERE tenant_id=UUID_TO_BIN(?) AND question_version_id=UUID_TO_BIN(?)`, tenantID, versionID); err != nil {
+	for lockedRows.Next() {
+		var questionID string
+		if err := lockedRows.Scan(&questionID); err != nil {
+			lockedRows.Close()
+			return nil, err
+		}
+		lockedQuestions[questionID] = true
+	}
+	lockedRows.Close()
+	if _, err := tx.ExecContext(ctx, `DELETE cm FROM cluster_members cm JOIN query_clusters qc ON qc.id=cm.cluster_id
+WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND qc.locked=FALSE`, tenantID, versionID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM query_clusters WHERE tenant_id=UUID_TO_BIN(?) AND question_version_id=UUID_TO_BIN(?) AND locked=FALSE`, tenantID, versionID); err != nil {
 		return nil, err
 	}
 	type pendingCluster struct {
@@ -75,6 +94,9 @@ WHERE qs.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.statu
 	}
 	clusters := []pendingCluster{}
 	for _, item := range items {
+		if lockedQuestions[item.id] {
+			continue
+		}
 		bestIndex, bestScore := -1, 0.0
 		itemShingles := shingles(item.text)
 		for index, cluster := range clusters {
@@ -89,7 +111,6 @@ WHERE qs.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.statu
 		}
 		clusters = append(clusters, pendingCluster{name: item.text, members: []ClusterMember{{QuestionID: item.id, Text: item.text, Similarity: 1}}})
 	}
-	result := []Cluster{}
 	for _, cluster := range clusters {
 		clusterID := uuid.NewString()
 		representative := ""
@@ -111,17 +132,16 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,UUID_TO_BIN(?),?,FALSE)`,
 				return nil, err
 			}
 		}
-		result = append(result, Cluster{ID: clusterID, Name: name, AlgorithmVersion: ClusterAlgorithm, RepresentativeQuestionID: representative, Members: cluster.members})
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return s.ListClusters(ctx, tenantID, projectID)
 }
 
 // ListClusters returns current clusters for the project's draft version.
 func (s *Store) ListClusters(ctx context.Context, tenantID, projectID string) ([]Cluster, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(qc.id),qc.name,qc.algorithm_version,BIN_TO_UUID(qc.representative_question_id)
+	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(qc.id),qc.name,qc.algorithm_version,BIN_TO_UUID(qc.representative_question_id),qc.locked
 FROM query_clusters qc JOIN question_set_versions qsv ON qsv.id=qc.question_version_id JOIN question_sets qs ON qs.id=qsv.question_set_id
 WHERE qc.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.status='draft' ORDER BY qc.name`, tenantID, projectID)
 	if err != nil {
@@ -131,18 +151,18 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.statu
 	clusters := []Cluster{}
 	for rows.Next() {
 		var cluster Cluster
-		if err := rows.Scan(&cluster.ID, &cluster.Name, &cluster.AlgorithmVersion, &cluster.RepresentativeQuestionID); err != nil {
+		if err := rows.Scan(&cluster.ID, &cluster.Name, &cluster.AlgorithmVersion, &cluster.RepresentativeQuestionID, &cluster.Locked); err != nil {
 			return nil, err
 		}
 		cluster.Members = []ClusterMember{}
-		memberRows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(cm.question_id),q.text_value,COALESCE(cm.similarity,0)
+		memberRows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(cm.question_id),q.text_value,COALESCE(cm.similarity,0),cm.manually_locked
 FROM cluster_members cm JOIN questions q ON q.id=cm.question_id WHERE cm.cluster_id=UUID_TO_BIN(?) ORDER BY cm.similarity DESC,q.created_at`, cluster.ID)
 		if err != nil {
 			return nil, err
 		}
 		for memberRows.Next() {
 			var member ClusterMember
-			if err := memberRows.Scan(&member.QuestionID, &member.Text, &member.Similarity); err != nil {
+			if err := memberRows.Scan(&member.QuestionID, &member.Text, &member.Similarity, &member.ManuallyLocked); err != nil {
 				memberRows.Close()
 				return nil, err
 			}

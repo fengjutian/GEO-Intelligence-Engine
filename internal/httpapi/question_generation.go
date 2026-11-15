@@ -75,6 +75,105 @@ func (h *questionHandler) listClusters(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (h *questionHandler) updateCluster(w http.ResponseWriter, r *http.Request) {
+	projectID, clusterID, ok := h.clusterPath(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Locked                   bool   `json:"locked"`
+		RepresentativeQuestionID string `json:"representativeQuestionId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	cluster, err := h.store.SetClusterLocked(r.Context(), h.tenantID, projectID, clusterID, input.Locked, input.RepresentativeQuestionID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cluster)
+}
+
+func (h *questionHandler) moveClusterMember(w http.ResponseWriter, r *http.Request) {
+	projectID, clusterID, ok := h.clusterPath(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		QuestionID string `json:"questionId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if _, err := uuid.Parse(input.QuestionID); err != nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_QUESTION_ID", "Question ID is invalid", traceID(r))
+		return
+	}
+	if err := h.store.MoveMember(r.Context(), h.tenantID, projectID, clusterID, input.QuestionID); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *questionHandler) splitCluster(w http.ResponseWriter, r *http.Request) {
+	projectID, clusterID, ok := h.clusterPath(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		QuestionIDs []string `json:"questionIds"`
+		Name        string   `json:"name"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	cluster, err := h.store.SplitCluster(r.Context(), h.tenantID, projectID, clusterID, input.QuestionIDs, input.Name)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, cluster)
+}
+
+func (h *questionHandler) mergeClusters(w http.ResponseWriter, r *http.Request) {
+	projectID, clusterID, ok := h.clusterPath(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		TargetClusterID string `json:"targetClusterId"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if _, err := uuid.Parse(input.TargetClusterID); err != nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_CLUSTER_ID", "Target cluster ID is invalid", traceID(r))
+		return
+	}
+	cluster, err := h.store.MergeClusters(r.Context(), h.tenantID, projectID, clusterID, input.TargetClusterID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cluster)
+}
+
+func (h *questionHandler) clusterPath(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	projectID := r.PathValue("projectId")
+	clusterID := r.PathValue("clusterId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return "", "", false
+	}
+	if _, err := uuid.Parse(clusterID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_CLUSTER_ID", "Cluster ID is invalid", traceID(r))
+		return "", "", false
+	}
+	return projectID, clusterID, true
+}
+
 func (h *questionHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, questions.ErrProjectNotFound):
@@ -87,6 +186,10 @@ func (h *questionHandler) writeError(w http.ResponseWriter, r *http.Request, err
 		writeProblem(w, http.StatusUnprocessableEntity, "KNOWLEDGE_SNAPSHOT_REQUIRED", "Publish a knowledge snapshot before generating questions", traceID(r))
 	case errors.Is(err, questions.ErrInvalidImport):
 		writeProblem(w, http.StatusUnprocessableEntity, "QUESTION_IMPORT_INVALID", "CSV header or content is invalid", traceID(r))
+	case errors.Is(err, questions.ErrClusterNotFound):
+		writeProblem(w, http.StatusNotFound, "QUESTION_CLUSTER_NOT_FOUND", "Question cluster was not found", traceID(r))
+	case errors.Is(err, questions.ErrClusterConflict):
+		writeProblem(w, http.StatusConflict, "QUESTION_CLUSTER_CONFLICT", "Question cluster operation conflicts with current membership", traceID(r))
 	default:
 		h.logger.Error("question operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))

@@ -20,6 +20,10 @@ type questionStore interface {
 	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
 	RebuildClusters(context.Context, string, string) ([]questions.Cluster, error)
 	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
+	SetClusterLocked(context.Context, string, string, string, bool, string) (questions.Cluster, error)
+	MoveMember(context.Context, string, string, string, string) error
+	SplitCluster(context.Context, string, string, string, []string, string) (questions.Cluster, error)
+	MergeClusters(context.Context, string, string, string, string) (questions.Cluster, error)
 }
 
 type questionHandler struct {

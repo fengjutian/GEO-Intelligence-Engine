@@ -351,6 +351,48 @@ paths:
       parameters: [{$ref: '#/components/parameters/ProjectId'}]
       responses:
         '200': {description: Question clusters, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /projects/{projectId}/question-clusters/{clusterId}:
+    patch:
+      tags: [Questions]
+      operationId: updateQuestionCluster
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: clusterId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {locked: {type: boolean}, representativeQuestionId: {$ref: '#/components/schemas/Id'}}}}}}
+      responses:
+        '200': {description: Updated cluster, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /projects/{projectId}/question-clusters/{clusterId}/members:
+    post:
+      tags: [Questions]
+      operationId: moveQuestionClusterMember
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: clusterId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [questionId], properties: {questionId: {$ref: '#/components/schemas/Id'}}}}}}
+      responses:
+        '204': {description: Member moved}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /projects/{projectId}/question-clusters/{clusterId}/split:
+    post:
+      tags: [Questions]
+      operationId: splitQuestionCluster
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: clusterId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [questionIds], properties: {questionIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, name: {type: string}}}}}}
+      responses:
+        '201': {description: New cluster, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+  /projects/{projectId}/question-clusters/{clusterId}/merge:
+    post:
+      tags: [Questions]
+      operationId: mergeQuestionClusters
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: clusterId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [targetClusterId], properties: {targetClusterId: {$ref: '#/components/schemas/Id'}}}}}}
+      responses:
+        '200': {description: Merged cluster, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
   /projects/{projectId}/question-sets:
     get:
       tags: [Questions]
