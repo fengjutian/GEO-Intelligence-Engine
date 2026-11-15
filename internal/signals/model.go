@@ -84,6 +84,8 @@ type Mention struct {
 	Snippet     string     `json:"snippet"`
 	SourceType  string     `json:"sourceType"`
 	Sentiment   string     `json:"sentiment"`
+	Authority   float64    `json:"authority"`
+	Discovery   string     `json:"discovery"`
 	PublishedAt *time.Time `json:"publishedAt"`
 	CreatedAt   time.Time  `json:"createdAt"`
 }

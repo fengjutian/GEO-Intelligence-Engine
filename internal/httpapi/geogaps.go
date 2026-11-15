@@ -20,6 +20,9 @@ type signalStore interface {
 	IngestMentions(ctx context.Context, tenantID, projectID string, inputs []signals.MentionInput) (int, error)
 	ListMentions(ctx context.Context, tenantID, projectID, sourceType string, limit int) ([]signals.Mention, error)
 	MentionSummary(ctx context.Context, tenantID, projectID string) ([]signals.SourceTypeCount, error)
+	IngestAccessLog(ctx context.Context, tenantID, projectID, content string) (signals.IngestResult, error)
+	Coverage(ctx context.Context, tenantID, projectID string, days int) (signals.CoverageReport, error)
+	DiscoverMentions(ctx context.Context, tenantID, projectID string, urls []string) (signals.DiscoverResult, error)
 }
 
 type signalHandler struct {
@@ -338,4 +341,56 @@ func (h *draftHandler) writeError(w http.ResponseWriter, r *http.Request, err er
 		h.logger.Error("draft operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
 	}
+}
+
+func (h *signalHandler) ingestLogText(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Content string `json:"content"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.IngestAccessLog(r.Context(), h.tenant(r), projectID, input.Content)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (h *signalHandler) coverage(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	report, err := h.store.Coverage(r.Context(), h.tenant(r), projectID, days)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *signalHandler) discoverMentions(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		URLs []string `json:"urls"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.DiscoverMentions(r.Context(), h.tenant(r), projectID, input.URLs)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
