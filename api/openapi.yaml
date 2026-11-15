@@ -506,6 +506,7 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/ProjectId'}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 50}}
+        - {name: dimension, in: query, schema: {type: string, enum: [overall, engine]}}
       responses:
         '200': {description: Chronological cross-audit metric points, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
   /projects/{projectId}/content-quality:

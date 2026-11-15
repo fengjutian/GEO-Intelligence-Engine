@@ -11,6 +11,7 @@ import (
 
 type auditTrendStore interface {
 	AuditTrends(ctx context.Context, tenantID, projectID string, limit int) (audits.AuditTrend, error)
+	AuditEngineTrends(ctx context.Context, tenantID, projectID string, limit int) (audits.EngineTrend, error)
 }
 
 type auditTrendHandler struct {
@@ -37,6 +38,15 @@ func (h *auditTrendHandler) get(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get(headerTenant)
 	if tenantID == "" {
 		tenantID = h.devTenantID
+	}
+	if r.URL.Query().Get("dimension") == "engine" {
+		trend, err := h.store.AuditEngineTrends(r.Context(), tenantID, projectID, limit)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
+			return
+		}
+		writeJSON(w, http.StatusOK, trend)
+		return
 	}
 	trend, err := h.store.AuditTrends(r.Context(), tenantID, projectID, limit)
 	if err != nil {

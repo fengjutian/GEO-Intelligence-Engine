@@ -25,6 +25,9 @@ type TrendPoint = { auditId: string; finishedAt: string | null; metricVersion: s
 type AuditTrend = { metrics: string[]; points: TrendPoint[] }
 type MetricDelta = { metricCode: string; baseValue: number | null; targetValue: number | null; delta: number | null; baseNumerator: number | null; baseDenominator: number | null; targetNumerator: number | null; targetDenominator: number | null }
 type AuditComparison = { baseAuditId: string; targetAuditId: string; baseCounts: { plannedCount: number; completedCount: number; eligibleCount: number }; targetCounts: { plannedCount: number; completedCount: number; eligibleCount: number }; metrics: MetricDelta[] }
+type EngineSeries = { engineConfigId: string; provider: string; modelSelector: string; metrics: Record<string, TrendValue>; delta: Record<string, number | null> }
+type EngineTrendPoint = { auditId: string; finishedAt: string | null; engines: EngineSeries[] }
+type EngineTrend = { metrics: string[]; points: EngineTrendPoint[] }
 
 type Props = { projectId: string; projectName: string; onClose: () => void }
 
@@ -92,6 +95,10 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     queryKey: ['audit-comparison', auditId, previousAuditId],
     queryFn: () => request<AuditComparison>(`/api/v1/audits/${auditId}/comparison?baseAuditId=${previousAuditId}`),
     enabled: Boolean(auditId && previousAuditId && auditId !== previousAuditId),
+  })
+  const engineTrend = useQuery({
+    queryKey: ['audit-engine-trends', projectId],
+    queryFn: () => request<EngineTrend>(`/api/v1/projects/${projectId}/audit-trends?limit=12&dimension=engine`),
   })
   const metrics = useQuery({
     queryKey: ['audit-metrics', auditId],
@@ -343,6 +350,19 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           </article>)}
         </div>
         <p className="audit-note">趋势按审计完成时间排序；口径取各审计最新可用指标快照（含人工回写版本）。</p>
+      </section>}
+      {engineTrend.data && engineTrend.data.points.length > 0 && <section className="audit-metrics audit-engine-trend">
+        <h3>按引擎 · 最新审计</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>引擎</span><span>提及率</span><span>推荐率</span><span>官网引用率</span><span>变化</span></div>
+          {engineTrend.data.points[engineTrend.data.points.length - 1].engines.map((engine) => <div className="metric-row" key={engine.engineConfigId}>
+            <span>{engine.provider} / {engine.modelSelector}</span>
+            <span>{formatPercent(engine.metrics.mention_rate?.value ?? null)}</span>
+            <span>{formatPercent(engine.metrics.recommendation_rate?.value ?? null)}</span>
+            <span>{formatPercent(engine.metrics.official_citation_rate?.value ?? null)}</span>
+            <span data-direction={(engine.delta.mention_rate ?? 0) > 0 ? 'up' : (engine.delta.mention_rate ?? 0) < 0 ? 'down' : 'flat'}>{engine.delta.mention_rate == null ? '—' : `${engine.delta.mention_rate >= 0 ? '+' : ''}${(engine.delta.mention_rate * 100).toFixed(1)}pp`}</span>
+          </div>)}
+        </div>
       </section>}
       {comparison.data && <section className="audit-metrics audit-compare">
         <h3>与上次审计对比</h3>

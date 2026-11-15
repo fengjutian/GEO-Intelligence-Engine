@@ -109,3 +109,4 @@ body{background:#f4f6f5}
 .cluster-list li input{margin:0;accent-color:#2f6b4a}.cluster-lock{margin-left:.4rem;border:1px solid #a8c9b7;border-radius:.3rem;padding:.05rem .3rem;color:#174c32;background:white;font-size:.58rem;cursor:pointer}.cluster-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin:.4rem 0 0 .6rem}.cluster-actions button,.cluster-actions select{border:1px solid #cbd7d0;border-radius:.3rem;padding:.2rem .35rem;background:white;font-size:.6rem}.cluster-actions button{cursor:pointer;color:#174c32}
 .question-toolbar select{border:1px solid #cbd7d0;border-radius:.35rem;padding:.28rem .35rem;font-size:.62rem;background:white}
 .audit-compare .metric-row span[data-direction=up]{color:#1f6b45}.audit-compare .metric-row span[data-direction=down]{color:#8b3029}
+.audit-engine-trend .metric-row span[data-direction=up]{color:#1f6b45}.audit-engine-trend .metric-row span[data-direction=down]{color:#8b3029}
