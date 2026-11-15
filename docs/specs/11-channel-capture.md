@@ -47,7 +47,7 @@
 | POST | `/api/v1/capture-batches` | 批量提交 capture（≤100 条/批） |
 | GET | `/api/v1/capture-batches/{batchId}` | 查询批次与逐条结果 |
 | GET | `/api/v1/audits/{auditId}/captures` | 按审计列出 capture（含 trust tier） |
-| POST | `/api/v1/captures/{captureId}:revoke` | 撤回错误采样（软删 + 审计留痕） |
+| POST | `/api/v1/captures/{captureId}/revoke` | 撤回错误采样（软删 + 审计留痕） |
 
 统一请求头：
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -99,7 +100,8 @@ func (s *Store) submitOne(ctx context.Context, tenantID string, batch BatchReque
 		return outcome
 	}
 	var questionCount int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM questions WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, projectID, capture.QuestionID).Scan(&questionCount); err != nil || questionCount == 0 {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM questions q JOIN audits a ON a.id=UUID_TO_BIN(?) AND a.tenant_id=UUID_TO_BIN(?)
+WHERE q.id=UUID_TO_BIN(?) AND q.version_id=a.question_version_id`, capture.AuditID, tenantID, capture.QuestionID).Scan(&questionCount); err != nil || questionCount == 0 {
 		outcome.Status, outcome.Code = "rejected", "QUESTION_NOT_IN_AUDIT"
 		return outcome
 	}
@@ -193,10 +195,12 @@ func (s *Store) evaluate(ctx context.Context, tenantID string, capture CaptureIn
 	}
 	var question, brandName, brandDomain, language string
 	_ = s.db.QueryRowContext(ctx, `SELECT q.text_value,COALESCE(b.canonical_name,''),COALESCE(b.official_domain,''),COALESCE(q.language,'zh-CN')
-FROM questions q JOIN audits a ON a.question_version_id IS NOT NULL
+FROM questions q
+JOIN audits a ON a.id=UUID_TO_BIN(?) AND a.question_version_id=q.version_id
 JOIN brands b ON b.tenant_id=a.tenant_id AND b.project_id=a.project_id
-WHERE q.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) LIMIT 1`, capture.QuestionID, capture.AuditID).Scan(&question, &brandName, &brandDomain, &language)
+WHERE q.id=UUID_TO_BIN(?) LIMIT 1`, capture.AuditID, capture.QuestionID).Scan(&question, &brandName, &brandDomain, &language)
 	if question == "" {
+		slog.Default().Warn("capture judge skipped", "reason", "question lookup empty", "capture", capture.CaptureID)
 		return
 	}
 	result, err := s.judge.Evaluate(ctx, judge.Input{
@@ -204,6 +208,7 @@ WHERE q.id=UUID_TO_BIN(?) AND a.id=UUID_TO_BIN(?) LIMIT 1`, capture.QuestionID, 
 		Language: language, TransportStatus: "succeeded", FinishReason: capture.Answer.FinishReason,
 	})
 	if err != nil {
+		slog.Default().Error("capture judge failed", "error", err, "capture", capture.CaptureID)
 		return
 	}
 	evaluation := &audits.Evaluation{

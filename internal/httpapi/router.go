@@ -9,6 +9,7 @@ import (
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
+	"github.com/fengjutian/geo-intelligence-engine/internal/captures"
 	"github.com/fengjutian/geo-intelligence-engine/internal/competitoraliases"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/drafts"
@@ -16,6 +17,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/fengjutian/geo-intelligence-engine/internal/experiments"
 	"github.com/fengjutian/geo-intelligence-engine/internal/factcheck"
+	"github.com/fengjutian/geo-intelligence-engine/internal/judge"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/monitoring"
@@ -47,6 +49,7 @@ type Dependencies struct {
 	OIDCAudience string
 	OIDCJWKSURL  string
 	OIDCClientID string
+	JudgeURL     string
 }
 
 func New(deps Dependencies) http.Handler {
@@ -157,6 +160,11 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/audits/{auditId}/semantic-checks", requirePermission("run_audit", semanticHandler.verify))
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/semantic-checks", semanticHandler.listByAudit)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/semantic-checks", projectAccess(deps.DB, semanticHandler.listByProject))
+	captureHandler := newCaptureHandler(captures.NewStore(deps.DB, judge.New(deps.JudgeURL), audits.NewStore(deps.DB)), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/capture-batches", requirePermission("edit_project", captureHandler.submit))
+	mux.HandleFunc("GET /api/v1/capture-batches/{batchId}", captureHandler.listBatch)
+	mux.HandleFunc("GET /api/v1/audits/{auditId}/captures", captureHandler.listByAudit)
+	mux.HandleFunc("POST /api/v1/captures/{captureId}/revoke", requirePermission("edit_project", captureHandler.revoke))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
 	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))

@@ -44,7 +44,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, Embeddings: embeddingClient, Notifier: notifier, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, Embeddings: embeddingClient, Notifier: notifier, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID, JudgeURL: cfg.JudgeURL}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
