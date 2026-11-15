@@ -4,13 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"strings"
 	"unicode"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/unicode/norm"
 )
 
-const ClusterAlgorithm = "jaccard-v1"
+const (
+	ClusterAlgorithmV1       = "jaccard-v1"
+	ClusterAlgorithmSemantic = "semantic-v2"
+	ClusterAlgorithm         = ClusterAlgorithmSemantic
+)
 
 // ClusterMember is one question grouped under a representative.
 type ClusterMember struct {
@@ -36,7 +42,8 @@ type clusterQuestion struct {
 }
 
 // RebuildClusters groups draft questions by deterministic token similarity.
-func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID string) ([]Cluster, error) {
+func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algorithm string) ([]Cluster, error) {
+	algorithm = normalizeAlgorithm(algorithm)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -81,6 +88,22 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 		lockedQuestions[questionID] = true
 	}
 	lockedRows.Close()
+	documents := map[string]map[string]bool{}
+	documentFrequency := map[string]int{}
+	for _, item := range items {
+		if algorithm == ClusterAlgorithmV1 {
+			documents[item.id] = shingles(item.text)
+		} else {
+			documents[item.id] = semanticTokens(item.text)
+		}
+		for token := range documents[item.id] {
+			documentFrequency[token]++
+		}
+	}
+	idf := map[string]float64{}
+	for token, frequency := range documentFrequency {
+		idf[token] = 1 + math.Log(float64(len(items)+1)/float64(frequency))
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE cm FROM cluster_members cm JOIN query_clusters qc ON qc.id=cm.cluster_id
 WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND qc.locked=FALSE`, tenantID, versionID); err != nil {
 		return nil, err
@@ -89,8 +112,9 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 		return nil, err
 	}
 	type pendingCluster struct {
-		name    string
-		members []ClusterMember
+		name           string
+		representative string
+		members        []ClusterMember
 	}
 	clusters := []pendingCluster{}
 	for _, item := range items {
@@ -98,9 +122,12 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 			continue
 		}
 		bestIndex, bestScore := -1, 0.0
-		itemShingles := shingles(item.text)
+		itemShingles := documents[item.id]
 		for index, cluster := range clusters {
-			score := similarity(itemShingles, shingles(cluster.name))
+			score := weightedSimilarity(itemShingles, documents[cluster.representative], idf)
+			if algorithm == ClusterAlgorithmV1 {
+				score = similarity(itemShingles, documents[cluster.representative])
+			}
 			if score > bestScore {
 				bestIndex, bestScore = index, score
 			}
@@ -109,7 +136,7 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 			clusters[bestIndex].members = append(clusters[bestIndex].members, ClusterMember{QuestionID: item.id, Text: item.text, Similarity: bestScore})
 			continue
 		}
-		clusters = append(clusters, pendingCluster{name: item.text, members: []ClusterMember{{QuestionID: item.id, Text: item.text, Similarity: 1}}})
+		clusters = append(clusters, pendingCluster{name: item.text, representative: item.id, members: []ClusterMember{{QuestionID: item.id, Text: item.text, Similarity: 1}}})
 	}
 	for _, cluster := range clusters {
 		clusterID := uuid.NewString()
@@ -124,7 +151,7 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 			name = string([]rune(name)[:120])
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO query_clusters (id,tenant_id,question_version_id,name,representative_question_id,algorithm_version,locked)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,UUID_TO_BIN(?),?,FALSE)`, clusterID, tenantID, versionID, name, representative, ClusterAlgorithm); err != nil {
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,UUID_TO_BIN(?),?,FALSE)`, clusterID, tenantID, versionID, name, representative, algorithm); err != nil {
 			return nil, err
 		}
 		for _, member := range cluster.members {
@@ -172,6 +199,106 @@ FROM cluster_members cm JOIN questions q ON q.id=cm.question_id WHERE cm.cluster
 		clusters = append(clusters, cluster)
 	}
 	return clusters, rows.Err()
+}
+
+func normalizeAlgorithm(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), ClusterAlgorithmV1) {
+		return ClusterAlgorithmV1
+	}
+	return ClusterAlgorithmSemantic
+}
+
+var semanticSynonyms = []struct{ from, to string }{
+	{"生成式引擎", "ai-search"}, {"生成式搜索", "ai-search"}, {"ai 搜索", "ai-search"}, {"ai搜索", "ai-search"},
+	{"ai search", "ai-search"}, {"ai引擎", "ai-search"}, {"ai 引擎", "ai-search"},
+	{"ai 回答", "ai-answer"}, {"ai回答", "ai-answer"}, {"ai answer", "ai-answer"},
+	{"可见性", "visibility"}, {"可见度", "visibility"}, {"visibility", "visibility"},
+	{"推荐率", "recommendation"}, {"recommendation", "recommendation"}, {"recommend", "recommendation"},
+	{"引用率", "citation"}, {"citation", "citation"}, {"citations", "citation"},
+	{"品牌", "brand"}, {"brand", "brand"},
+	{"提升", "improve"}, {"提高", "improve"}, {"improve", "improve"}, {"increase", "improve"},
+	{"工具", "tool"}, {"tools", "tool"}, {"tool", "tool"},
+	{"优化", "optimize"}, {"optimization", "optimize"}, {"optimize", "optimize"},
+}
+
+var questionStopwords = map[string]bool{
+	"什么": true, "如何": true, "怎么": true, "哪些": true, "哪个": true, "是否": true,
+	"可以": true, "需要": true, "以及": true, "一个": true, "进行": true, "通过": true,
+	"我们": true, "你们": true, "他们": true, "的": true, "了": true, "吗": true, "呢": true,
+	"what": true, "how": true, "which": true, "is": true, "are": true, "the": true,
+	"a": true, "an": true, "to": true, "for": true, "of": true, "and": true, "or": true,
+	"do": true, "does": true, "can": true, "should": true, "with": true,
+}
+
+// semanticTokens canonicalizes GEO vocabulary and removes question filler.
+func semanticTokens(text string) map[string]bool {
+	normalized := strings.ToLower(norm.NFKC.String(text))
+	for _, synonym := range semanticSynonyms {
+		normalized = strings.ReplaceAll(normalized, synonym.from, " "+synonym.to+" ")
+	}
+	set := map[string]bool{}
+	words := strings.FieldsFunc(normalized, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	for _, word := range words {
+		if questionStopwords[word] {
+			continue
+		}
+		if !containsCJK(word) {
+			set["w:"+strings.TrimSuffix(word, "s")] = true
+			continue
+		}
+		runes := []rune(word)
+		for index := 0; index < len(runes); index++ {
+			if index+1 < len(runes) {
+				bigram := string(runes[index : index+2])
+				if !questionStopwords[bigram] {
+					set["b:"+bigram] = true
+				}
+			}
+		}
+		if len(runes) <= 6 {
+			set["w:"+word] = true
+		}
+	}
+	return set
+}
+
+func containsCJK(value string) bool {
+	for _, r := range value {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
+}
+
+func weightedSimilarity(left, right map[string]bool, idf map[string]float64) float64 {
+	if len(left) == 0 || len(right) == 0 {
+		return 0
+	}
+	intersection, union := 0.0, 0.0
+	for token := range left {
+		weight := idf[token]
+		if weight == 0 {
+			weight = 1
+		}
+		union += weight
+		if right[token] {
+			intersection += weight
+		}
+	}
+	for token := range right {
+		if !left[token] {
+			weight := idf[token]
+			if weight == 0 {
+				weight = 1
+			}
+			union += weight
+		}
+	}
+	if union == 0 {
+		return 0
+	}
+	return intersection / union
 }
 
 func shingles(text string) map[string]bool {

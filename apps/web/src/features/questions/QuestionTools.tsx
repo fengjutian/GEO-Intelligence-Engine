@@ -23,6 +23,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [result, setResult] = useState<ImportResult | null>(null)
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({})
+  const [algorithm, setAlgorithm] = useState('semantic-v2')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const generate = useMutation({
     mutationFn: () => request<{ run: { generated: number; skipped: number } }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
@@ -41,7 +42,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
     onSuccess: async (value) => { setResult(value); if (value.committed) onChanged() },
   })
   const rebuild = useMutation({
-    mutationFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters:rebuild`, { method: 'POST' }),
+    mutationFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters:rebuild?algorithm=${algorithm}`, { method: 'POST' }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['question-clusters', projectId] }) },
   })
   const lock = useMutation({
@@ -71,6 +72,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   return <div className="question-tools">
     <div className="question-toolbar">
       <button type="button" onClick={() => generate.mutate()} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成建议问题'}</button>
+      <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} aria-label="聚类算法"><option value="semantic-v2">语义 v2</option><option value="jaccard-v1">基础 v1</option></select>
       <button type="button" onClick={() => rebuild.mutate()} disabled={rebuild.isPending}>{rebuild.isPending ? '聚类中…' : '重建聚类'}</button>
       {generate.data && <span>生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条</span>}
     </div>

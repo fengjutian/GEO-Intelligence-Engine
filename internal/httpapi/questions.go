@@ -18,7 +18,7 @@ type questionStore interface {
 	List(context.Context, string, string, int) (questions.Page, error)
 	Generate(context.Context, string, string, questions.GenerateInput) (questions.GenerationRun, []questions.Question, error)
 	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
-	RebuildClusters(context.Context, string, string) ([]questions.Cluster, error)
+	RebuildClusters(context.Context, string, string, string) ([]questions.Cluster, error)
 	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
 	SetClusterLocked(context.Context, string, string, string, bool, string) (questions.Cluster, error)
 	MoveMember(context.Context, string, string, string, string) error

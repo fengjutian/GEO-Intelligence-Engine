@@ -41,3 +41,24 @@ func TestSimilarityGroupsRelatedQuestions(t *testing.T) {
 		t.Fatalf("related questions should be closer: related=%.3f other=%.3f", similarity(left, right), similarity(left, other))
 	}
 }
+
+func TestSemanticTokensCanonicalizeSynonyms(t *testing.T) {
+	left := semanticTokens("AI 搜索可见度如何提升？")
+	right := semanticTokens("生成式引擎可见性怎么提高？")
+	idf := map[string]float64{}
+	for token := range left {
+		idf[token] = 1
+	}
+	for token := range right {
+		idf[token] = 1
+	}
+	if score := weightedSimilarity(left, right, idf); score < 0.8 {
+		t.Fatalf("expected high semantic similarity, got %.3f (%v vs %v)", score, left, right)
+	}
+	if normalizeAlgorithm("jaccard-v1") != ClusterAlgorithmV1 {
+		t.Fatal("jaccard-v1 must be preserved")
+	}
+	if normalizeAlgorithm("") != ClusterAlgorithmSemantic {
+		t.Fatal("default algorithm must be semantic-v2")
+	}
+}

@@ -53,12 +53,16 @@ func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request
 		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
 		return
 	}
-	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID)
+	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID, r.URL.Query().Get("algorithm"))
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "algorithmVersion": questions.ClusterAlgorithm})
+	version := questions.ClusterAlgorithm
+	if len(items) > 0 {
+		version = items[0].AlgorithmVersion
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "algorithmVersion": version})
 }
 
 func (h *questionHandler) listClusters(w http.ResponseWriter, r *http.Request) {
