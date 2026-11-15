@@ -28,8 +28,12 @@ type AuditComparison = { baseAuditId: string; targetAuditId: string; baseCounts:
 type EngineSeries = { engineConfigId: string; provider: string; modelSelector: string; metrics: Record<string, TrendValue>; delta: Record<string, number | null> }
 type EngineTrendPoint = { auditId: string; finishedAt: string | null; engines: EngineSeries[] }
 type EngineTrend = { metrics: string[]; points: EngineTrendPoint[] }
-type ShareEntity = { name: string; type: string; mentions: number; answers: number; share: number; mentionShare: number }
+type ShareEntity = { name: string; type: string; mentions: number; answers: number; share: number; mentionShare: number; positive: number; negative: number; neutral: number }
 type ShareOfVoice = { totalAnswers: number; brandShare: number; entities: ShareEntity[] }
+type StoredAnswer = { id: string; question: string; provider: string; model: string; content: string; contentValidity: string; answerOutcome: string; eligible: boolean }
+type ShareTrendEntity = { entity: string; entityType: string; share: number | null; delta: number | null }
+type ShareTrendPoint = { auditId: string; finishedAt: string | null; entities: ShareTrendEntity[] }
+type ShareTrend = { points: ShareTrendPoint[] }
 
 type Props = { projectId: string; projectName: string; onClose: () => void }
 
@@ -108,6 +112,15 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     queryKey: ['share-of-voice', auditId],
     queryFn: () => request<ShareOfVoice>(`/api/v1/audits/${auditId}/share-of-voice`),
     enabled: Boolean(auditId),
+  })
+  const storedAnswers = useQuery({
+    queryKey: ['stored-answers', auditId],
+    queryFn: () => request<{ items: StoredAnswer[] }>(`/api/v1/audits/${auditId}/answers?limit=20`),
+    enabled: Boolean(auditId),
+  })
+  const shareTrend = useQuery({
+    queryKey: ['share-trends', projectId],
+    queryFn: () => request<ShareTrend>(`/api/v1/projects/${projectId}/audit-trends?limit=12&dimension=share`),
   })
   const metrics = useQuery({
     queryKey: ['audit-metrics', auditId],
@@ -376,7 +389,7 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
       {shareOfVoice.data && shareOfVoice.data.totalAnswers > 0 && <section className="audit-metrics audit-share">
         <h3>Share of Voice · 品牌覆盖 {Math.round(shareOfVoice.data.brandShare * 100)}%</h3>
         <div className="metric-table">
-          <div className="metric-row metric-head"><span>实体</span><span>类型</span><span>出现回答</span><span>提及次数</span><span>回答覆盖</span><span>提及份额</span></div>
+          <div className="metric-row metric-head"><span>实体</span><span>类型</span><span>出现回答</span><span>提及次数</span><span>回答覆盖</span><span>提及份额</span><span>正/负/中</span></div>
           {shareOfVoice.data.entities.map((entity) => <div className="metric-row" key={`${entity.type}-${entity.name}`}>
             <span>{entity.name}</span>
             <span>{entity.type === 'brand' ? '品牌' : '竞品'}</span>
@@ -384,6 +397,26 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{entity.mentions}</span>
             <span>{Math.round(entity.share * 100)}%</span>
             <span>{Math.round(entity.mentionShare * 100)}%</span>
+            <span>{entity.positive}/{entity.negative}/{entity.neutral}</span>
+          </div>)}
+        </div>
+      </section>}
+      {storedAnswers.data && storedAnswers.data.items.length > 0 && <section className="audit-metrics audit-answers">
+        <h3>回答正文 · {storedAnswers.data.items.length} 条</h3>
+        {storedAnswers.data.items.map((answer) => <details key={answer.id}>
+          <summary>{answer.question}<small>{answer.answerOutcome} · {answer.contentValidity} · {answer.content.length} 字</small></summary>
+          <p>{answer.content}</p>
+        </details>)}
+      </section>}
+      {shareTrend.data && shareTrend.data.points.length > 0 && <section className="audit-metrics audit-share-trend">
+        <h3>Share of Voice 趋势 · {shareTrend.data.points.length} 次</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>实体</span><span>类型</span><span>最新份额</span><span>变化</span></div>
+          {shareTrend.data.points[shareTrend.data.points.length - 1].entities.map((entity) => <div className="metric-row" key={`${entity.entityType}-${entity.entity}`}>
+            <span>{entity.entity}</span>
+            <span>{entity.entityType === 'brand' ? '品牌' : '竞品'}</span>
+            <span>{entity.share == null ? '—' : `${Math.round(entity.share * 100)}%`}</span>
+            <span data-direction={entity.delta == null ? 'flat' : entity.delta > 0 ? 'up' : entity.delta < 0 ? 'down' : 'flat'}>{entity.delta == null ? '—' : `${entity.delta >= 0 ? '+' : ''}${(entity.delta * 100).toFixed(1)}pp`}</span>
           </div>)}
         </div>
       </section>}

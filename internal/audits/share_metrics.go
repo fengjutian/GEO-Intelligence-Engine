@@ -102,14 +102,7 @@ JOIN audit_samples s ON s.id=r.sample_id WHERE r.tenant_id=UUID_TO_BIN(?) AND s.
 	for index, target := range targets {
 		values[index] = value{name: target.name, kind: target.kind}
 		for _, answer := range answers {
-			lowered := strings.ToLower(answer)
-			count := 0
-			for _, term := range target.terms {
-				term = strings.ToLower(strings.TrimSpace(term))
-				if term != "" {
-					count += strings.Count(lowered, term)
-				}
-			}
+			count := countTermMentions(answer, target.terms)
 			if count > 0 {
 				values[index].mentions += count
 				values[index].answers++

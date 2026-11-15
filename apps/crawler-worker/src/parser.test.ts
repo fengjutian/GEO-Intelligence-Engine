@@ -18,6 +18,13 @@ it('ignores malformed JSON-LD', () => {
   expect(parseStructuredData('<script type="application/ld+json">{oops</script>')).toEqual([])
 })
 
+it('extracts schema.org microdata', () => {
+  const html = '<div itemscope itemtype="https://schema.org/Organization"><span itemprop="name">Acme</span><a itemprop="url" href="https://acme.example">Site</a></div>'
+  expect(parseStructuredData(html)).toEqual([
+    { '@context': 'https://schema.org', '@type': 'Organization', _format: 'microdata', name: 'Acme', url: 'https://acme.example' },
+  ])
+})
+
 it('extracts author, published date and FAQ answers', () => {
   const html = `<html><head><meta name="author" content="Acme Team"><meta property="article:published_time" content="2026-01-02T00:00:00Z"></head><body><h1>FAQ</h1><script type="application/ld+json">{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is GEO?","acceptedAnswer":{"@type":"Answer","text":"GEO is AI visibility analytics."}}]}</script></body></html>`
   const page = parseHTML(html, 'https://example.com/faq')

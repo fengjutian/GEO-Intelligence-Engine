@@ -123,6 +123,13 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		return Report{}, err
 	}
 	severityCounts, _ := contentQuality["bySeverity"].(map[string]int)
+	shareValues := []map[string]any{}
+	for _, metric := range metrics {
+		code, _ := metric["metricCode"].(string)
+		if code == "share_of_voice" || code == "mention_share" {
+			shareValues = append(shareValues, metric)
+		}
+	}
 	sections := []struct {
 		code    string
 		content map[string]any
@@ -140,6 +147,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		}},
 		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion}},
 		{"metrics", map[string]any{"metricVersion": metricVersion, "values": metrics}},
+		{"share_of_voice", map[string]any{"metricVersion": metricVersion, "values": shareValues}},
 		{"findings", map[string]any{"items": findings}},
 		{"priorities", map[string]any{"items": priorities, "version": PriorityVersion}},
 		{"limitations", map[string]any{"items": limitations}},

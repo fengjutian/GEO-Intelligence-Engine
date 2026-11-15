@@ -16,6 +16,9 @@ type ShareEntity struct {
 	Answers      int     `json:"answers"`
 	Share        float64 `json:"share"`
 	MentionShare float64 `json:"mentionShare"`
+	Positive     int     `json:"positive"`
+	Negative     int     `json:"negative"`
+	Neutral      int     `json:"neutral"`
 }
 
 // ShareOfVoice is the answer-level presence share for a brand and its competitors.
@@ -97,19 +100,25 @@ func (s *Store) ShareOfVoice(ctx context.Context, tenantID, auditID string) (Sha
 		}
 		targets = append(targets, shareTarget{name: competitor.name, kind: "competitor", terms: terms})
 	}
-	answerRows, err := s.db.QueryContext(ctx, `SELECT COALESCE(r.content_text,'') FROM ai_responses r
-JOIN audit_samples s ON s.id=r.sample_id WHERE r.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?)`, tenantID, auditID)
+	answerRows, err := s.db.QueryContext(ctx, `SELECT COALESCE(r.content_text,''),COALESCE(ae.sentiment,'') FROM ai_responses r
+JOIN audit_samples s ON s.id=r.sample_id
+LEFT JOIN answer_evaluations ae ON ae.response_id=r.id
+WHERE r.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?)`, tenantID, auditID)
 	if err != nil {
 		return ShareOfVoice{}, err
 	}
-	answers := []string{}
+	type answerRow struct {
+		content   string
+		sentiment string
+	}
+	answers := []answerRow{}
 	for answerRows.Next() {
-		var content string
-		if err := answerRows.Scan(&content); err != nil {
+		var content, sentiment string
+		if err := answerRows.Scan(&content, &sentiment); err != nil {
 			answerRows.Close()
 			return ShareOfVoice{}, err
 		}
-		answers = append(answers, content)
+		answers = append(answers, answerRow{content: content, sentiment: sentiment})
 	}
 	answerRows.Close()
 	result := ShareOfVoice{AuditID: auditID, TotalAnswers: len(answers), Entities: []ShareEntity{}}
@@ -117,17 +126,18 @@ JOIN audit_samples s ON s.id=r.sample_id WHERE r.tenant_id=UUID_TO_BIN(?) AND s.
 	for _, target := range targets {
 		entity := ShareEntity{Name: target.name, Type: target.kind}
 		for _, answer := range answers {
-			lowered := strings.ToLower(answer)
-			count := 0
-			for _, term := range target.terms {
-				term = strings.ToLower(strings.TrimSpace(term))
-				if term != "" {
-					count += strings.Count(lowered, term)
-				}
-			}
+			count := countTermMentions(answer.content, target.terms)
 			if count > 0 {
 				entity.Mentions += count
 				entity.Answers++
+				switch strings.ToLower(answer.sentiment) {
+				case "positive":
+					entity.Positive++
+				case "negative":
+					entity.Negative++
+				default:
+					entity.Neutral++
+				}
 			}
 		}
 		totalMentions += entity.Mentions

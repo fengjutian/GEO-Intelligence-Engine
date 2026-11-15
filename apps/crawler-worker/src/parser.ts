@@ -21,6 +21,20 @@ export function parseStructuredData(html: string): StructuredDataItem[] {
       // Invalid JSON-LD is ignored; the technical audit can surface it later.
     }
   })
+  $('[itemscope][itemtype]').each((_, element) => {
+    const itemType = $(element).attr('itemtype') ?? ''
+    const type = itemType.split('/').pop() ?? ''
+    if (!type) return
+    const item: StructuredDataItem = { '@context': 'https://schema.org', '@type': type, _format: 'microdata' }
+    $(element).find('[itemprop]').each((__, node) => {
+      if ($(node).closest('[itemscope]').get(0) !== element) return
+      const property = $(node).attr('itemprop')
+      if (!property || property in item) return
+      const value = $(node).attr('content') ?? $(node).attr('href') ?? $(node).attr('datetime') ?? $(node).text().trim()
+      if (value) item[property] = value
+    })
+    if (Object.keys(item).length > 3) items.push(item)
+  })
   return items.slice(0, 20)
 }
 
