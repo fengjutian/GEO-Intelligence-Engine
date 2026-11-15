@@ -85,6 +85,7 @@ type Experiment struct {
 	Name             string    `json:"name"`
 	Hypothesis       string    `json:"hypothesis"`
 	MetricCode       string    `json:"metricCode"`
+	Channel          string    `json:"channel"`
 	BaselineAuditID  *string   `json:"baselineAuditId"`
 	TreatmentAuditID *string   `json:"treatmentAuditId"`
 	Status           string    `json:"status"`
@@ -99,4 +100,5 @@ type CreateInput struct {
 	Name       string `json:"name"`
 	Hypothesis string `json:"hypothesis"`
 	MetricCode string `json:"metricCode"`
+	Channel    string `json:"channel"`
 }

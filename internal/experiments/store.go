@@ -29,6 +29,15 @@ func (s *Store) Create(ctx context.Context, tenantID, projectID string, input Cr
 	name := strings.TrimSpace(input.Name)
 	hypothesis := strings.TrimSpace(input.Hypothesis)
 	metric := strings.TrimSpace(input.MetricCode)
+	channel := strings.TrimSpace(input.Channel)
+	if channel == "" {
+		channel = "model_api"
+	}
+	switch channel {
+	case "model_api", "search_api", "consumer_app_capture":
+	default:
+		return Experiment{}, ErrInvalid
+	}
 	if name == "" || hypothesis == "" || metric == "" {
 		return Experiment{}, ErrInvalid
 	}
@@ -40,9 +49,9 @@ func (s *Store) Create(ctx context.Context, tenantID, projectID string, input Cr
 		return Experiment{}, ErrNotFound
 	}
 	id := uuid.NewString()
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO experiments (id,tenant_id,project_id,name,hypothesis,metric_code,status,created_at,updated_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'draft',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
-		id, tenantID, projectID, name, hypothesis, metric); err != nil {
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO experiments (id,tenant_id,project_id,name,hypothesis,metric_code,channel,status,created_at,updated_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,'draft',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,
+		id, tenantID, projectID, name, hypothesis, metric, channel); err != nil {
 		return Experiment{}, err
 	}
 	return s.Get(ctx, tenantID, projectID, id)
@@ -51,7 +60,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'draft',UTC_TIMESTAMP
 // List returns experiments newest first.
 func (s *Store) List(ctx context.Context, tenantID, projectID string) ([]Experiment, error) {
 	items := []Experiment{}
-	direct, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
+	direct, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,channel,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
 FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY created_at DESC`, tenantID, projectID)
 	if err != nil {
 		return nil, err
@@ -69,7 +78,7 @@ FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) OR
 
 // Get returns one experiment.
 func (s *Store) Get(ctx context.Context, tenantID, projectID, id string) (Experiment, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
+	row := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,channel,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
 FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, projectID, id)
 	item, err := scanExperiment(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -114,11 +123,11 @@ func (s *Store) Evaluate(ctx context.Context, tenantID, projectID, id string) (E
 	if item.Status != "running" || item.BaselineAuditID == nil || item.TreatmentAuditID == nil {
 		return Experiment{}, ErrConflict
 	}
-	baseline, err := s.metricCounts(ctx, tenantID, *item.BaselineAuditID, item.MetricCode)
+	baseline, err := s.metricCounts(ctx, tenantID, *item.BaselineAuditID, item.MetricCode, item.Channel)
 	if err != nil {
 		return Experiment{}, err
 	}
-	treatment, err := s.metricCounts(ctx, tenantID, *item.TreatmentAuditID, item.MetricCode)
+	treatment, err := s.metricCounts(ctx, tenantID, *item.TreatmentAuditID, item.MetricCode, item.Channel)
 	if err != nil {
 		return Experiment{}, err
 	}
@@ -132,13 +141,14 @@ WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(
 	return s.Get(ctx, tenantID, projectID, id)
 }
 
-func (s *Store) metricCounts(ctx context.Context, tenantID, auditID, code string) (Counts, error) {
+func (s *Store) metricCounts(ctx context.Context, tenantID, auditID, code, channel string) (Counts, error) {
 	var numerator, denominator sql.NullFloat64
 	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(mv.numerator),0),COALESCE(SUM(mv.denominator),0)
 FROM metric_values mv
 WHERE mv.snapshot_id=(SELECT id FROM metric_snapshots WHERE tenant_id=UUID_TO_BIN(?) AND audit_id=UUID_TO_BIN(?) ORDER BY generated_at DESC,id DESC LIMIT 1)
-  AND mv.metric_code=? AND mv.aggregation_method='answer_equal' AND JSON_LENGTH(mv.dimensions_json)=1`,
-		tenantID, auditID, code).Scan(&numerator, &denominator)
+  AND mv.metric_code=? AND mv.aggregation_method='answer_equal' AND JSON_LENGTH(mv.dimensions_json)=1
+  AND JSON_UNQUOTE(JSON_EXTRACT(mv.dimensions_json,'$.channel'))=?`,
+		tenantID, auditID, code, channel).Scan(&numerator, &denominator)
 	if err != nil {
 		return Counts{}, err
 	}
@@ -152,7 +162,7 @@ func scanExperiment(row rowScanner) (Experiment, error) {
 	var baseline, treatment, conclusion []byte
 	var stats []byte
 	var createdAt, updatedAt time.Time
-	if err := row.Scan(&item.ID, &item.ProjectID, &item.Name, &item.Hypothesis, &item.MetricCode, &baseline, &treatment, &item.Status, &conclusion, &stats, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&item.ID, &item.ProjectID, &item.Name, &item.Hypothesis, &item.MetricCode, &item.Channel, &baseline, &treatment, &item.Status, &conclusion, &stats, &createdAt, &updatedAt); err != nil {
 		return Experiment{}, err
 	}
 	if len(baseline) > 0 {
