@@ -5,7 +5,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 是什么？",
@@ -13,7 +14,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 靠谱吗？",
@@ -21,7 +23,8 @@
     "same": true,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme Insight 是做什么的？",
@@ -29,7 +32,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme Insight 和 Acme Insight Pro 有什么区别？",
@@ -37,7 +41,8 @@
     "same": true,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何提升品牌在 AI 回答中的可见度？",
@@ -45,7 +50,8 @@
     "same": true,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "有哪些 GEO 分析工具？",
@@ -53,7 +59,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "AI 回答中官网引用率怎么算？",
@@ -61,7 +68,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "品牌主动推荐率是什么？",
@@ -69,7 +77,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 适合什么团队？",
@@ -77,7 +86,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "采购 Acme GEO 前需要了解什么？",
@@ -85,7 +95,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 和竞品相比怎么样？",
@@ -93,7 +104,8 @@
     "same": true,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "GEO 优化有哪些步骤？",
@@ -101,7 +113,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "内容质量分析能发现什么问题？",
@@ -109,7 +122,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "审计报告包含哪些内容？",
@@ -117,7 +131,8 @@
     "same": true,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 是什么？",
@@ -125,7 +140,8 @@
     "same": false,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "官网引用率是多少？",
@@ -133,7 +149,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "技术审计检查什么？",
@@ -141,7 +158,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何提升提及率？",
@@ -149,7 +167,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "抓取失败怎么办？",
@@ -157,7 +176,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 的价格是多少？",
@@ -165,7 +185,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何配置 DeepSeek？",
@@ -173,7 +194,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "实体合并怎么撤销？",
@@ -181,7 +203,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "复核队列有哪些状态？",
@@ -189,7 +212,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "GEO 和 SEO 有什么区别？",
@@ -197,7 +221,8 @@
     "same": false,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "问题集如何发布版本？",
@@ -205,7 +230,8 @@
     "same": false,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "品牌别名在哪里维护？",
@@ -213,7 +239,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "指标置信区间怎么计算？",
@@ -221,7 +248,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "MiniMax 配额错误怎么处理？",
@@ -229,7 +257,8 @@
     "same": false,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何创建优化任务？",
@@ -237,7 +266,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What is Acme GEO?",
@@ -245,7 +275,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Is Acme GEO trustworthy?",
@@ -253,7 +284,8 @@
     "same": true,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I improve AI search visibility?",
@@ -261,7 +293,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What are the best GEO tools?",
@@ -269,7 +302,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How is official citation rate calculated?",
@@ -277,7 +311,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What is recommendation rate?",
@@ -285,7 +320,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Who should use Acme GEO?",
@@ -293,7 +329,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What should I know before buying Acme GEO?",
@@ -301,7 +338,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How does Acme GEO compare with competitors?",
@@ -309,7 +347,8 @@
     "same": true,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What are the steps for GEO optimization?",
@@ -317,7 +356,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What does content quality analysis detect?",
@@ -325,7 +365,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What sections are in the audit report?",
@@ -333,7 +374,8 @@
     "same": true,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme Insight 和 Acme Insight Pro 哪个更适合小团队？",
@@ -341,7 +383,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何查看审计指标？",
@@ -349,7 +392,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "报告可以导出哪些格式？",
@@ -357,7 +401,8 @@
     "same": true,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What is Acme GEO?",
@@ -365,7 +410,8 @@
     "same": false,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I improve mention rate?",
@@ -373,7 +419,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What does technical audit check?",
@@ -381,7 +428,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I configure DeepSeek?",
@@ -389,7 +437,8 @@
     "same": false,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I undo an entity merge?",
@@ -397,7 +446,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What statuses does the review queue have?",
@@ -405,7 +455,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "What is GEO?",
@@ -413,7 +464,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I publish a question set?",
@@ -421,7 +473,8 @@
     "same": false,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Where do I maintain brand aliases?",
@@ -429,7 +482,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How are confidence intervals calculated?",
@@ -437,7 +491,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I handle MiniMax quota errors?",
@@ -445,7 +500,8 @@
     "same": false,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "How do I create an optimization task?",
@@ -453,7 +509,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持中文吗？",
@@ -461,7 +518,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "内容质量分析支持哪些规则？",
@@ -469,7 +527,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何重跑内容分析？",
@@ -477,7 +536,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持私有化部署吗？",
@@ -485,7 +545,8 @@
     "same": true,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 的数据存储在哪里？",
@@ -493,7 +554,8 @@
     "same": true,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 如何收费？",
@@ -501,7 +563,8 @@
     "same": true,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 有免费试用吗？",
@@ -509,7 +572,8 @@
     "same": true,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持哪些模型？",
@@ -517,7 +581,8 @@
     "same": true,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何联系 Acme GEO 销售？",
@@ -525,7 +590,8 @@
     "same": true,
     "category": "product",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 是否符合 GDPR？",
@@ -533,7 +599,8 @@
     "same": true,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持单点登录吗？",
@@ -541,7 +608,8 @@
     "same": true,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何导入现有问题库？",
@@ -549,7 +617,8 @@
     "same": true,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "报告支持定时发送吗？",
@@ -557,7 +626,8 @@
     "same": true,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何设置预算上限？",
@@ -565,7 +635,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何添加项目成员？",
@@ -573,7 +644,8 @@
     "same": true,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何撤销 API Token？",
@@ -581,7 +653,8 @@
     "same": true,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "知识快照可以回滚吗？",
@@ -589,7 +662,8 @@
     "same": true,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "内容分析支持哪些语言？",
@@ -597,7 +671,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "审计失败会退款吗？",
@@ -605,7 +680,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何查看历史审计？",
@@ -613,7 +689,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 和 Profound 有什么区别？",
@@ -621,7 +698,8 @@
     "same": true,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何提升官网引用率？",
@@ -629,7 +707,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何降低拒答率？",
@@ -637,7 +716,8 @@
     "same": true,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "支持导出原始回答吗？",
@@ -645,7 +725,8 @@
     "same": true,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何配置告警通知？",
@@ -653,7 +734,8 @@
     "same": true,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持多因素认证吗？",
@@ -661,7 +743,8 @@
     "same": true,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": true,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持私有化部署吗？",
@@ -669,7 +752,8 @@
     "same": false,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何导入问题？",
@@ -677,7 +761,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何提升提及率？",
@@ -685,7 +770,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何撤销 API Token？",
@@ -693,7 +779,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "报告支持 PDF 吗？",
@@ -701,7 +788,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何设置预算上限？",
@@ -709,7 +797,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何添加项目成员？",
@@ -717,7 +806,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "知识快照可以回滚吗？",
@@ -725,7 +815,8 @@
     "same": false,
     "category": "operations",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "内容分析支持哪些语言？",
@@ -733,7 +824,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何查看历史审计？",
@@ -741,7 +833,8 @@
     "same": false,
     "category": "content",
     "weight": 2.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 和 Profound 有什么区别？",
@@ -749,7 +842,8 @@
     "same": false,
     "category": "competitor",
     "weight": 2.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何提升官网引用率？",
@@ -757,7 +851,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何降低拒答率？",
@@ -765,7 +860,8 @@
     "same": false,
     "category": "metrics",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "支持导出原始回答吗？",
@@ -773,7 +869,8 @@
     "same": false,
     "category": "report",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何配置告警通知？",
@@ -781,7 +878,8 @@
     "same": false,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持单点登录吗？",
@@ -789,7 +887,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 的数据存储在哪里？",
@@ -797,7 +896,8 @@
     "same": false,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 如何收费？",
@@ -805,7 +905,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 有免费试用吗？",
@@ -813,7 +914,8 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 支持哪些模型？",
@@ -821,7 +923,8 @@
     "same": false,
     "category": "integration",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何联系销售？",
@@ -829,7 +932,8 @@
     "same": false,
     "category": "unknown",
     "weight": 1.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "Acme GEO 是否符合 GDPR？",
@@ -837,7 +941,8 @@
     "same": false,
     "category": "security",
     "weight": 1.5,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   },
   {
     "a": "如何导入现有问题库？",
@@ -845,6 +950,7 @@
     "same": false,
     "category": "brand",
     "weight": 3.0,
-    "expert": null
+    "expert": false,
+    "expertSource": "deepseek-flash-ai-proxy"
   }
 ]
