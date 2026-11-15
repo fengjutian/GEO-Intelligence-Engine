@@ -43,8 +43,17 @@ type clusterQuestion struct {
 }
 
 // RebuildClusters groups draft questions by deterministic token similarity.
-func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algorithm string, vectors map[string][]float64) ([]Cluster, error) {
+func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algorithm string, vectors map[string][]float64, threshold float64) ([]Cluster, error) {
 	algorithm = normalizeAlgorithm(algorithm)
+	if threshold <= 0 {
+		threshold = 0.3
+		if algorithm == ClusterAlgorithmEmbedding {
+			threshold = 0.8
+		}
+	}
+	if threshold > 0.99 {
+		threshold = 0.99
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -136,11 +145,11 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 				bestIndex, bestScore = index, score
 			}
 		}
-		threshold := 0.3
-		if algorithm == ClusterAlgorithmEmbedding {
-			threshold = 0.8
+		thresholdLocal := threshold
+		if algorithm == ClusterAlgorithmEmbedding && thresholdLocal == 0 {
+			thresholdLocal = 0.8
 		}
-		if bestIndex >= 0 && bestScore >= threshold {
+		if bestIndex >= 0 && bestScore >= thresholdLocal {
 			clusters[bestIndex].members = append(clusters[bestIndex].members, ClusterMember{QuestionID: item.id, Text: item.text, Similarity: bestScore})
 			continue
 		}

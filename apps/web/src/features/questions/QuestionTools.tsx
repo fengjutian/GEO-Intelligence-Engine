@@ -24,6 +24,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({})
   const [algorithm, setAlgorithm] = useState('semantic-v2')
+  const [threshold, setThreshold] = useState('0.8')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
@@ -42,7 +43,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
     onSuccess: async (value) => { setResult(value); if (value.committed) onChanged() },
   })
   const rebuild = useMutation({
-    mutationFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters:rebuild?algorithm=${algorithm}`, { method: 'POST' }),
+    mutationFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters:rebuild?algorithm=${algorithm}${algorithm === 'embedding-v1' ? `&threshold=${threshold}` : ''}`, { method: 'POST' }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['question-clusters', projectId] }) },
   })
   const lock = useMutation({
@@ -74,6 +75,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
       <button type="button" onClick={() => generate.mutate('template')} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成建议问题'}</button>
       <button type="button" onClick={() => generate.mutate('llm')} disabled={generate.isPending}>LLM 生成</button>
       <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} aria-label="聚类算法"><option value="semantic-v2">语义 v2</option><option value="embedding-v1">向量 v1</option><option value="jaccard-v1">基础 v1</option></select>
+      {algorithm === 'embedding-v1' && <input type="number" min="0.5" max="0.95" step="0.01" value={threshold} onChange={(event) => setThreshold(event.target.value)} aria-label="向量阈值" />}
       <button type="button" onClick={() => rebuild.mutate()} disabled={rebuild.isPending}>{rebuild.isPending ? '聚类中…' : '重建聚类'}</button>
       {generate.data && <span>{generate.data.mode === 'llm' ? 'LLM' : '模板'}生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条{generate.data.warning ? `（${generate.data.warning}）` : ''}</span>}
     </div>

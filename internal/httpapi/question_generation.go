@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/google/uuid"
@@ -84,16 +85,29 @@ func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
-	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID, algorithm, vectors)
+	threshold := 0.0
+	if raw := r.URL.Query().Get("threshold"); raw != "" {
+		if parsed, err := strconv.ParseFloat(raw, 64); err == nil {
+			threshold = parsed
+		}
+	}
+	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID, algorithm, vectors, threshold)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
+	}
+	effectiveThreshold := threshold
+	if effectiveThreshold == 0 {
+		effectiveThreshold = 0.3
+		if algorithm == questions.ClusterAlgorithmEmbedding {
+			effectiveThreshold = 0.8
+		}
 	}
 	version := algorithm
 	if version == "" {
 		version = questions.ClusterAlgorithm
 	}
-	response := map[string]any{"items": items, "algorithmVersion": version}
+	response := map[string]any{"items": items, "algorithmVersion": version, "threshold": effectiveThreshold}
 	if warning != "" {
 		response["warning"] = warning
 	}

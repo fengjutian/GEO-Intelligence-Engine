@@ -22,7 +22,7 @@ type questionStore interface {
 	LoadGenerationContext(context.Context, string, string, string) (questions.GenerationContext, error)
 	GenerateFromCandidates(context.Context, string, string, string, string, string, string, []questions.Candidate) (questions.GenerationRun, []questions.Question, error)
 	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
-	RebuildClusters(context.Context, string, string, string, map[string][]float64) ([]questions.Cluster, error)
+	RebuildClusters(context.Context, string, string, string, map[string][]float64, float64) ([]questions.Cluster, error)
 	DraftQuestionTexts(context.Context, string, string) (map[string]string, error)
 	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
 	SetClusterLocked(context.Context, string, string, string, bool, string) (questions.Cluster, error)
