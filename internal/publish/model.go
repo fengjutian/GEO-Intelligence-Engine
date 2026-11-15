@@ -27,11 +27,13 @@ type Event struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
-// Target is the configured webhook receiver.
+// Target is the configured publish connector.
 type Target struct {
-	Endpoint  string    `json:"endpoint"`
-	Enabled   bool      `json:"enabled"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Kind      string            `json:"kind"`
+	Endpoint  string            `json:"endpoint"`
+	Config    map[string]string `json:"config,omitempty"`
+	Enabled   bool              `json:"enabled"`
+	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 // Payload is what we POST to the customer endpoint.

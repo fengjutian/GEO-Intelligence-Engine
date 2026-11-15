@@ -11,7 +11,7 @@ import (
 )
 
 type publishStore interface {
-	SetTarget(ctx context.Context, tenantID, projectID, endpoint string, enabled bool) (publish.Target, error)
+	SetTarget(ctx context.Context, tenantID, projectID, kind, endpoint string, enabled bool) (publish.Target, error)
 	GetTarget(ctx context.Context, tenantID, projectID string) (publish.Target, error)
 	Publish(ctx context.Context, tenantID, projectID, draftID string) (publish.Event, error)
 	Rollback(ctx context.Context, tenantID, projectID, eventID, reason string) (publish.Event, error)
@@ -37,21 +37,26 @@ func (h *publishHandler) tenant(r *http.Request) string {
 
 func (h *publishHandler) setTarget(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Kind     string `json:"kind"`
 		Endpoint string `json:"endpoint"`
 		Enabled  *bool  `json:"enabled"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
+	kind := strings.TrimSpace(input.Kind)
+	if kind == "" {
+		kind = publish.KindWebhook
+	}
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
-	if !isPublicHTTPURL(input.Endpoint) {
+	if kind == publish.KindWebhook && !isPublicHTTPURL(input.Endpoint) {
 		writeProblem(w, http.StatusUnprocessableEntity, "PUBLISH_TARGET_INVALID", "endpoint must be a public http(s) URL", traceID(r))
 		return
 	}
-	target, err := h.store.SetTarget(r.Context(), h.tenant(r), r.PathValue("projectId"), input.Endpoint, enabled)
+	target, err := h.store.SetTarget(r.Context(), h.tenant(r), r.PathValue("projectId"), kind, input.Endpoint, enabled)
 	if err != nil {
 		h.writeError(w, r, err)
 		return

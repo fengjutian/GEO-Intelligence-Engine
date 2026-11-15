@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -46,38 +47,57 @@ func NewStore(db *sql.DB, draftStore *drafts.Store) *Store {
 	}
 }
 
-// SetTarget upserts the project webhook.
-func (s *Store) SetTarget(ctx context.Context, tenantID, projectID, endpoint string, enabled bool) (Target, error) {
-	endpoint = strings.TrimSpace(endpoint)
-	if err := ValidateEndpoint(endpoint); err != nil {
-		return Target{}, err
+// SetTarget upserts the project publish connector.
+func (s *Store) SetTarget(ctx context.Context, tenantID, projectID, kind, endpoint string, enabled bool) (Target, error) {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = KindWebhook
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO publish_targets (id,tenant_id,project_id,endpoint,enabled,created_at,updated_at)
-VALUES (UUID_TO_BIN(UUID()),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
-ON DUPLICATE KEY UPDATE endpoint=VALUES(endpoint),enabled=VALUES(enabled),updated_at=UTC_TIMESTAMP(6)`,
-		tenantID, projectID, endpoint, enabled); err != nil {
+	endpoint = strings.TrimSpace(endpoint)
+	switch kind {
+	case KindWebhook:
+		if err := ValidateEndpoint(endpoint); err != nil {
+			return Target{}, err
+		}
+	case KindFilesystem:
+		if endpoint != "" {
+			if err := ValidateFilesystemPath(endpoint); err != nil {
+				return Target{}, err
+			}
+		}
+	default:
+		return Target{}, &TargetError{"unsupported connector kind"}
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO publish_targets (id,tenant_id,project_id,kind,endpoint,enabled,created_at,updated_at)
+VALUES (UUID_TO_BIN(UUID()),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+ON DUPLICATE KEY UPDATE kind=VALUES(kind),endpoint=VALUES(endpoint),enabled=VALUES(enabled),updated_at=UTC_TIMESTAMP(6)`,
+		tenantID, projectID, kind, endpoint, enabled); err != nil {
 		return Target{}, err
 	}
 	return s.GetTarget(ctx, tenantID, projectID)
 }
 
-// GetTarget returns the configured webhook.
+// GetTarget returns the configured connector.
 func (s *Store) GetTarget(ctx context.Context, tenantID, projectID string) (Target, error) {
 	var target Target
-	err := s.db.QueryRowContext(ctx, `SELECT endpoint,enabled,updated_at FROM publish_targets WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?)`,
-		tenantID, projectID).Scan(&target.Endpoint, &target.Enabled, &target.UpdatedAt)
+	var rawConfig []byte
+	err := s.db.QueryRowContext(ctx, `SELECT kind,endpoint,COALESCE(config_json,'{}'),enabled,updated_at FROM publish_targets
+WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?)`,
+		tenantID, projectID).Scan(&target.Kind, &target.Endpoint, &rawConfig, &target.Enabled, &target.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Target{}, ErrTargetMissing
 	}
-	return target, err
+	if err != nil {
+		return Target{}, err
+	}
+	if len(rawConfig) > 0 {
+		_ = json.Unmarshal(rawConfig, &target.Config)
+	}
+	return target, nil
 }
 
-// Publish delivers an approved draft to the project's webhook.
+// Publish delivers an approved draft through the project's connector.
 func (s *Store) Publish(ctx context.Context, tenantID, projectID, draftID string) (Event, error) {
-	secret := strings.TrimSpace(os.Getenv("GEO_PUBLISH_SECRET"))
-	if secret == "" {
-		return Event{}, errors.New("GEO_PUBLISH_SECRET is not configured")
-	}
 	target, err := s.GetTarget(ctx, tenantID, projectID)
 	if err != nil {
 		return Event{}, err
@@ -92,8 +112,17 @@ func (s *Store) Publish(ctx context.Context, tenantID, projectID, draftID string
 	if draft.Status != "approved" {
 		return Event{}, ErrNotApproved
 	}
-	payload := BuildPayload("publish", projectID, draftID, draft.Kind, draft.Title, draft.Version+1, draft.Payload, time.Now())
-	event, err := s.deliver(ctx, tenantID, projectID, draftID, target, payload, secret)
+	var event Event
+	if target.Kind == KindFilesystem {
+		event, err = s.deliverFilesystem(ctx, tenantID, projectID, draftID, target, draft)
+	} else {
+		secret := strings.TrimSpace(os.Getenv("GEO_PUBLISH_SECRET"))
+		if secret == "" {
+			return Event{}, errors.New("GEO_PUBLISH_SECRET is not configured")
+		}
+		payload := BuildPayload("publish", projectID, draftID, draft.Kind, draft.Title, draft.Version+1, draft.Payload, time.Now())
+		event, err = s.deliver(ctx, tenantID, projectID, draftID, target, payload, secret)
+	}
 	if err != nil {
 		return Event{}, err
 	}
@@ -105,18 +134,13 @@ func (s *Store) Publish(ctx context.Context, tenantID, projectID, draftID string
 	return event, nil
 }
 
-// Rollback notifies the endpoint that a previously published draft must be reverted.
+// Rollback reverts a previously delivered publish.
 func (s *Store) Rollback(ctx context.Context, tenantID, projectID, eventID, reason string) (Event, error) {
-	secret := strings.TrimSpace(os.Getenv("GEO_PUBLISH_SECRET"))
-	if secret == "" {
-		return Event{}, errors.New("GEO_PUBLISH_SECRET is not configured")
-	}
-	var draftID, action, status, targetEndpoint string
-	var targetID string
-	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(e.draft_id),e.action,e.status,BIN_TO_UUID(e.target_id),t.endpoint
+	var draftID, action, status, targetEndpoint, targetKind string
+	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(e.draft_id),e.action,e.status,t.endpoint,t.kind
 FROM publish_events e JOIN publish_targets t ON t.id=e.target_id
 WHERE e.tenant_id=UUID_TO_BIN(?) AND e.project_id=UUID_TO_BIN(?) AND e.id=UUID_TO_BIN(?)`,
-		tenantID, projectID, eventID).Scan(&draftID, &action, &status, &targetID, &targetEndpoint)
+		tenantID, projectID, eventID).Scan(&draftID, &action, &status, &targetEndpoint, &targetKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Event{}, ErrEventNotFound
 	}
@@ -126,13 +150,20 @@ WHERE e.tenant_id=UUID_TO_BIN(?) AND e.project_id=UUID_TO_BIN(?) AND e.id=UUID_T
 	if action != "publish" || status != "delivered" {
 		return Event{}, ErrNotDelivered
 	}
+	if targetKind == KindFilesystem {
+		return s.rollbackFilesystem(ctx, tenantID, projectID, draftID)
+	}
+	secret := strings.TrimSpace(os.Getenv("GEO_PUBLISH_SECRET"))
+	if secret == "" {
+		return Event{}, errors.New("GEO_PUBLISH_SECRET is not configured")
+	}
 	draft, err := s.drafts.Get(ctx, tenantID, projectID, draftID)
 	if err != nil {
 		return Event{}, err
 	}
 	payload := BuildPayload("rollback", projectID, draftID, draft.Kind, draft.Title, draft.Version, draft.Payload, time.Now())
 	payload.Reason = strings.TrimSpace(reason)
-	target := Target{Endpoint: targetEndpoint, Enabled: true}
+	target := Target{Kind: targetKind, Endpoint: targetEndpoint, Enabled: true}
 	return s.deliver(ctx, tenantID, projectID, draftID, target, payload, secret)
 }
 
