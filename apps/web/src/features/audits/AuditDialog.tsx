@@ -23,6 +23,8 @@ type MetricValue = {
 type TrendValue = { value: number | null; numerator: number | null; denominator: number | null; ciLow: number | null; ciHigh: number | null }
 type TrendPoint = { auditId: string; finishedAt: string | null; metricVersion: string; plannedCount: number; eligibleCount: number; metrics: Record<string, TrendValue>; delta: Record<string, number | null> }
 type AuditTrend = { metrics: string[]; points: TrendPoint[] }
+type MetricDelta = { metricCode: string; baseValue: number | null; targetValue: number | null; delta: number | null; baseNumerator: number | null; baseDenominator: number | null; targetNumerator: number | null; targetDenominator: number | null }
+type AuditComparison = { baseAuditId: string; targetAuditId: string; baseCounts: { plannedCount: number; completedCount: number; eligibleCount: number }; targetCounts: { plannedCount: number; completedCount: number; eligibleCount: number }; metrics: MetricDelta[] }
 
 type Props = { projectId: string; projectName: string; onClose: () => void }
 
@@ -84,6 +86,12 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const trend = useQuery({
     queryKey: ['audit-trends', projectId],
     queryFn: () => request<AuditTrend>(`/api/v1/projects/${projectId}/audit-trends?limit=12`),
+  })
+  const previousAuditId = trend.data && trend.data.points.length > 1 ? trend.data.points[trend.data.points.length - 2].auditId : null
+  const comparison = useQuery({
+    queryKey: ['audit-comparison', auditId, previousAuditId],
+    queryFn: () => request<AuditComparison>(`/api/v1/audits/${auditId}/comparison?baseAuditId=${previousAuditId}`),
+    enabled: Boolean(auditId && previousAuditId && auditId !== previousAuditId),
   })
   const metrics = useQuery({
     queryKey: ['audit-metrics', auditId],
@@ -335,6 +343,19 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           </article>)}
         </div>
         <p className="audit-note">趋势按审计完成时间排序；口径取各审计最新可用指标快照（含人工回写版本）。</p>
+      </section>}
+      {comparison.data && <section className="audit-metrics audit-compare">
+        <h3>与上次审计对比</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>指标</span><span>上次</span><span>本次</span><span>变化</span></div>
+          {comparison.data.metrics.slice(0, 5).map((metric) => <div className="metric-row" key={metric.metricCode}>
+            <span>{METRIC_LABELS[metric.metricCode] ?? metric.metricCode}</span>
+            <span>{formatPercent(metric.baseValue)}</span>
+            <span>{formatPercent(metric.targetValue)}</span>
+            <span data-direction={metric.delta == null ? 'flat' : metric.delta > 0 ? 'up' : metric.delta < 0 ? 'down' : 'flat'}>{metric.delta == null ? '—' : `${metric.delta >= 0 ? '+' : ''}${(metric.delta * 100).toFixed(1)}pp`}</span>
+          </div>)}
+        </div>
+        <p className="audit-note">样本：计划 {comparison.data.baseCounts.plannedCount} → {comparison.data.targetCounts.plannedCount}；有效 {comparison.data.baseCounts.eligibleCount} → {comparison.data.targetCounts.eligibleCount}。</p>
       </section>}
       {evidence && <section className="audit-metrics evidence-panel">
         <h3>指标证据 · {evidence.memberCount} 条{evidence.truncated ? '（已截断）' : ''} <button type="button" className="evidence-close" onClick={() => setEvidence(null)}>关闭</button></h3>

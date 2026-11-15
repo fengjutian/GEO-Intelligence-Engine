@@ -739,6 +739,16 @@ paths:
       responses:
         '201': {description: Annotation created, content: {application/json: {schema: {$ref: '#/components/schemas/HumanAnnotation'}}}}
         '409': {$ref: '#/components/responses/Conflict'}
+  /audits/{auditId}/comparison:
+    get:
+      tags: [Metrics]
+      operationId: compareAudits
+      parameters:
+        - {$ref: '#/components/parameters/AuditId'}
+        - {name: baseAuditId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      responses:
+        '200': {description: Metric deltas between two audits, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
   /audits/{auditId}/metrics:
     get:
       tags: [Metrics]
