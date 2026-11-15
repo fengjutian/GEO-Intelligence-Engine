@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// RecordEvaluation stores a judge result for one response and updates audit counters.
+func (s *Store) RecordEvaluation(ctx context.Context, tenantID, auditID, responseID string, evaluation *Evaluation) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := persistEvaluation(ctx, tx, tenantID, auditID, responseID, evaluation); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // persistEvaluation stores the judge run and answer evaluation, and counts eligible answers.
 func persistEvaluation(ctx context.Context, tx *sql.Tx, tenantID, auditID, responseID string, evaluation *Evaluation) error {
 	if evaluation == nil || evaluation.JudgeVersion == "" {
