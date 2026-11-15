@@ -20,6 +20,7 @@ type taskStore interface {
 	UpdateAcceptance(ctx context.Context, tenantID, actorID, taskID, itemID, status string, expectedVersion int64) (tasks.Task, error)
 	Update(ctx context.Context, tenantID, actorID, taskID string, expectedVersion int64, input tasks.UpdateInput) (tasks.Task, error)
 	AddComment(ctx context.Context, tenantID, actorID, taskID, body string) (tasks.Comment, error)
+	BatchFromFindings(ctx context.Context, tenantID, actorID, projectID string, input tasks.BatchInput) (tasks.BatchResult, error)
 }
 
 type taskHandler struct {
@@ -239,4 +240,17 @@ func (h *taskHandler) writeError(w http.ResponseWriter, r *http.Request, err err
 		h.logger.Error("task operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
 	}
+}
+
+func (h *taskHandler) batchFromFindings(w http.ResponseWriter, r *http.Request) {
+	var input tasks.BatchInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	result, err := h.store.BatchFromFindings(r.Context(), h.tenant(r), h.actor(r), r.PathValue("projectId"), input)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
 }

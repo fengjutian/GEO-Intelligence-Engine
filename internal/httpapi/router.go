@@ -204,6 +204,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/reports/{reportId}/artifacts/{artifactId}", auditHandler.downloadReportArtifact)
 	taskHandler := newTaskHandler(tasks.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
 	mux.HandleFunc("POST /api/v1/findings/{findingId}/optimization-tasks", requirePermission("edit_task", taskHandler.createFromFinding))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/findings:batch-tasks", requirePermission("edit_task", projectAccess(deps.DB, taskHandler.batchFromFindings)))
 	mux.HandleFunc("GET /api/v1/optimization-tasks", taskHandler.list)
 	mux.HandleFunc("GET /api/v1/optimization-tasks/{taskId}", taskHandler.get)
 	mux.HandleFunc("PATCH /api/v1/optimization-tasks/{taskId}", requirePermission("edit_task", taskHandler.update))
