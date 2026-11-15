@@ -5,6 +5,8 @@ type Member = { id: string; userId: string; email: string; subject: string; role
 type Invitation = { id: string; email: string; role: string; status: string; expiresAt: string; token?: string }
 type ServiceAccount = { id: string; name: string; status: string; createdAt: string }
 type APIToken = { id: string; principalId: string; scopes: string[]; expiresAt: string | null; lastUsedAt: string | null; revokedAt: string | null; createdAt: string; token?: string }
+type ProjectOption = { id: string; name: string }
+type ProjectMember = { id: string; userId: string; email: string; roleOverride: string | null }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
@@ -27,6 +29,9 @@ export function SettingsPage() {
   const [tokenScopes, setTokenScopes] = useState('read')
   const [expiresDays, setExpiresDays] = useState(30)
   const [newToken, setNewToken] = useState<APIToken | null>(null)
+  const [projectId, setProjectId] = useState('')
+  const [projectUserId, setProjectUserId] = useState('')
+  const [projectRole, setProjectRole] = useState('')
   const [message, setMessage] = useState('')
   const me = useQuery({ queryKey: ['me'], queryFn: () => request<{ tenantId: string; role: string }>('/api/v1/me') })
   const members = useQuery({
@@ -62,6 +67,12 @@ export function SettingsPage() {
 
   const accounts = useQuery({ queryKey: ['service-accounts'], queryFn: () => request<{ items: ServiceAccount[] }>('/api/v1/service-accounts') })
   const tokens = useQuery({ queryKey: ['api-tokens'], queryFn: () => request<{ items: APIToken[] }>('/api/v1/api-tokens') })
+  const projects = useQuery({ queryKey: ['settings-projects'], queryFn: () => request<{ items: ProjectOption[] }>('/api/v1/projects?limit=100') })
+  const projectMembers = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: () => request<{ items: ProjectMember[] }>(`/api/v1/projects/${projectId}/members`),
+    enabled: Boolean(projectId),
+  })
   const createAccount = useMutation({
     mutationFn: () => request<ServiceAccount>('/api/v1/service-accounts', {
       method: 'POST',
@@ -93,6 +104,28 @@ export function SettingsPage() {
     onSuccess: async () => {
       setMessage('Token 已撤销')
       await queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+
+  const removeProjectMember = useMutation({
+    mutationFn: (userId: string) => request(`/api/v1/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      setMessage('项目成员已移除')
+      await queryClient.invalidateQueries({ queryKey: ['project-members', projectId] })
+    },
+    onError: (error) => setMessage(error.message),
+  })
+  const addProjectMember = useMutation({
+    mutationFn: () => request(`/api/v1/projects/${projectId}/members`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: projectUserId, roleOverride: projectRole }),
+    }),
+    onSuccess: async () => {
+      setProjectUserId('')
+      setMessage('项目成员已添加')
+      await queryClient.invalidateQueries({ queryKey: ['project-members', projectId] })
     },
     onError: (error) => setMessage(error.message),
   })
@@ -161,5 +194,24 @@ export function SettingsPage() {
         </div>
       </section>
     </div>
+    <section className="settings-panel project-members-panel">
+      <h3>项目成员</h3>
+      <p className="settings-hint">项目成员用于项目级授权：存在项目成员记录的用户只能访问被授权项目。</p>
+      <div className="project-member-form">
+        <label>项目<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">选择项目…</option>{projects.data?.items.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+        <label>用户 ID<input value={projectUserId} onChange={(event) => setProjectUserId(event.target.value)} placeholder="用户 UUID" /></label>
+        <label>角色覆盖<select value={projectRole} onChange={(event) => setProjectRole(event.target.value)}><option value="">继承租户角色</option>{ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+        <button type="button" disabled={!projectId || !projectUserId || addProjectMember.isPending} onClick={() => addProjectMember.mutate()}>添加</button>
+      </div>
+      {projectId && <div className="member-table">
+        <div className="member-row member-head"><span>成员</span><span>角色覆盖</span><span>操作</span></div>
+        {projectMembers.data?.items.length === 0 && <p className="empty-state">该项目暂无成员记录，当前成员按租户权限访问。</p>}
+        {projectMembers.data?.items.map((member) => <div className="member-row" key={member.id}>
+          <div><strong>{member.email}</strong><small>{member.userId}</small></div>
+          <span>{member.roleOverride ?? '继承'}</span>
+          <button type="button" className="danger-link" disabled={removeProjectMember.isPending} onClick={() => removeProjectMember.mutate(member.userId)}>移除</button>
+        </div>)}
+      </div>}
+    </section>
   </section>
 }

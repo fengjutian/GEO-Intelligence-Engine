@@ -399,6 +399,30 @@ paths:
       responses:
         '200': {description: Structural snapshot difference, content: {application/json: {schema: {$ref: '#/components/schemas/SnapshotDiff'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
+  /projects/{projectId}/members:
+    get:
+      tags: [Projects]
+      operationId: listProjectMembers
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      responses:
+        '200': {description: Project member grants, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {type: object, additionalProperties: true}}}}}}}
+    post:
+      tags: [Projects]
+      operationId: addProjectMember
+      parameters: [{$ref: '#/components/parameters/ProjectId'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [userId], properties: {userId: {$ref: '#/components/schemas/Id'}, roleOverride: {type: string}}}}}}
+      responses:
+        '201': {description: Project member added}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+  /projects/{projectId}/members/{userId}:
+    delete:
+      tags: [Projects]
+      operationId: removeProjectMember
+      parameters:
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {name: userId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+      responses:
+        '204': {description: Project member removed}
   /projects/{projectId}/content-quality:
     get:
       tags: [Entities]

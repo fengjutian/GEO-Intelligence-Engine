@@ -13,6 +13,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
+	"github.com/fengjutian/geo-intelligence-engine/internal/projectmembers"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
@@ -97,6 +98,10 @@ func New(deps Dependencies) http.Handler {
 	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/questions", projectAccess(deps.DB, questionHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", projectAccess(deps.DB, questionHandler.create))
+	projectMemberHandler := newProjectMemberHandler(projectmembers.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/members", projectAccess(deps.DB, projectMemberHandler.list))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/members", requirePermission("edit_project", projectAccess(deps.DB, projectMemberHandler.add)))
+	mux.HandleFunc("DELETE /api/v1/projects/{projectId}/members/{userId}", requirePermission("edit_project", projectAccess(deps.DB, projectMemberHandler.remove)))
 	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ReportDir)
 	mux.HandleFunc("GET /api/v1/engine-configs", auditHandler.listEngineConfigs)
 	mux.HandleFunc("POST /api/v1/engine-configs", auditHandler.createEngineConfig)
