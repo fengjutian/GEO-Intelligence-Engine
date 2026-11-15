@@ -226,7 +226,7 @@ func buildGeoInsights(metrics, shares, facts []map[string]any, quality map[strin
 		dimensions, _ := item["dimensions"].(map[string]any)
 		name, _ := dimensions["entity"].(string)
 		entityType, _ := dimensions["entityType"].(string)
-		value, _ := item["value"].(float64)
+		value := metricFloat(item, "value")
 		if name == "" {
 			continue
 		}
@@ -273,6 +273,20 @@ func buildGeoInsights(metrics, shares, facts []map[string]any, quality map[strin
 		"scope":          "仅基于已抓取页面文本与模型判定，unknown 与 pending 需人工复核",
 	}
 	return geoSummary, competitive, contentTrust
+}
+
+// metricFloat reads a metric value that may be stored as a plain float or as
+// the nullable *float64 produced by nullFloat.
+func metricFloat(item map[string]any, key string) float64 {
+	switch typed := item[key].(type) {
+	case float64:
+		return typed
+	case *float64:
+		if typed != nil {
+			return *typed
+		}
+	}
+	return 0
 }
 
 func overallMetric(metrics []map[string]any, code string) any {

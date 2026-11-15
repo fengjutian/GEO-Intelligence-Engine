@@ -30,6 +30,9 @@ type EngineTrendPoint = { auditId: string; finishedAt: string | null; engines: E
 type EngineTrend = { metrics: string[]; points: EngineTrendPoint[] }
 type ShareEntity = { name: string; type: string; mentions: number; answers: number; share: number; mentionShare: number; positive: number; negative: number; neutral: number }
 type ShareOfVoice = { totalAnswers: number; brandShare: number; entities: ShareEntity[] }
+type CitationDomain = { domain: string; count: number; official: number; thirdParty: number; answers: number }
+type CitationItem = { url: string; domain: string; sourceType: string; supportLabel: string; question: string; confidence: number }
+type AuditCitations = { total: number; official: number; thirdParty: number; domains: CitationDomain[]; items: CitationItem[] }
 type StoredAnswer = { id: string; question: string; provider: string; model: string; content: string; contentValidity: string; answerOutcome: string; eligible: boolean }
 type ShareTrendEntity = { entity: string; entityType: string; share: number | null; delta: number | null }
 type ShareTrendPoint = { auditId: string; finishedAt: string | null; entities: ShareTrendEntity[] }
@@ -111,6 +114,11 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const shareOfVoice = useQuery({
     queryKey: ['share-of-voice', auditId],
     queryFn: () => request<ShareOfVoice>(`/api/v1/audits/${auditId}/share-of-voice`),
+    enabled: Boolean(auditId),
+  })
+  const citations = useQuery({
+    queryKey: ['audit-citations', auditId],
+    queryFn: () => request<AuditCitations>(`/api/v1/audits/${auditId}/citations`),
     enabled: Boolean(auditId),
   })
   const storedAnswers = useQuery({
@@ -400,6 +408,22 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{entity.positive}/{entity.negative}/{entity.neutral}</span>
           </div>)}
         </div>
+      </section>}
+      {citations.data && citations.data.total > 0 && <section className="audit-metrics audit-citations">
+        <h3>引用来源 · {citations.data.total} 次（官方 {citations.data.official} / 第三方 {citations.data.thirdParty}）</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>域名</span><span>引用</span><span>官方</span><span>第三方</span><span>回答</span></div>
+          {citations.data.domains.slice(0, 10).map((item) => <div className="metric-row" key={item.domain}>
+            <span>{item.domain || '未知域名'}</span>
+            <span>{item.count}</span>
+            <span>{item.official}</span>
+            <span>{item.thirdParty}</span>
+            <span>{item.answers}</span>
+          </div>)}
+        </div>
+        <details className="citation-items"><summary>最近引用明细</summary>
+          {citations.data.items.slice(0, 10).map((item, index) => <div key={`${item.url}-${index}`}><a href={item.url} target="_blank" rel="noreferrer">{item.domain || item.url}</a><span>{item.sourceType} · {item.supportLabel || '未标注'} · {Math.round(item.confidence * 100)}%</span></div>)}
+        </details>
       </section>}
       {storedAnswers.data && storedAnswers.data.items.length > 0 && <section className="audit-metrics audit-answers">
         <h3>回答正文 · {storedAnswers.data.items.length} 条</h3>
