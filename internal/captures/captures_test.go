@@ -161,3 +161,28 @@ func TestRequiresSignature(t *testing.T) {
 	}
 	_ = os.Getenv("GEO_CAPTURE_AGENT_KEYS")
 }
+
+func TestLooksMojibake(t *testing.T) {
+	broken := []string{"????????,??????", "Is it???", "????????????????"}
+	for _, text := range broken {
+		if !looksMojibake(text) {
+			t.Fatalf("%q should be flagged", text)
+		}
+	}
+	healthy := []string{"飞书支持多维表格", "What is this?", "正常的中文回答，包含问号？", "Short answer."}
+	for _, text := range healthy {
+		if looksMojibake(text) {
+			t.Fatalf("%q should not be flagged", text)
+		}
+	}
+}
+
+func TestValidateCaptureRejectsMojibakeAnswer(t *testing.T) {
+	capture := validCapture()
+	capture.Answer.Text = "????????,??????"
+	err := ValidateCapture(capture, time.Now().UTC())
+	validation, ok := err.(*ValidationError)
+	if !ok || validation.Code != "ANSWER_ENCODING_SUSPECT" {
+		t.Fatalf("err = %v", err)
+	}
+}

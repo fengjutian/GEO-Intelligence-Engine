@@ -165,6 +165,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/capture-batches/{batchId}", captureHandler.listBatch)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/captures", captureHandler.listByAudit)
 	mux.HandleFunc("POST /api/v1/captures/{captureId}/revoke", requirePermission("edit_project", captureHandler.revoke))
+	mux.HandleFunc("GET /api/v1/capture-surfaces", captureHandler.listSurfaces)
+	mux.HandleFunc("POST /api/v1/capture-surfaces", requirePermission("manage_keys", captureHandler.addSurface))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
 	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))

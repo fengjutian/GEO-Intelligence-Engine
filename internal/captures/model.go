@@ -166,6 +166,9 @@ func ValidateCapture(c CaptureInput, now time.Time) error {
 	if len([]rune(c.Answer.Text)) > 20000 {
 		return invalid("ANSWER_TOO_LONG", "answer text exceeds 20000 characters")
 	}
+	if looksMojibake(c.Answer.Text) {
+		return invalid("ANSWER_ENCODING_SUSPECT", "answer text looks like a broken encoding of the original characters")
+	}
 	if c.Surface.Provider == "" || c.Surface.Product == "" {
 		return invalid("SURFACE_INVALID", "surface.provider and surface.product are required")
 	}
@@ -187,6 +190,28 @@ func ValidateCapture(c CaptureInput, now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// looksMojibake catches text that lost its characters to a bad encoding, the
+// classic symptom being runs of "?" where non-ASCII content used to be.
+func looksMojibake(text string) bool {
+	runes := []rune(text)
+	run, maxRun, questions := 0, 0, 0
+	for _, value := range runes {
+		if value == '?' {
+			run++
+			questions++
+			if run > maxRun {
+				maxRun = run
+			}
+			continue
+		}
+		run = 0
+	}
+	if maxRun >= 3 {
+		return true
+	}
+	return len(runes) >= 12 && questions*3 >= len(runes)
 }
 
 // IdempotencyKey implements the SPEC-11 fingerprint.

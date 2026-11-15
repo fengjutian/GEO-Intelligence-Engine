@@ -55,9 +55,20 @@ func (s *Store) Submit(ctx context.Context, tenantID string, batch BatchRequest,
 	}
 	signatureVerified, signatureErr := VerifySignature(batch.Agent, rawCaptures)
 	result := BatchResult{BatchID: batch.BatchID, Results: make([]ItemResult, 0, len(items))}
+	acceptedAudits := map[string]bool{}
 	for _, capture := range items {
 		outcome := s.submitOne(ctx, tenantID, batch, capture, signatureVerified, signatureErr)
+		if outcome.Status == "accepted" {
+			acceptedAudits[capture.AuditID] = true
+		}
 		result.Results = append(result.Results, outcome)
+	}
+	// Captures are judged during submission; rebuilding the snapshot makes them
+	// visible to metrics without a separate manual recompute call.
+	if s.audits != nil {
+		for auditID := range acceptedAudits {
+			_, _ = s.audits.RecomputeMetrics(ctx, tenantID, auditID)
+		}
 	}
 	return result, nil
 }
@@ -78,6 +89,16 @@ func (s *Store) submitOne(ctx context.Context, tenantID string, batch BatchReque
 		outcome.Message = "signature is required and must verify for this method"
 		return outcome
 	}
+	supported, err := s.surfaceSupported(ctx, capture.Surface.Provider, capture.Surface.Product)
+	if err != nil {
+		outcome.Status, outcome.Code = "rejected", "INTERNAL"
+		return outcome
+	}
+	if !supported {
+		outcome.Status, outcome.Code = "rejected", "SURFACE_UNSUPPORTED"
+		outcome.Message = "surface.provider/product is not registered for capture"
+		return outcome
+	}
 
 	var existing int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM capture_provenance WHERE tenant_id=UUID_TO_BIN(?) AND capture_id=UUID_TO_BIN(?)`, tenantID, capture.CaptureID).Scan(&existing); err != nil {
@@ -90,7 +111,7 @@ func (s *Store) submitOne(ctx context.Context, tenantID string, batch BatchReque
 	}
 
 	var projectID, auditStatus string
-	err := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(project_id),status FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, capture.AuditID).Scan(&projectID, &auditStatus)
+	err = s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(project_id),status FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, capture.AuditID).Scan(&projectID, &auditStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		outcome.Status, outcome.Code = "rejected", "AUDIT_NOT_FOUND"
 		return outcome
@@ -304,4 +325,55 @@ WHERE cp.tenant_id=UUID_TO_BIN(?) AND cp.batch_id=UUID_TO_BIN(?) ORDER BY cp.obs
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+// SurfaceEntry is one registered capture surface.
+type SurfaceEntry struct {
+	Provider string `json:"provider"`
+	Product  string `json:"product"`
+	Enabled  bool   `json:"enabled"`
+}
+
+// surfaceSupported reports whether the provider/product pair may be captured.
+func (s *Store) surfaceSupported(ctx context.Context, provider, product string) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM capture_surfaces WHERE provider=? AND product=? AND enabled=TRUE`,
+		strings.ToLower(strings.TrimSpace(provider)), strings.ToLower(strings.TrimSpace(product))).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// ListSurfaces returns the capture surface registry.
+func (s *Store) ListSurfaces(ctx context.Context) ([]SurfaceEntry, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT provider,product,enabled FROM capture_surfaces ORDER BY provider,product`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SurfaceEntry{}
+	for rows.Next() {
+		var item SurfaceEntry
+		if err := rows.Scan(&item.Provider, &item.Product, &item.Enabled); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// AddSurface registers or re-enables a capture surface.
+func (s *Store) AddSurface(ctx context.Context, provider, product string) (SurfaceEntry, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	product = strings.ToLower(strings.TrimSpace(product))
+	if provider == "" || product == "" {
+		return SurfaceEntry{}, invalid("SURFACE_INVALID", "provider and product are required")
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO capture_surfaces (id,provider,product,enabled,created_at)
+VALUES (UUID_TO_BIN(UUID()),?,?,TRUE,UTC_TIMESTAMP(6))
+ON DUPLICATE KEY UPDATE enabled=TRUE`, provider, product); err != nil {
+		return SurfaceEntry{}, err
+	}
+	return SurfaceEntry{Provider: provider, Product: product, Enabled: true}, nil
 }

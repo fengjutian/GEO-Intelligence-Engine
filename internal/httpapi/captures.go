@@ -16,6 +16,8 @@ type captureStore interface {
 	ListByAudit(ctx context.Context, tenantID, auditID string) ([]captures.Capture, error)
 	ListByBatch(ctx context.Context, tenantID, batchID string) ([]captures.Capture, error)
 	Revoke(ctx context.Context, tenantID, captureID, reason string) error
+	ListSurfaces(ctx context.Context) ([]captures.SurfaceEntry, error)
+	AddSurface(ctx context.Context, provider, product string) (captures.SurfaceEntry, error)
 }
 
 type captureHandler struct {
@@ -110,4 +112,29 @@ func (h *captureHandler) writeError(w http.ResponseWriter, r *http.Request, err 
 		h.logger.Error("capture operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))
 	}
+}
+
+func (h *captureHandler) listSurfaces(w http.ResponseWriter, r *http.Request) {
+	items, err := h.store.ListSurfaces(r.Context())
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *captureHandler) addSurface(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Provider string `json:"provider"`
+		Product  string `json:"product"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	item, err := h.store.AddSurface(r.Context(), input.Provider, input.Product)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
 }
