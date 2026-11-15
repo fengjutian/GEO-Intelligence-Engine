@@ -343,7 +343,7 @@ paths:
       operationId: rebuildQuestionClusters
       parameters:
         - {$ref: '#/components/parameters/ProjectId'}
-        - {name: algorithm, in: query, schema: {type: string, enum: [semantic-v2, jaccard-v1]}}
+        - {name: algorithm, in: query, schema: {type: string, enum: [semantic-v2, embedding-v1, jaccard-v1]}}
       responses:
         '200': {description: Rebuilt clusters, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
   /projects/{projectId}/question-clusters:

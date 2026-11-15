@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	ClusterAlgorithmV1       = "jaccard-v1"
-	ClusterAlgorithmSemantic = "semantic-v2"
-	ClusterAlgorithm         = ClusterAlgorithmSemantic
+	ClusterAlgorithmV1        = "jaccard-v1"
+	ClusterAlgorithmSemantic  = "semantic-v2"
+	ClusterAlgorithmEmbedding = "embedding-v1"
+	ClusterAlgorithm          = ClusterAlgorithmSemantic
 )
 
 // ClusterMember is one question grouped under a representative.
@@ -42,7 +43,7 @@ type clusterQuestion struct {
 }
 
 // RebuildClusters groups draft questions by deterministic token similarity.
-func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algorithm string) ([]Cluster, error) {
+func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algorithm string, vectors map[string][]float64) ([]Cluster, error) {
 	algorithm = normalizeAlgorithm(algorithm)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -128,11 +129,18 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 			if algorithm == ClusterAlgorithmV1 {
 				score = similarity(itemShingles, documents[cluster.representative])
 			}
+			if algorithm == ClusterAlgorithmEmbedding {
+				score = cosineSimilarity(vectors[item.id], vectors[cluster.representative])
+			}
 			if score > bestScore {
 				bestIndex, bestScore = index, score
 			}
 		}
-		if bestIndex >= 0 && bestScore >= 0.3 {
+		threshold := 0.3
+		if algorithm == ClusterAlgorithmEmbedding {
+			threshold = 0.8
+		}
+		if bestIndex >= 0 && bestScore >= threshold {
 			clusters[bestIndex].members = append(clusters[bestIndex].members, ClusterMember{QuestionID: item.id, Text: item.text, Similarity: bestScore})
 			continue
 		}
@@ -164,6 +172,26 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,UUID_TO_BIN(?),?,FALSE)`,
 		return nil, err
 	}
 	return s.ListClusters(ctx, tenantID, projectID)
+}
+
+// DraftQuestionTexts returns id→text for the project's draft version.
+func (s *Store) DraftQuestionTexts(ctx context.Context, tenantID, projectID string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(q.id),q.text_value
+FROM questions q JOIN question_set_versions qsv ON qsv.id=q.version_id JOIN question_sets qs ON qs.id=qsv.question_set_id
+WHERE q.tenant_id=UUID_TO_BIN(?) AND qs.project_id=UUID_TO_BIN(?) AND qsv.status='draft' ORDER BY q.created_at,q.id`, tenantID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	texts := map[string]string{}
+	for rows.Next() {
+		var id, text string
+		if err := rows.Scan(&id, &text); err != nil {
+			return nil, err
+		}
+		texts[id] = text
+	}
+	return texts, rows.Err()
 }
 
 // ListClusters returns current clusters for the project's draft version.
@@ -202,10 +230,30 @@ FROM cluster_members cm JOIN questions q ON q.id=cm.question_id WHERE cm.cluster
 }
 
 func normalizeAlgorithm(value string) string {
-	if strings.EqualFold(strings.TrimSpace(value), ClusterAlgorithmV1) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case ClusterAlgorithmV1:
 		return ClusterAlgorithmV1
+	case ClusterAlgorithmEmbedding:
+		return ClusterAlgorithmEmbedding
+	default:
+		return ClusterAlgorithmSemantic
 	}
-	return ClusterAlgorithmSemantic
+}
+
+func cosineSimilarity(left, right []float64) float64 {
+	if len(left) == 0 || len(left) != len(right) {
+		return 0
+	}
+	dot, leftNorm, rightNorm := 0.0, 0.0, 0.0
+	for index := range left {
+		dot += left[index] * right[index]
+		leftNorm += left[index] * left[index]
+		rightNorm += right[index] * right[index]
+	}
+	if leftNorm == 0 || rightNorm == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(leftNorm) * math.Sqrt(rightNorm))
 }
 
 var semanticSynonyms = []struct{ from, to string }{

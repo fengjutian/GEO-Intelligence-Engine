@@ -73,7 +73,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
     <div className="question-toolbar">
       <button type="button" onClick={() => generate.mutate('template')} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成建议问题'}</button>
       <button type="button" onClick={() => generate.mutate('llm')} disabled={generate.isPending}>LLM 生成</button>
-      <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} aria-label="聚类算法"><option value="semantic-v2">语义 v2</option><option value="jaccard-v1">基础 v1</option></select>
+      <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} aria-label="聚类算法"><option value="semantic-v2">语义 v2</option><option value="embedding-v1">向量 v1</option><option value="jaccard-v1">基础 v1</option></select>
       <button type="button" onClick={() => rebuild.mutate()} disabled={rebuild.isPending}>{rebuild.isPending ? '聚类中…' : '重建聚类'}</button>
       {generate.data && <span>{generate.data.mode === 'llm' ? 'LLM' : '模板'}生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条{generate.data.warning ? `（${generate.data.warning}）` : ''}</span>}
     </div>

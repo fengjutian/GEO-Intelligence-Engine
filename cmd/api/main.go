@@ -12,6 +12,7 @@ import (
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/config"
 	"github.com/fengjutian/geo-intelligence-engine/internal/database"
+	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/httpapi"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 )
@@ -36,10 +37,11 @@ func main() {
 		modelgateway.ProviderConfig{Name: "deepseek", BaseURL: cfg.DeepSeekBaseURL, APIKey: cfg.DeepSeekAPIKey, Model: cfg.DeepSeekModel, MaxField: "max_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 	)
+	embeddingClient := embeddings.New(cfg.EmbeddingBaseURL, cfg.EmbeddingAPIKey, cfg.EmbeddingModel)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, Embeddings: embeddingClient, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

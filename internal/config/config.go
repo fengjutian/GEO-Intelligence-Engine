@@ -20,6 +20,9 @@ type Config struct {
 	MiniMaxAPIKey    string
 	MiniMaxBaseURL   string
 	MiniMaxModel     string
+	EmbeddingBaseURL string
+	EmbeddingAPIKey  string
+	EmbeddingModel   string
 	ModelRPM         int
 	ModelConcurrency int
 	JudgeURL         string
@@ -47,6 +50,9 @@ func FromEnv() (Config, error) {
 		MiniMaxAPIKey:    strings.TrimSpace(os.Getenv("MINIMAX_API_KEY")),
 		MiniMaxBaseURL:   envOr("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1"),
 		MiniMaxModel:     envOr("MINIMAX_MODEL", "MiniMax-M2.5"),
+		EmbeddingBaseURL: envOr("GEO_EMBEDDING_BASE_URL", ""),
+		EmbeddingAPIKey:  strings.TrimSpace(os.Getenv("GEO_EMBEDDING_API_KEY")),
+		EmbeddingModel:   envOr("GEO_EMBEDDING_MODEL", ""),
 		ModelRPM:         envInt("GEO_MODEL_RPM", 60),
 		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
 		JudgeURL:         envOr("GEO_JUDGE_URL", "http://127.0.0.1:8081"),

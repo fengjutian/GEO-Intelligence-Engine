@@ -53,16 +53,51 @@ func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request
 		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
 		return
 	}
-	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID, r.URL.Query().Get("algorithm"))
+	algorithm := r.URL.Query().Get("algorithm")
+	warning := ""
+	var vectors map[string][]float64
+	if algorithm == questions.ClusterAlgorithmEmbedding {
+		if h.embeddings == nil || !h.embeddings.Enabled() {
+			algorithm = questions.ClusterAlgorithmSemantic
+			warning = "embedding service is not configured; fell back to semantic-v2"
+		} else {
+			texts, err := h.store.DraftQuestionTexts(r.Context(), h.tenantID, projectID)
+			if err != nil {
+				h.writeError(w, r, err)
+				return
+			}
+			ids := make([]string, 0, len(texts))
+			inputs := make([]string, 0, len(texts))
+			for id, text := range texts {
+				ids = append(ids, id)
+				inputs = append(inputs, text)
+			}
+			embedded, err := h.embeddings.Embed(r.Context(), inputs)
+			if err != nil {
+				algorithm = questions.ClusterAlgorithmSemantic
+				warning = "embedding request failed; fell back to semantic-v2"
+			} else {
+				vectors = make(map[string][]float64, len(ids))
+				for index, id := range ids {
+					vectors[id] = embedded[index]
+				}
+			}
+		}
+	}
+	items, err := h.store.RebuildClusters(r.Context(), h.tenantID, projectID, algorithm, vectors)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	version := questions.ClusterAlgorithm
-	if len(items) > 0 {
-		version = items[0].AlgorithmVersion
+	version := algorithm
+	if version == "" {
+		version = questions.ClusterAlgorithm
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "algorithmVersion": version})
+	response := map[string]any{"items": items, "algorithmVersion": version}
+	if warning != "" {
+		response["warning"] = warning
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *questionHandler) listClusters(w http.ResponseWriter, r *http.Request) {

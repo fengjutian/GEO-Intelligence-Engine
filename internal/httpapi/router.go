@@ -10,6 +10,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
+	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
@@ -28,6 +29,7 @@ type Dependencies struct {
 	DevActorID   string
 	WorkerToken  string
 	ModelGateway *modelgateway.Gateway
+	Embeddings   *embeddings.Client
 	ReportDir    string
 	AuthMode     string
 	AuthSecret   string
@@ -95,7 +97,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/model-providers", modelHandler.listProviders)
 	mux.HandleFunc("POST /api/v1/model-providers/{provider}/health", modelHandler.health)
 	mux.HandleFunc("POST /api/v1/model-gateway/chat", modelHandler.chat)
-	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ModelGateway)
+	questionHandler := newQuestionHandler(questions.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ModelGateway, deps.Embeddings)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/questions", projectAccess(deps.DB, questionHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/questions", projectAccess(deps.DB, questionHandler.create))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-generation-runs", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.generateQuestions)))

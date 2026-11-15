@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/google/uuid"
@@ -21,7 +22,8 @@ type questionStore interface {
 	LoadGenerationContext(context.Context, string, string, string) (questions.GenerationContext, error)
 	GenerateFromCandidates(context.Context, string, string, string, string, string, string, []questions.Candidate) (questions.GenerationRun, []questions.Question, error)
 	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
-	RebuildClusters(context.Context, string, string, string) ([]questions.Cluster, error)
+	RebuildClusters(context.Context, string, string, string, map[string][]float64) ([]questions.Cluster, error)
+	DraftQuestionTexts(context.Context, string, string) (map[string]string, error)
 	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
 	SetClusterLocked(context.Context, string, string, string, bool, string) (questions.Cluster, error)
 	MoveMember(context.Context, string, string, string, string) error
@@ -30,14 +32,15 @@ type questionStore interface {
 }
 
 type questionHandler struct {
-	store    questionStore
-	tenantID string
-	logger   *slog.Logger
-	gateway  *modelgateway.Gateway
+	store      questionStore
+	tenantID   string
+	logger     *slog.Logger
+	gateway    *modelgateway.Gateway
+	embeddings *embeddings.Client
 }
 
-func newQuestionHandler(store questionStore, tenantID string, logger *slog.Logger, gateway *modelgateway.Gateway) *questionHandler {
-	return &questionHandler{store: store, tenantID: tenantID, logger: logger, gateway: gateway}
+func newQuestionHandler(store questionStore, tenantID string, logger *slog.Logger, gateway *modelgateway.Gateway, embeddingClient *embeddings.Client) *questionHandler {
+	return &questionHandler{store: store, tenantID: tenantID, logger: logger, gateway: gateway, embeddings: embeddingClient}
 }
 
 func (h *questionHandler) list(w http.ResponseWriter, r *http.Request) {
