@@ -1,32 +1,302 @@
 [
-  {"a": "AI 搜索可见度怎么提升？", "b": "生成式引擎可见性如何提高？", "same": true},
-  {"a": "Acme GEO 是什么？", "b": "Acme GEO 是什么品牌？", "same": true},
-  {"a": "Acme GEO 靠谱吗？", "b": "Acme GEO 值得信任吗？", "same": true},
-  {"a": "Acme Insight 是做什么的？", "b": "Acme Insight 是什么产品？", "same": true},
-  {"a": "Acme Insight 和 Acme Insight Pro 有什么区别？", "b": "Acme Insight Pro 与 Acme Insight 有什么不同？", "same": true},
-  {"a": "如何提升品牌在 AI 回答中的可见度？", "b": "怎样提高品牌在生成式搜索中的曝光？", "same": true},
-  {"a": "有哪些 GEO 分析工具？", "b": "GEO 工具推荐哪些？", "same": true},
-  {"a": "AI 回答中官网引用率怎么算？", "b": "官网被 AI 引用的比例如何计算？", "same": true},
-  {"a": "品牌主动推荐率是什么？", "b": "AI 主动推荐品牌的比例怎么定义？", "same": true},
-  {"a": "Acme GEO 适合什么团队？", "b": "哪些企业适合使用 Acme GEO？", "same": true},
-  {"a": "采购 Acme GEO 前需要了解什么？", "b": "选择 Acme GEO 前要确认哪些信息？", "same": true},
-  {"a": "Acme GEO 和竞品相比怎么样？", "b": "Acme GEO 与竞争对手有什么区别？", "same": true},
-  {"a": "GEO 优化有哪些步骤？", "b": "如何落地 GEO 优化？", "same": true},
-  {"a": "内容质量分析能发现什么问题？", "b": "内容审计会检查哪些问题？", "same": true},
-  {"a": "审计报告包含哪些内容？", "b": "GEO 报告有哪些章节？", "same": true},
-  {"a": "Acme GEO 是什么？", "b": "如何选择 CRM 系统？", "same": false},
-  {"a": "官网引用率是多少？", "b": "品牌主动推荐率是多少？", "same": false},
-  {"a": "技术审计检查什么？", "b": "内容质量分析检查什么？", "same": false},
-  {"a": "如何提升提及率？", "b": "如何降低拒答率？", "same": false},
-  {"a": "抓取失败怎么办？", "b": "报告如何导出 PDF？", "same": false},
-  {"a": "Acme GEO 的价格是多少？", "b": "Acme GEO 支持哪些语言？", "same": false},
-  {"a": "如何配置 DeepSeek？", "b": "如何创建审计任务？", "same": false},
-  {"a": "实体合并怎么撤销？", "b": "知识快照怎么发布？", "same": false},
-  {"a": "复核队列有哪些状态？", "b": "审计预算如何结算？", "same": false},
-  {"a": "GEO 和 SEO 有什么区别？", "b": "GEO 报告怎么生成？", "same": false},
-  {"a": "问题集如何发布版本？", "b": "如何导入 CSV 问题？", "same": false},
-  {"a": "品牌别名在哪里维护？", "b": "官网 URL 在哪里修改？", "same": false},
-  {"a": "指标置信区间怎么计算？", "b": "报告优先级如何排序？", "same": false},
-  {"a": "MiniMax 配额错误怎么处理？", "b": "DeepSeek 调用超时怎么办？", "same": false},
-  {"a": "如何创建优化任务？", "b": "如何查看任务看板？", "same": false}
+  {
+    "a": "AI 搜索可见度怎么提升？",
+    "b": "生成式引擎可见性如何提高？",
+    "same": true
+  },
+  {
+    "a": "Acme GEO 是什么？",
+    "b": "Acme GEO 是什么品牌？",
+    "same": true
+  },
+  {
+    "a": "Acme GEO 靠谱吗？",
+    "b": "Acme GEO 值得信任吗？",
+    "same": true
+  },
+  {
+    "a": "Acme Insight 是做什么的？",
+    "b": "Acme Insight 是什么产品？",
+    "same": true
+  },
+  {
+    "a": "Acme Insight 和 Acme Insight Pro 有什么区别？",
+    "b": "Acme Insight Pro 与 Acme Insight 有什么不同？",
+    "same": true
+  },
+  {
+    "a": "如何提升品牌在 AI 回答中的可见度？",
+    "b": "怎样提高品牌在生成式搜索中的曝光？",
+    "same": true
+  },
+  {
+    "a": "有哪些 GEO 分析工具？",
+    "b": "GEO 工具推荐哪些？",
+    "same": true
+  },
+  {
+    "a": "AI 回答中官网引用率怎么算？",
+    "b": "官网被 AI 引用的比例如何计算？",
+    "same": true
+  },
+  {
+    "a": "品牌主动推荐率是什么？",
+    "b": "AI 主动推荐品牌的比例怎么定义？",
+    "same": true
+  },
+  {
+    "a": "Acme GEO 适合什么团队？",
+    "b": "哪些企业适合使用 Acme GEO？",
+    "same": true
+  },
+  {
+    "a": "采购 Acme GEO 前需要了解什么？",
+    "b": "选择 Acme GEO 前要确认哪些信息？",
+    "same": true
+  },
+  {
+    "a": "Acme GEO 和竞品相比怎么样？",
+    "b": "Acme GEO 与竞争对手有什么区别？",
+    "same": true
+  },
+  {
+    "a": "GEO 优化有哪些步骤？",
+    "b": "如何落地 GEO 优化？",
+    "same": true
+  },
+  {
+    "a": "内容质量分析能发现什么问题？",
+    "b": "内容审计会检查哪些问题？",
+    "same": true
+  },
+  {
+    "a": "审计报告包含哪些内容？",
+    "b": "GEO 报告有哪些章节？",
+    "same": true
+  },
+  {
+    "a": "Acme GEO 是什么？",
+    "b": "如何选择 CRM 系统？",
+    "same": false
+  },
+  {
+    "a": "官网引用率是多少？",
+    "b": "品牌主动推荐率是多少？",
+    "same": false
+  },
+  {
+    "a": "技术审计检查什么？",
+    "b": "内容质量分析检查什么？",
+    "same": false
+  },
+  {
+    "a": "如何提升提及率？",
+    "b": "如何降低拒答率？",
+    "same": false
+  },
+  {
+    "a": "抓取失败怎么办？",
+    "b": "报告如何导出 PDF？",
+    "same": false
+  },
+  {
+    "a": "Acme GEO 的价格是多少？",
+    "b": "Acme GEO 支持哪些语言？",
+    "same": false
+  },
+  {
+    "a": "如何配置 DeepSeek？",
+    "b": "如何创建审计任务？",
+    "same": false
+  },
+  {
+    "a": "实体合并怎么撤销？",
+    "b": "知识快照怎么发布？",
+    "same": false
+  },
+  {
+    "a": "复核队列有哪些状态？",
+    "b": "审计预算如何结算？",
+    "same": false
+  },
+  {
+    "a": "GEO 和 SEO 有什么区别？",
+    "b": "GEO 报告怎么生成？",
+    "same": false
+  },
+  {
+    "a": "问题集如何发布版本？",
+    "b": "如何导入 CSV 问题？",
+    "same": false
+  },
+  {
+    "a": "品牌别名在哪里维护？",
+    "b": "官网 URL 在哪里修改？",
+    "same": false
+  },
+  {
+    "a": "指标置信区间怎么计算？",
+    "b": "报告优先级如何排序？",
+    "same": false
+  },
+  {
+    "a": "MiniMax 配额错误怎么处理？",
+    "b": "DeepSeek 调用超时怎么办？",
+    "same": false
+  },
+  {
+    "a": "如何创建优化任务？",
+    "b": "如何查看任务看板？",
+    "same": false
+  },
+  {
+    "a": "What is Acme GEO?",
+    "b": "What kind of product is Acme GEO?",
+    "same": true
+  },
+  {
+    "a": "Is Acme GEO trustworthy?",
+    "b": "Can I trust Acme GEO?",
+    "same": true
+  },
+  {
+    "a": "How do I improve AI search visibility?",
+    "b": "How can I increase visibility in generative engines?",
+    "same": true
+  },
+  {
+    "a": "What are the best GEO tools?",
+    "b": "Which GEO tools do you recommend?",
+    "same": true
+  },
+  {
+    "a": "How is official citation rate calculated?",
+    "b": "How do you compute the official website citation ratio?",
+    "same": true
+  },
+  {
+    "a": "What is recommendation rate?",
+    "b": "How is brand recommendation rate defined?",
+    "same": true
+  },
+  {
+    "a": "Who should use Acme GEO?",
+    "b": "Which teams are a good fit for Acme GEO?",
+    "same": true
+  },
+  {
+    "a": "What should I know before buying Acme GEO?",
+    "b": "What to check before choosing Acme GEO?",
+    "same": true
+  },
+  {
+    "a": "How does Acme GEO compare with competitors?",
+    "b": "What makes Acme GEO different from alternatives?",
+    "same": true
+  },
+  {
+    "a": "What are the steps for GEO optimization?",
+    "b": "How do I implement GEO optimization?",
+    "same": true
+  },
+  {
+    "a": "What does content quality analysis detect?",
+    "b": "What issues does content auditing find?",
+    "same": true
+  },
+  {
+    "a": "What sections are in the audit report?",
+    "b": "What does a GEO report include?",
+    "same": true
+  },
+  {
+    "a": "Acme Insight 和 Acme Insight Pro 哪个更适合小团队？",
+    "b": "小团队应该选 Acme Insight 还是 Acme Insight Pro？",
+    "same": true
+  },
+  {
+    "a": "如何查看审计指标？",
+    "b": "审计指标在哪里看？",
+    "same": true
+  },
+  {
+    "a": "报告可以导出哪些格式？",
+    "b": "报告支持 CSV 和 PDF 导出吗？",
+    "same": true
+  },
+  {
+    "a": "What is Acme GEO?",
+    "b": "How do I choose a CRM?",
+    "same": false
+  },
+  {
+    "a": "How do I improve mention rate?",
+    "b": "How do I reduce refusal rate?",
+    "same": false
+  },
+  {
+    "a": "What does technical audit check?",
+    "b": "What does content quality analysis check?",
+    "same": false
+  },
+  {
+    "a": "How do I configure DeepSeek?",
+    "b": "How do I create an audit?",
+    "same": false
+  },
+  {
+    "a": "How do I undo an entity merge?",
+    "b": "How do I publish a knowledge snapshot?",
+    "same": false
+  },
+  {
+    "a": "What statuses does the review queue have?",
+    "b": "How is the audit budget settled?",
+    "same": false
+  },
+  {
+    "a": "What is GEO?",
+    "b": "How do I export a report?",
+    "same": false
+  },
+  {
+    "a": "How do I publish a question set?",
+    "b": "How do I import CSV questions?",
+    "same": false
+  },
+  {
+    "a": "Where do I maintain brand aliases?",
+    "b": "Where do I edit the official URL?",
+    "same": false
+  },
+  {
+    "a": "How are confidence intervals calculated?",
+    "b": "How are report priorities sorted?",
+    "same": false
+  },
+  {
+    "a": "How do I handle MiniMax quota errors?",
+    "b": "How do I debug DeepSeek timeouts?",
+    "same": false
+  },
+  {
+    "a": "How do I create an optimization task?",
+    "b": "How do I view the task board?",
+    "same": false
+  },
+  {
+    "a": "Acme GEO 支持中文吗？",
+    "b": "Acme GEO 的价格是多少？",
+    "same": false
+  },
+  {
+    "a": "内容质量分析支持哪些规则？",
+    "b": "技术审计支持哪些规则？",
+    "same": false
+  },
+  {
+    "a": "如何重跑内容分析？",
+    "b": "如何重建问题聚类？",
+    "same": false
+  }
 ]
