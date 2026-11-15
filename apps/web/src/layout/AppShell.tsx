@@ -1,7 +1,7 @@
-import { BarChart3, Bot, ClipboardCheck, FolderKanban, Gauge, Globe2, LogOut, Network, Settings } from 'lucide-react'
+import { Activity, BarChart3, Bot, ClipboardCheck, FolderKanban, Gauge, Globe2, LogOut, Network, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-export type PageId = 'overview' | 'projects' | 'audits' | 'entities' | 'questions' | 'reviews' | 'models' | 'settings'
+export type PageId = 'overview' | 'projects' | 'audits' | 'entities' | 'questions' | 'reviews' | 'models' | 'monitoring' | 'settings'
 
 const navItems = [
   { id: 'overview' as const, label: '概览', icon: Gauge },
@@ -10,11 +10,12 @@ const navItems = [
   { id: 'entities' as const, label: '实体知识', icon: Network },
   { id: 'questions' as const, label: '问题空间', icon: BarChart3 },
   { id: 'reviews' as const, label: '复核队列', icon: ClipboardCheck },
+  { id: 'monitoring' as const, label: '持续监测', icon: Activity },
   { id: 'models' as const, label: '模型服务', icon: Bot },
   { id: 'settings' as const, label: '成员设置', icon: Settings },
 ]
 
-const titles: Record<PageId, string> = { overview: '工作台', projects: '项目空间', audits: '网站审计', entities: '实体知识', questions: '问题空间', reviews: '复核队列', models: '模型服务', settings: '成员设置' }
+const titles: Record<PageId, string> = { overview: '工作台', projects: '项目空间', audits: '网站审计', entities: '实体知识', questions: '问题空间', reviews: '复核队列', monitoring: '持续监测', models: '模型服务', settings: '成员设置' }
 
 type Props = {
   activePage: PageId

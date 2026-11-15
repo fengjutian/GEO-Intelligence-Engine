@@ -8,6 +8,7 @@ import { EntitiesPage } from './features/entities/EntitiesPage'
 import { ReviewPage } from './features/reviews/ReviewPage'
 import { QuestionTools } from './features/questions/QuestionTools'
 import { SettingsPage } from './features/settings/SettingsPage'
+import { MonitoringPage } from './features/monitoring/MonitoringPage'
 import { AppShell, type PageId } from './layout/AppShell'
 import { useAuth } from './features/auth/AuthGate'
 
@@ -299,7 +300,8 @@ export function App() {
       {activePage === 'entities' && <EntitiesPage projects={projects.data?.items ?? []} />}
       {activePage === 'reviews' && <ReviewPage />}
       {activePage === 'settings' && <SettingsPage />}
-      {!['overview', 'models', 'entities', 'reviews', 'settings'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
+      {activePage === 'monitoring' && <MonitoringPage />}
+      {!['overview', 'models', 'entities', 'reviews', 'settings', 'monitoring'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
         <div className="section-heading">
           <div><p className="eyebrow">{activePage.toUpperCase()}</p><h2 id="projects-title">{workspaceTitle}</h2><p>{workspaceDescription}</p></div>
           <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>
