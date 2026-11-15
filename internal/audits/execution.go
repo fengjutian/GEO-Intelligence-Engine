@@ -200,9 +200,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,JSON_OBJECT(),?,UTC_T
 	if err != nil {
 		return fmt.Errorf("persist model request: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO ai_responses (id,tenant_id,sample_id,request_id,provider_request_id,resolved_model,transport_status,raw_object_key,raw_hash,usage_json,cost_microunits,currency,finish_reason,latency_ms,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'succeeded',?,?,CAST(? AS JSON),?,?,?,?,UTC_TIMESTAMP(6))`,
-		responseID.String(), tenantID, result.SampleID, requestID.String(), result.ProviderRequestID, result.ResolvedModel, "db://raw/"+responseID.String(), rawHash, usage, result.CostMicrounits, result.Currency, result.FinishReason, result.LatencyMS)
+	_, err = tx.ExecContext(ctx, `INSERT INTO ai_responses (id,tenant_id,sample_id,request_id,provider_request_id,resolved_model,transport_status,raw_object_key,raw_hash,usage_json,cost_microunits,currency,finish_reason,content_text,latency_ms,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'succeeded',?,?,CAST(? AS JSON),?,?,?,?,?,UTC_TIMESTAMP(6))`,
+		responseID.String(), tenantID, result.SampleID, requestID.String(), result.ProviderRequestID, result.ResolvedModel, "db://raw/"+responseID.String(), rawHash, usage, result.CostMicrounits, result.Currency, result.FinishReason, result.Content, result.LatencyMS)
 	if err != nil {
 		return fmt.Errorf("persist model response: %w", err)
 	}
