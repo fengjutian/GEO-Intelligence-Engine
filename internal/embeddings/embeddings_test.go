@@ -42,3 +42,34 @@ func TestEmbedNotConfigured(t *testing.T) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
 	}
 }
+
+func TestEmbedBatchesByTen(t *testing.T) {
+	batches := []int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Input []string `json:"input"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&input)
+		batches = append(batches, len(input.Input))
+		data := []map[string]any{}
+		for range input.Input {
+			data = append(data, map[string]any{"embedding": []float64{1, 0}})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	defer server.Close()
+	inputs := make([]string, 12)
+	for index := range inputs {
+		inputs[index] = "question"
+	}
+	vectors, err := New(server.URL, "", "embed-small").Embed(context.Background(), inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vectors) != 12 {
+		t.Fatalf("expected 12 vectors, got %d", len(vectors))
+	}
+	if len(batches) != 2 || batches[0] != 10 || batches[1] != 2 {
+		t.Fatalf("unexpected batches: %v", batches)
+	}
+}

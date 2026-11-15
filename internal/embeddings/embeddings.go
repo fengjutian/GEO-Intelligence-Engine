@@ -44,6 +44,26 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float64, error)
 	if len(texts) == 0 {
 		return [][]float64{}, nil
 	}
+	const batchSize = 10
+	vectors := make([][]float64, 0, len(texts))
+	for start := 0; start < len(texts); start += batchSize {
+		end := start + batchSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+		batch, err := c.embedBatch(ctx, texts[start:end])
+		if err != nil {
+			return nil, err
+		}
+		vectors = append(vectors, batch...)
+	}
+	return vectors, nil
+}
+
+func (c *Client) embedBatch(ctx context.Context, texts []string) ([][]float64, error) {
+	if len(texts) == 0 {
+		return [][]float64{}, nil
+	}
 	body, err := json.Marshal(map[string]any{"model": c.Model, "input": texts})
 	if err != nil {
 		return nil, err
