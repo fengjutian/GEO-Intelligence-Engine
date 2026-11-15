@@ -117,7 +117,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 	}
 	messages := buildMessages(claim)
 	temperature := 0.2
-	response, err := callWithRetry(ctx, gateway, modelgateway.ChatRequest{Provider: claim.Provider, Model: claim.ModelSelector, Messages: messages, MaxTokens: 1200, Temperature: &temperature}, logger)
+	response, err := callWithRetry(ctx, gateway, modelgateway.ChatRequest{Provider: claim.Provider, Model: claim.ModelSelector, Messages: messages, MaxTokens: 4096, Temperature: &temperature}, logger)
 	if err != nil {
 		code := "MODEL_CALL_FAILED"
 		if errors.Is(err, modelgateway.ErrProviderUnconfigured) {
