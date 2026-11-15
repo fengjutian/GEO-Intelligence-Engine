@@ -90,3 +90,18 @@ func TestBuildGeoInsightsTreatsMissingValueAsZero(t *testing.T) {
 		t.Fatalf("brandShare = %v, want 0.0", got)
 	}
 }
+
+func TestCitationAvailabilityDistinguishesMissingCitations(t *testing.T) {
+	coverage, availability := citationAvailability(AuditCitations{Total: 0})
+	if coverage != nil {
+		t.Fatalf("coverage = %v, want nil when the answers carry no URLs", coverage)
+	}
+	if availability != "no_citations_in_answers" {
+		t.Fatalf("availability = %q", availability)
+	}
+
+	coverage, availability = citationAvailability(AuditCitations{Total: 4, BrandDomainCount: 1, BrandDomainCoverage: 0.25})
+	if coverage != 0.25 || availability != "available" {
+		t.Fatalf("coverage = %v availability = %q", coverage, availability)
+	}
+}

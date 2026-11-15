@@ -13,8 +13,7 @@ func findingCodes(items []technicalFinding) map[string]bool {
 	return codes
 }
 
-func TestContentFindingsStructure(t *testing.T) {
-	completion := Completion{
+func TestContentFindingsStructure(t *testing.T) {	completion := Completion{
 		FinalURL:   "https://example.com/guide",
 		TextLength: 800,
 		Headings:   []Heading{{Level: 2, Text: "Details"}, {Level: 4, Text: "Deep"}},

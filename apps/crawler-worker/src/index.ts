@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { fetch, Headers, type RequestInit } from 'undici'
 import { parseHTML } from './parser.js'
+import { closeRenderer, renderHtml, shouldRender } from './renderer.js'
 import { CRAWLER_USER_AGENT, emptyRobots, isAllowedByRobots, parseRobots, type RobotsFile } from './robots.js'
 import { parseSitemap, SITEMAP_PARSER_VERSION } from './sitemap.js'
 import { assertPublicResolvedUrl } from './url-policy.js'
@@ -268,12 +269,26 @@ async function processClaim(claim: Claim) {
       checkRobots: true,
     })
     const html = new TextDecoder().decode(bytes)
-    const parsed = parseHTML(html, finalUrl)
+    let parsed = parseHTML(html, finalUrl)
+    const staticTextLength = parsed.text.length
+    let parserVersion = 'cheerio-v1'
+    let rendered = false
+    if (shouldRender(staticTextLength)) {
+      const renderedHtml = await renderHtml(finalUrl)
+      if (renderedHtml) {
+        const renderedParsed = parseHTML(renderedHtml, finalUrl)
+        if (renderedParsed.text.length > parsed.text.length) {
+          parsed = renderedParsed
+          parserVersion = 'cheerio-v1+chromium'
+          rendered = true
+        }
+      }
+    }
     const contentHash = sha256(bytes)
     let canonicalUrl: string | null = null
     try { if (parsed.canonical) canonicalUrl = new URL(parsed.canonical, finalUrl).href } catch { canonicalUrl = null }
     const links = [...new Set(parsed.links.filter((link) => link.startsWith('http://') || link.startsWith('https://')))].slice(0, 100)
-    const completion = { crawlUrlId: claim.crawlUrlId, finalUrl, httpStatus: response.status, title: parsed.title, language: parsed.language ?? null, contentHash, parserVersion: 'cheerio-v1', canonicalUrl, links, noIndex: parsed.robots.includes('noindex'), textLength: parsed.text.length, structuredData: parsed.structuredData, headings: parsed.headings.slice(0, 50), textSample: parsed.text.slice(0, 2000), author: parsed.author ?? null, publishedAt: parsed.publishedAt ?? null, faq: parsed.faq, terms: parsed.terms }
+    const completion = { crawlUrlId: claim.crawlUrlId, finalUrl, httpStatus: response.status, title: parsed.title, language: parsed.language ?? null, contentHash, parserVersion, rendered, staticTextLength, canonicalUrl, links, noIndex: parsed.robots.includes('noindex'), textLength: parsed.text.length, structuredData: parsed.structuredData, headings: parsed.headings.slice(0, 50), textSample: parsed.text.slice(0, 2000), author: parsed.author ?? null, publishedAt: parsed.publishedAt ?? null, faq: parsed.faq, terms: parsed.terms }
     const result = await api(`/internal/crawler/v1/runs/${claim.runId}/complete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(completion) })
     if (!result.ok) throw new Error(`COMPLETE_API_${result.status}`)
     process.stdout.write(JSON.stringify({ level: 'info', message: 'crawl completed', runId: claim.runId, url: finalUrl, status: response.status }) + '\n')
@@ -310,6 +325,7 @@ function shutdown(signal: string) {
   stopping = true
   clearInterval(pollTimer)
   process.stdout.write(JSON.stringify({ level: 'info', message: 'shutting down', signal }) + '\n')
+  void closeRenderer()
   server.close((error) => {
     process.exitCode = error ? 1 : 0
   })

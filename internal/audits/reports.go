@@ -138,6 +138,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 	}
 	geoSummary, competitiveLandscape, contentTrust := buildGeoInsights(metrics, shareValues, factChecks, contentQuality)
 	if citations, citationErr := s.Citations(ctx, tenantID, auditID, "", ""); citationErr == nil {
+		coverage, availability := citationAvailability(citations)
 		topDomains := []map[string]any{}
 		for index, domain := range citations.Domains {
 			if index >= 5 {
@@ -149,8 +150,10 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 			"total": citations.Total, "official": citations.Official, "thirdParty": citations.ThirdParty,
 			"brandDomain": citations.BrandDomain, "brandDomainCount": citations.BrandDomainCount,
 			"brandDomainCoverage": citations.BrandDomainCoverage, "topDomains": topDomains,
+			"availability": availability,
 		}
-		geoSummary["citationCoverage"] = citations.BrandDomainCoverage
+		geoSummary["citationCoverage"] = coverage
+		geoSummary["citationAvailability"] = availability
 	}
 	sections := []struct {
 		code    string
@@ -303,6 +306,15 @@ func metricFloat(item map[string]any, key string) float64 {
 		}
 	}
 	return 0
+}
+
+// citationAvailability keeps "the model never emitted URLs" distinct from
+// "the brand was never cited": coverage is only meaningful once citations exist.
+func citationAvailability(citations AuditCitations) (any, string) {
+	if citations.Total == 0 {
+		return nil, "no_citations_in_answers"
+	}
+	return citations.BrandDomainCoverage, "available"
 }
 
 func overallMetric(metrics []map[string]any, code string) any {

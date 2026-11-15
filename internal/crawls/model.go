@@ -56,25 +56,27 @@ type Claim struct {
 }
 
 type Completion struct {
-	RunID          string            `json:"runId"`
-	CrawlURLID     string            `json:"crawlUrlId"`
-	FinalURL       string            `json:"finalUrl"`
-	HTTPStatus     int               `json:"httpStatus"`
-	Title          string            `json:"title"`
-	Language       *string           `json:"language"`
-	ContentHash    string            `json:"contentHash"`
-	ParserVersion  string            `json:"parserVersion"`
-	CanonicalURL   *string           `json:"canonicalUrl"`
-	Links          []string          `json:"links"`
-	NoIndex        bool              `json:"noIndex"`
-	TextLength     int               `json:"textLength"`
-	StructuredData []json.RawMessage `json:"structuredData,omitempty"`
-	Headings       []Heading         `json:"headings,omitempty"`
-	TextSample     string            `json:"textSample,omitempty"`
-	Author         string            `json:"author,omitempty"`
-	PublishedAt    string            `json:"publishedAt,omitempty"`
-	FAQ            []FAQItem         `json:"faq,omitempty"`
-	Terms          []TermSignal      `json:"terms,omitempty"`
+	RunID            string            `json:"runId"`
+	CrawlURLID       string            `json:"crawlUrlId"`
+	FinalURL         string            `json:"finalUrl"`
+	HTTPStatus       int               `json:"httpStatus"`
+	Title            string            `json:"title"`
+	Language         *string           `json:"language"`
+	ContentHash      string            `json:"contentHash"`
+	ParserVersion    string            `json:"parserVersion"`
+	CanonicalURL     *string           `json:"canonicalUrl"`
+	Links            []string          `json:"links"`
+	NoIndex          bool              `json:"noIndex"`
+	TextLength       int               `json:"textLength"`
+	Rendered         bool              `json:"rendered,omitempty"`
+	StaticTextLength int               `json:"staticTextLength,omitempty"`
+	StructuredData   []json.RawMessage `json:"structuredData,omitempty"`
+	Headings         []Heading         `json:"headings,omitempty"`
+	TextSample       string            `json:"textSample,omitempty"`
+	Author           string            `json:"author,omitempty"`
+	PublishedAt      string            `json:"publishedAt,omitempty"`
+	FAQ              []FAQItem         `json:"faq,omitempty"`
+	Terms            []TermSignal      `json:"terms,omitempty"`
 }
 
 // TermSignal is one repeated acronym and whether a definition was found near it.

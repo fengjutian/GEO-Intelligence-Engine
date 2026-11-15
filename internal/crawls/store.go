@@ -416,6 +416,7 @@ func completionSnapshot(completion Completion) string {
 		"noIndex": completion.NoIndex, "textLength": completion.TextLength, "headings": completion.Headings,
 		"textSample": completion.TextSample, "author": completion.Author, "publishedAt": completion.PublishedAt,
 		"faq": completion.FAQ, "terms": completion.Terms,
+		"parserVersion": completion.ParserVersion, "rendered": completion.Rendered, "staticTextLength": completion.StaticTextLength,
 	})
 	return string(content)
 }
@@ -1027,6 +1028,8 @@ func findingVersion(code string) string {
 		return "content-rules-v1"
 	case "CONTENT_OPINION_AS_FACT":
 		return "content-rules-v2"
+	case "CONTENT_JS_ONLY":
+		return "content-rules-v1"
 	default:
 		return "technical-rules-v1"
 	}
@@ -1035,6 +1038,11 @@ func findingVersion(code string) string {
 // contentFindings applies deterministic P0 content-structure and evidence rules.
 func contentFindings(completion Completion) []technicalFinding {
 	findings := []technicalFinding{}
+	if completion.Rendered && completion.StaticTextLength < 200 {
+		findings = append(findings, technicalFinding{"CONTENT_JS_ONLY", "medium", "Page content requires JavaScript; non-rendering crawlers see little or no text", map[string]any{
+			"url": completion.FinalURL, "staticTextLength": completion.StaticTextLength, "renderedTextLength": completion.TextLength,
+		}})
+	}
 	h1Count := 0
 	for _, heading := range completion.Headings {
 		if heading.Level == 1 {
