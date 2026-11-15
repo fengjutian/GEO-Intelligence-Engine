@@ -30,9 +30,9 @@ func (s *Store) Generate(ctx context.Context, tenantID, projectID, kind string) 
 	}
 	var brandName, officialURL, description string
 	err := s.db.QueryRowContext(ctx, `SELECT b.canonical_name,
-COALESCE((SELECT w.base_url FROM websites w WHERE w.tenant_id=b.tenant_id AND w.project_id=b.project_id ORDER BY w.created_at LIMIT 1), p.official_url, ''),
+COALESCE((SELECT w.base_url FROM websites w WHERE w.tenant_id=b.tenant_id AND w.project_id=b.project_id ORDER BY w.created_at LIMIT 1), CONCAT('https://', b.official_domain)),
 COALESCE(b.description,'')
-FROM brands b JOIN projects p ON p.id=b.project_id AND p.tenant_id=b.tenant_id
+FROM brands b
 WHERE b.tenant_id=UUID_TO_BIN(?) AND b.project_id=UUID_TO_BIN(?) ORDER BY b.created_at LIMIT 1`, tenantID, projectID).Scan(&brandName, &officialURL, &description)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Draft{}, ErrNotFound

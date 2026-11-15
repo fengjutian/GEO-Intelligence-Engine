@@ -51,7 +51,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'draft',UTC_TIMESTAMP
 // List returns experiments newest first.
 func (s *Store) List(ctx context.Context, tenantID, projectID string) ([]Experiment, error) {
 	items := []Experiment{}
-	direct, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,baseline_audit_id,treatment_audit_id,status,conclusion,stats_json,created_at,updated_at
+	direct, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
 FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY created_at DESC`, tenantID, projectID)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) OR
 
 // Get returns one experiment.
 func (s *Store) Get(ctx context.Context, tenantID, projectID, id string) (Experiment, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,baseline_audit_id,treatment_audit_id,status,conclusion,stats_json,created_at,updated_at
+	row := s.db.QueryRowContext(ctx, `SELECT BIN_TO_UUID(id),BIN_TO_UUID(project_id),name,hypothesis,metric_code,BIN_TO_UUID(baseline_audit_id),BIN_TO_UUID(treatment_audit_id),status,conclusion,stats_json,created_at,updated_at
 FROM experiments WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?)`, tenantID, projectID, id)
 	item, err := scanExperiment(row)
 	if errors.Is(err, sql.ErrNoRows) {
