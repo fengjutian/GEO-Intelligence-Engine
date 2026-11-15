@@ -20,6 +20,10 @@ type MetricValue = {
   intervalMethod: string
 }
 
+type TrendValue = { value: number | null; numerator: number | null; denominator: number | null; ciLow: number | null; ciHigh: number | null }
+type TrendPoint = { auditId: string; finishedAt: string | null; metricVersion: string; plannedCount: number; eligibleCount: number; metrics: Record<string, TrendValue>; delta: Record<string, number | null> }
+type AuditTrend = { metrics: string[]; points: TrendPoint[] }
+
 type Props = { projectId: string; projectName: string; onClose: () => void }
 
 const TERMINAL = ['succeeded', 'partial_success', 'failed', 'cancelled']
@@ -76,6 +80,10 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
     queryFn: () => request<Audit>(`/api/v1/audits/${auditId}`),
     enabled: auditId !== null,
     refetchInterval: (query) => TERMINAL.includes(query.state.data?.status ?? '') ? false : 2000,
+  })
+  const trend = useQuery({
+    queryKey: ['audit-trends', projectId],
+    queryFn: () => request<AuditTrend>(`/api/v1/projects/${projectId}/audit-trends?limit=12`),
   })
   const metrics = useQuery({
     queryKey: ['audit-metrics', auditId],
@@ -310,7 +318,24 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           </div>)}
         </div>
       </section>}
-      {evidenceLoading && <p className="audit-note">正在加载指标证据…</p>}
+      {trend.data && trend.data.points.length > 1 && <section className="audit-metrics audit-trend">
+        <h3>跨审计趋势 · {trend.data.points.length} 次</h3>
+        <div className="trend-grid">
+          {trend.data.points.slice(-4).map((point) => <article key={point.auditId}>
+            <small>{point.finishedAt ? new Date(point.finishedAt).toLocaleDateString() : '未完成'} · {point.metricVersion}</small>
+            {['mention_rate', 'recommendation_rate', 'official_citation_rate'].map((code) => {
+              const metric = point.metrics[code]
+              const delta = point.delta[code]
+              return <div key={code}>
+                <span>{METRIC_LABELS[code]}</span>
+                <strong>{formatPercent(metric?.value ?? null)}</strong>
+                <em data-direction={delta == null ? 'flat' : delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'}>{delta == null ? '—' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}pp`}</em>
+              </div>
+            })}
+          </article>)}
+        </div>
+        <p className="audit-note">趋势按审计完成时间排序；口径取各审计最新可用指标快照（含人工回写版本）。</p>
+      </section>}
       {evidence && <section className="audit-metrics evidence-panel">
         <h3>指标证据 · {evidence.memberCount} 条{evidence.truncated ? '（已截断）' : ''} <button type="button" className="evidence-close" onClick={() => setEvidence(null)}>关闭</button></h3>
         <div className="metric-table">
