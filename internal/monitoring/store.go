@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
+	"github.com/fengjutian/geo-intelligence-engine/internal/notify"
 	"github.com/google/uuid"
 )
 
@@ -37,9 +38,14 @@ type Alert struct {
 	ResolvedAt *time.Time `json:"resolvedAt"`
 }
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db       *sql.DB
+	notifier *notify.Notifier
+}
 
-func NewStore(db *sql.DB) *Store { return &Store{db: db} }
+func NewStore(db *sql.DB, notifier *notify.Notifier) *Store {
+	return &Store{db: db, notifier: notifier}
+}
 
 func (s *Store) Create(ctx context.Context, tenantID, projectID, protocolID string, intervalMinutes int) (Schedule, error) {
 	if intervalMinutes < 60 || intervalMinutes > 24*60*30 {
@@ -196,8 +202,7 @@ func (s *Store) Run(ctx context.Context, tenantID string, schedule Schedule) (st
 		_, _ = s.db.ExecContext(ctx, `UPDATE monitoring_schedules SET consecutive_failures=consecutive_failures+1,
 next_run_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL LEAST(interval_minutes,5*(consecutive_failures+1)) MINUTE),
 last_error=?,updated_at=UTC_TIMESTAMP(6) WHERE id=UUID_TO_BIN(?)`, err.Error(), schedule.ID)
-		_, _ = s.db.ExecContext(ctx, `INSERT INTO monitoring_alerts (id,tenant_id,schedule_id,kind,message,status,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'audit_create_failed',?,'open',UTC_TIMESTAMP(6))`, uuid.NewString(), tenantID, schedule.ID, err.Error())
+		_ = s.insertAlert(ctx, tenantID, schedule.ProjectID, schedule.ID, "", "audit_create_failed", err.Error())
 		return "", err
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE monitoring_schedules SET last_audit_id=UUID_TO_BIN(?),consecutive_failures=0,last_error=NULL,
@@ -205,4 +210,22 @@ next_run_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL interval_minutes MINUTE),updated_
 		return "", err
 	}
 	return audit.ID, nil
+}
+
+func (s *Store) insertAlert(ctx context.Context, tenantID, projectID, scheduleID, auditID, kind, message string) error {
+	alertID := uuid.NewString()
+	var auditValue any
+	if auditID != "" {
+		auditValue = auditID
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO monitoring_alerts (id,tenant_id,schedule_id,audit_id,kind,message,status,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'open',UTC_TIMESTAMP(6))`, alertID, tenantID, scheduleID, auditValue, kind, message); err != nil {
+		return err
+	}
+	if s.notifier != nil && s.notifier.Enabled() {
+		payload := notify.Alert{ID: alertID, ProjectID: projectID, ScheduleID: scheduleID, AuditID: auditID, Kind: kind, Message: message}
+		delivery := s.notifier.Send(ctx, payload)
+		_, _ = s.db.ExecContext(ctx, `UPDATE monitoring_alerts SET delivery_json=CAST(? AS JSON) WHERE id=UUID_TO_BIN(?)`, delivery, alertID)
+	}
+	return nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/httpapi"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/monitoring"
+	"github.com/fengjutian/geo-intelligence-engine/internal/notify"
 )
 
 func main() {
@@ -39,10 +40,11 @@ func main() {
 		modelgateway.ProviderConfig{Name: "minimax", BaseURL: cfg.MiniMaxBaseURL, APIKey: cfg.MiniMaxAPIKey, Model: cfg.MiniMaxModel, MaxField: "max_completion_tokens", RPMLimit: cfg.ModelRPM, MaxConcurrency: cfg.ModelConcurrency},
 	)
 	embeddingClient := embeddings.New(cfg.EmbeddingBaseURL, cfg.EmbeddingAPIKey, cfg.EmbeddingModel)
+	notifier := notify.New(cfg.AlertWebhookURL, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom, cfg.SMTPTo)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, Embeddings: embeddingClient, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID}),
+		Handler:           httpapi.New(httpapi.Dependencies{DB: db, Logger: logger, DevTenantID: cfg.DevTenantID, DevActorID: cfg.DevActorID, WorkerToken: cfg.WorkerToken, ModelGateway: gateway, Embeddings: embeddingClient, Notifier: notifier, ReportDir: cfg.ReportDir, AuthMode: cfg.AuthMode, AuthSecret: cfg.AuthSecret, DevRole: cfg.DevRole, OIDCIssuer: cfg.OIDCIssuer, OIDCAudience: cfg.OIDCAudience, OIDCJWKSURL: cfg.OIDCJWKSURL, OIDCClientID: cfg.OIDCClientID}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -51,7 +53,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go monitoring.NewStore(db).Start(ctx, logger)
+	go monitoring.NewStore(db, notifier).Start(ctx, logger)
 
 	go func() {
 		logger.Info("api listening", "address", cfg.HTTPAddress)

@@ -17,6 +17,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/monitoring"
+	"github.com/fengjutian/geo-intelligence-engine/internal/notify"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projectmembers"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	WorkerToken  string
 	ModelGateway *modelgateway.Gateway
 	Embeddings   *embeddings.Client
+	Notifier     *notify.Notifier
 	ReportDir    string
 	AuthMode     string
 	AuthSecret   string
@@ -127,7 +129,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
 	questionTrendHandler := newQuestionTrendHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-trends", projectAccess(deps.DB, questionTrendHandler.list))
-	monitoringHandler := newMonitoringHandler(monitoring.NewStore(deps.DB), deps.DevTenantID)
+	monitoringHandler := newMonitoringHandler(monitoring.NewStore(deps.DB, deps.Notifier), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/monitoring-schedules", projectAccess(deps.DB, monitoringHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/monitoring-schedules", requirePermission("run_audit", projectAccess(deps.DB, monitoringHandler.create)))
 	mux.HandleFunc("PATCH /api/v1/monitoring-schedules/{scheduleId}", requirePermission("run_audit", monitoringHandler.update))

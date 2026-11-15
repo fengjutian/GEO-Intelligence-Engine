@@ -3,9 +3,8 @@ package monitoring
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type dueSchedule struct {
@@ -76,7 +75,7 @@ func (s *Store) RunDue(ctx context.Context, logger *slog.Logger) {
 
 // CheckExecutionFailures raises one alert per failed/cancelled audit.
 func (s *Store) CheckExecutionFailures(ctx context.Context, logger *slog.Logger) {
-	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(m.tenant_id),BIN_TO_UUID(m.id),BIN_TO_UUID(a.id),a.status
+	rows, err := s.db.QueryContext(ctx, `SELECT BIN_TO_UUID(m.tenant_id),BIN_TO_UUID(m.id),BIN_TO_UUID(m.project_id),BIN_TO_UUID(a.id),a.status
 FROM monitoring_schedules m JOIN audits a ON a.id=m.last_audit_id
 WHERE a.status IN ('failed','cancelled')`)
 	if err != nil {
@@ -86,13 +85,14 @@ WHERE a.status IN ('failed','cancelled')`)
 	type failure struct {
 		tenantID   string
 		scheduleID string
+		projectID  string
 		auditID    string
 		status     string
 	}
 	items := []failure{}
 	for rows.Next() {
 		var item failure
-		if err := rows.Scan(&item.tenantID, &item.scheduleID, &item.auditID, &item.status); err != nil {
+		if err := rows.Scan(&item.tenantID, &item.scheduleID, &item.projectID, &item.auditID, &item.status); err != nil {
 			rows.Close()
 			logger.Error("monitoring execution scan failed", "error", err)
 			return
@@ -102,11 +102,10 @@ WHERE a.status IN ('failed','cancelled')`)
 	rows.Close()
 	for _, item := range items {
 		message := "scheduled audit finished with status " + item.status
-		if _, err := s.db.ExecContext(ctx, `INSERT IGNORE INTO monitoring_alerts
-(id,tenant_id,schedule_id,audit_id,kind,message,status,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'audit_execution_failed',?,'open',UTC_TIMESTAMP(6))`,
-			uuid.NewString(), item.tenantID, item.scheduleID, item.auditID, message); err != nil {
-			logger.Error("monitoring execution alert failed", "error", err)
+		if err := s.insertAlert(ctx, item.tenantID, item.projectID, item.scheduleID, item.auditID, "audit_execution_failed", message); err != nil {
+			if !strings.Contains(err.Error(), "1062") {
+				logger.Error("monitoring execution alert failed", "error", err)
+			}
 		}
 	}
 }

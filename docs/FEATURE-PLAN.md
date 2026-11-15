@@ -106,7 +106,7 @@
 
 以下能力在 P0 发布前不排期：
 
-- 持续监测（P1）：schedules/alerts/API/30s runner + SKIP LOCKED + 执行失败告警 + 双实例演练 + 监测 UI 完成
+- 持续监测（P1）：schedules/alerts/runner + SKIP LOCKED + 失败告警 + 双实例演练 + UI + 间隔编辑 + Webhook/SMTP 投递完成
 - 多站点/多区域品牌管理（P1）
 - 外部来源采集、AI 爬虫日志分析（P1）
 - 优化 Agent：草稿、Diff、发布、回滚（P3）

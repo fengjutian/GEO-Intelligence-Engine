@@ -5,6 +5,7 @@ type Project = { id: string; name: string }
 type Protocol = { id: string; semanticVersion: string; status: string }
 type Schedule = { id: string; projectId: string; protocolId: string; intervalMinutes: number; nextRunAt: string; enabled: boolean; lastAuditId: string | null; consecutiveFailures: number; lastError: string | null }
 type Alert = { id: string; scheduleId: string; auditId: string | null; kind: string; message: string; status: string; createdAt: string }
+type TrendPoint = { auditId: string; finishedAt: string | null; plannedCount: number; eligibleCount: number; metrics: Record<string, { value: number | null }> }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
@@ -46,6 +47,11 @@ export function MonitoringPage() {
     enabled: Boolean(projectId),
     refetchInterval: 15000,
   })
+  const trend = useQuery({
+    queryKey: ['monitor-trend', projectId],
+    queryFn: () => request<{ points: TrendPoint[] }>(`/api/v1/projects/${projectId}/audit-trends?limit=5`),
+    enabled: Boolean(projectId),
+  })
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['monitor-schedules', projectId] })
     await queryClient.invalidateQueries({ queryKey: ['monitor-alerts', projectId] })
@@ -63,6 +69,13 @@ export function MonitoringPage() {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }),
     }),
     onSuccess: async () => { setMessage('监测状态已更新'); await refresh() },
+    onError: (error) => setMessage(error.message),
+  })
+  const updateInterval = useMutation({
+    mutationFn: ({ id, intervalMinutes }: { id: string; intervalMinutes: number }) => request(`/api/v1/monitoring-schedules/${id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intervalMinutes }),
+    }),
+    onSuccess: async () => { setMessage('监测间隔已更新'); await refresh() },
     onError: (error) => setMessage(error.message),
   })
   const runNow = useMutation({
@@ -96,7 +109,16 @@ export function MonitoringPage() {
         <h3>监测计划 · {schedules.data?.items.length ?? 0}</h3>
         {schedules.data?.items.length === 0 && <p className="empty-state">暂无监测计划。</p>}
         {schedules.data?.items.map((schedule) => <div className="monitor-row" key={schedule.id}>
-          <div><strong>v{protocols.data?.items.find((item) => item.id === schedule.protocolId)?.semanticVersion ?? '—'} · {schedule.intervalMinutes / 60}h</strong><small>下次 {new Date(schedule.nextRunAt).toLocaleString()} · {schedule.enabled ? '启用' : '暂停'}{schedule.lastError ? ` · ${schedule.lastError}` : ''}</small></div>
+          <div><strong>v{protocols.data?.items.find((item) => item.id === schedule.protocolId)?.semanticVersion ?? '—'}</strong><small>下次 {new Date(schedule.nextRunAt).toLocaleString()} · {schedule.enabled ? '启用' : '暂停'}{schedule.lastError ? ` · ${schedule.lastError}` : ''}</small><LatestAudit auditId={schedule.lastAuditId} /></div>
+          <div className="monitor-interval">
+            <select value={schedule.intervalMinutes} onChange={(event) => updateInterval.mutate({ id: schedule.id, intervalMinutes: Number(event.target.value) })} disabled={updateInterval.isPending}>
+              <option value={60}>每小时</option>
+              <option value={360}>每 6 小时</option>
+              <option value={1440}>每天</option>
+              <option value={10080}>每周</option>
+            </select>
+            <a href="#audit-trend">趋势</a>
+          </div>
           <span data-failures={schedule.consecutiveFailures > 0}>{schedule.consecutiveFailures > 0 ? `失败 ${schedule.consecutiveFailures}` : '正常'}</span>
           <div className="monitor-actions">
             <button type="button" onClick={() => toggle.mutate({ id: schedule.id, enabled: !schedule.enabled })}>{schedule.enabled ? '暂停' : '启用'}</button>
@@ -114,5 +136,27 @@ export function MonitoringPage() {
         </div>)}
       </section>
     </div>
+    <section className="settings-panel" id="audit-trend">
+      <h3>最近审计趋势</h3>
+      {trend.data?.points.length === 0 && <p className="empty-state">暂无已完成审计。</p>}
+      {trend.data?.points.map((point) => <div className="monitor-trend-row" key={point.auditId}>
+        <span>{point.finishedAt ? new Date(point.finishedAt).toLocaleDateString() : '—'}</span>
+        <span>mention {Math.round((point.metrics.mention_rate?.value ?? 0) * 100)}%</span>
+        <span>recommendation {Math.round((point.metrics.recommendation_rate?.value ?? 0) * 100)}%</span>
+        <span>eligible {point.eligibleCount}/{point.plannedCount}</span>
+      </div>)}
+    </section>
   </section>
+}
+
+function LatestAudit({ auditId }: { auditId: string | null }) {
+  const audit = useQuery({
+    queryKey: ['monitor-last-audit', auditId],
+    queryFn: () => request<{ status: string; completedCount: number; eligibleCount: number }>(`/api/v1/audits/${auditId}`),
+    enabled: Boolean(auditId),
+  })
+  if (!auditId) return <small>暂无最近审计</small>
+  if (audit.isLoading) return <small>加载最近审计…</small>
+  if (audit.error) return <small>最近审计读取失败</small>
+  return <small>最近审计 {audit.data?.status} · 完成 {audit.data?.completedCount} · 有效 {audit.data?.eligibleCount}</small>
 }

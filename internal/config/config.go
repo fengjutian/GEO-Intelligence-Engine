@@ -23,6 +23,13 @@ type Config struct {
 	EmbeddingBaseURL string
 	EmbeddingAPIKey  string
 	EmbeddingModel   string
+	AlertWebhookURL  string
+	SMTPHost         string
+	SMTPPort         string
+	SMTPUser         string
+	SMTPPass         string
+	SMTPFrom         string
+	SMTPTo           string
 	ModelRPM         int
 	ModelConcurrency int
 	JudgeURL         string
@@ -53,6 +60,13 @@ func FromEnv() (Config, error) {
 		EmbeddingBaseURL: envOr("GEO_EMBEDDING_BASE_URL", ""),
 		EmbeddingAPIKey:  strings.TrimSpace(os.Getenv("GEO_EMBEDDING_API_KEY")),
 		EmbeddingModel:   envOr("GEO_EMBEDDING_MODEL", ""),
+		AlertWebhookURL:  envOr("GEO_ALERT_WEBHOOK_URL", ""),
+		SMTPHost:         envOr("GEO_SMTP_HOST", ""),
+		SMTPPort:         envOr("GEO_SMTP_PORT", "25"),
+		SMTPUser:         envOr("GEO_SMTP_USER", ""),
+		SMTPPass:         os.Getenv("GEO_SMTP_PASS"),
+		SMTPFrom:         envOr("GEO_SMTP_FROM", ""),
+		SMTPTo:           envOr("GEO_SMTP_TO", ""),
 		ModelRPM:         envInt("GEO_MODEL_RPM", 60),
 		ModelConcurrency: envInt("GEO_MODEL_MAX_CONCURRENCY", 4),
 		JudgeURL:         envOr("GEO_JUDGE_URL", "http://127.0.0.1:8081"),
