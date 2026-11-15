@@ -259,7 +259,8 @@ ON DUPLICATE KEY UPDATE status='running',finished_at=NULL`, analysisID, tenantID
 			rules = append(rules, technicalFinding{"CONTENT_THIN", "medium", "Extracted page text is below the minimum useful length", map[string]any{"url": completion.FinalURL, "textLength": completion.TextLength, "threshold": 200}})
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE findings SET status='superseded',updated_at=UTC_TIMESTAMP(6)
-WHERE tenant_id=UUID_TO_BIN(?) AND source_type='page_content' AND source_id=UUID_TO_BIN(?) AND source_version='content-rules-v1' AND status='open'`, tenantID, page.contentID); err != nil {
+WHERE tenant_id=UUID_TO_BIN(?) AND source_type='page_content' AND source_id=UUID_TO_BIN(?) AND status='open'
+  AND (source_version IN ('content-rules-v1','content-rules-v2') OR rule_code='CONTENT_THIN')`, tenantID, page.contentID); err != nil {
 			return ContentAnalysisRun{}, err
 		}
 		for _, rule := range rules {
