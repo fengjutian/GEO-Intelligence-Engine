@@ -16,6 +16,10 @@ import (
 type questionStore interface {
 	Create(context.Context, string, string, questions.CreateInput) (questions.Question, error)
 	List(context.Context, string, string, int) (questions.Page, error)
+	Generate(context.Context, string, string, questions.GenerateInput) (questions.GenerationRun, []questions.Question, error)
+	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
+	RebuildClusters(context.Context, string, string) ([]questions.Cluster, error)
+	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
 }
 
 type questionHandler struct {
