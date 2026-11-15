@@ -245,6 +245,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts/{draftId}", projectAccess(deps.DB, draftHandler.get))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/content-drafts/{draftId}/status", requirePermission("edit_project", projectAccess(deps.DB, draftHandler.setStatus)))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts/{draftId}/diff", projectAccess(deps.DB, draftHandler.diff))
+	llmsHandler := newLLMsHandler(deps.DB, deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/llms-txt", projectAccess(deps.DB, llmsHandler.check))
 
 	var oidcVerifier *auth.OIDCVerifier
 	if strings.EqualFold(deps.AuthMode, "oidc") {
