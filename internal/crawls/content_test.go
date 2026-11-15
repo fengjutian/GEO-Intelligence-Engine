@@ -94,3 +94,24 @@ func TestContentFindingsTermsAndAbsoluteClaims(t *testing.T) {
 		t.Fatalf("missing term/claim findings: %+v", codes)
 	}
 }
+
+func TestContentFindingsOpinionAsFact(t *testing.T) {
+	completion := Completion{
+		FinalURL:    "https://example.com/opinion",
+		TextLength:  600,
+		Headings:    []Heading{{Level: 1, Text: "Review"}},
+		TextSample:  "我们推荐 Acme GEO，这是行业最好的平台。",
+		Author:      "Acme Team",
+		PublishedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	findings := contentFindings(completion)
+	codes := findingCodes(findings)
+	if !codes["CONTENT_OPINION_AS_FACT"] {
+		t.Fatalf("missing opinion-as-fact finding: %+v", codes)
+	}
+	for _, finding := range findings {
+		if finding.code == "CONTENT_OPINION_AS_FACT" && finding.severity != "medium" {
+			t.Fatalf("unexpected opinion finding: %+v", finding)
+		}
+	}
+}

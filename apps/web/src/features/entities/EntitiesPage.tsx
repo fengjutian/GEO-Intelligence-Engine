@@ -42,7 +42,7 @@ export function EntitiesPage({ projects }: Props) {
   })
   const quality = useQuery({
     queryKey: ['content-quality', projectId],
-    queryFn: () => request<{ total: number; bySeverity: Record<string, number> }>(`/api/v1/projects/${projectId}/content-quality`),
+    queryFn: () => request<{ total: number; bySeverity: Record<string, number>; review?: { reviewed: number; confirmed: number; dismissed: number; acceptedRisk: number; confirmRate: number | null } }>(`/api/v1/projects/${projectId}/content-quality`),
     enabled: Boolean(projectId),
   })
   const findings = useQuery({
@@ -135,6 +135,7 @@ export function EntitiesPage({ projects }: Props) {
       <span data-severity="high">高 {quality.data.bySeverity.high ?? 0}</span>
       <span data-severity="medium">中 {quality.data.bySeverity.medium ?? 0}</span>
       <span data-severity="low">低 {quality.data.bySeverity.low ?? 0}</span>
+      {quality.data.review && <span>已复核 {quality.data.review.reviewed} · 确认率 {quality.data.review.confirmRate == null ? '—' : `${Math.round(quality.data.review.confirmRate * 100)}%`}</span>}
     </div>}
     {findings.data && findings.data.items.length > 0 && <div className="content-findings">
       {findings.data.items.map((finding) => <div key={finding.id} className="content-finding">

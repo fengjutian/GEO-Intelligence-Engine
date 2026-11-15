@@ -187,30 +187,77 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 }
 
 func loadContentQuality(ctx context.Context, tx *sql.Tx, tenantID, projectID string) (map[string]any, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT rule_code,severity,COUNT(*) FROM findings
-WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND rule_code LIKE 'CONTENT_%' AND status='open'
-GROUP BY rule_code,severity ORDER BY rule_code`, tenantID, projectID)
+	rows, err := tx.QueryContext(ctx, `SELECT rule_code,severity,status,COUNT(*) FROM findings
+WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND rule_code LIKE 'CONTENT_%'
+GROUP BY rule_code,severity,status ORDER BY rule_code`, tenantID, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	total := 0
+	type ruleCounts struct {
+		code         string
+		severity     string
+		open         int
+		confirmed    int
+		dismissed    int
+		acceptedRisk int
+	}
 	bySeverity := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0}
-	byRule := []map[string]any{}
+	byRuleMap := map[string]*ruleCounts{}
+	order := []string{}
+	totalOpen, confirmed, dismissed, acceptedRisk := 0, 0, 0, 0
 	for rows.Next() {
-		var code, severity string
+		var code, severity, status string
 		var count int
-		if err := rows.Scan(&code, &severity, &count); err != nil {
+		if err := rows.Scan(&code, &severity, &status, &count); err != nil {
 			return nil, err
 		}
-		total += count
-		bySeverity[severity] += count
-		byRule = append(byRule, map[string]any{"ruleCode": code, "severity": severity, "count": count})
+		entry := byRuleMap[code]
+		if entry == nil {
+			entry = &ruleCounts{code: code, severity: severity}
+			byRuleMap[code] = entry
+			order = append(order, code)
+		}
+		switch status {
+		case "open":
+			entry.open += count
+			totalOpen += count
+			bySeverity[severity] += count
+		case "confirmed":
+			entry.confirmed += count
+			confirmed += count
+		case "dismissed":
+			entry.dismissed += count
+			dismissed += count
+		case "accepted_risk":
+			entry.acceptedRisk += count
+			acceptedRisk += count
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return map[string]any{"total": total, "bySeverity": bySeverity, "byRule": byRule}, nil
+	byRule := make([]map[string]any, 0, len(order))
+	for _, code := range order {
+		entry := byRuleMap[code]
+		byRule = append(byRule, map[string]any{
+			"ruleCode": entry.code, "severity": entry.severity, "count": entry.open,
+			"open": entry.open, "confirmed": entry.confirmed, "dismissed": entry.dismissed, "acceptedRisk": entry.acceptedRisk,
+		})
+	}
+	reviewed := confirmed + dismissed + acceptedRisk
+	var confirmRate, dismissRate any
+	if reviewed > 0 {
+		confirmRate = float64(confirmed) / float64(reviewed)
+		dismissRate = float64(dismissed) / float64(reviewed)
+	}
+	return map[string]any{
+		"total": totalOpen, "bySeverity": bySeverity, "byRule": byRule,
+		"review": map[string]any{
+			"reviewed": reviewed, "confirmed": confirmed, "dismissed": dismissed, "acceptedRisk": acceptedRisk,
+			"confirmRate": confirmRate, "dismissRate": dismissRate,
+		},
+	}, nil
 }
 
 // ContentQuality returns current content-rule counts for a project.

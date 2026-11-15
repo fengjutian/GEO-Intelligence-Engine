@@ -1024,6 +1024,8 @@ func findingVersion(code string) string {
 	switch code {
 	case "CONTENT_HEADINGS_MISSING", "CONTENT_H1_MISSING", "CONTENT_H1_MULTIPLE", "CONTENT_HEADING_SKIP", "CONTENT_ANSWER_FIRST", "CONTENT_NO_EVIDENCE", "CONTENT_AUTHOR_MISSING", "CONTENT_PUBLISHED_DATE_MISSING", "CONTENT_PUBLISHED_DATE_INVALID", "CONTENT_STALE_CONTENT", "CONTENT_FAQ_ANSWER_MISSING", "CONTENT_FAQ_DUPLICATE", "CONTENT_TERM_UNDEFINED", "CONTENT_ABSOLUTE_CLAIM":
 		return "content-rules-v1"
+	case "CONTENT_OPINION_AS_FACT":
+		return "content-rules-v2"
 	default:
 		return "technical-rules-v1"
 	}
@@ -1103,11 +1105,54 @@ func contentFindings(completion Completion) []technicalFinding {
 		}
 	}
 	if sample != "" {
+		sourced := externalLinkCount(completion) > 0 || attributionPattern.MatchString(sample)
 		if phrase := absoluteClaim(sample); phrase != "" {
-			findings = append(findings, technicalFinding{"CONTENT_ABSOLUTE_CLAIM", "low", "Page contains an absolute claim without qualification", map[string]any{"phrase": phrase}})
+			severity := "low"
+			summary := "Page contains an absolute claim without qualification"
+			if !sourced {
+				severity = "medium"
+				summary = "Page contains an absolute claim without a cited source"
+			}
+			findings = append(findings, technicalFinding{"CONTENT_ABSOLUTE_CLAIM", severity, summary, map[string]any{"phrase": phrase, "sourced": sourced}})
+		}
+		if finding, ok := opinionAsFact(sample, sourced); ok {
+			findings = append(findings, finding)
 		}
 	}
 	return findings
+}
+
+var opinionPattern = regexp.MustCompile(`(?i)\b(we believe|in our opinion|arguably|recommend|should)\b|我们认为|我觉得|值得|推荐`)
+var attributionPattern = regexp.MustCompile(`(?i)\b(according to|research|report|survey|source)\b|根据|据.{0,12}(显示|表明|报告)|数据显示|研究表明|来源`)
+
+func opinionAsFact(sample string, sourced bool) (technicalFinding, bool) {
+	if sourced {
+		return technicalFinding{}, false
+	}
+	for _, sentence := range splitSentences(sample) {
+		if opinionPattern.MatchString(sentence) && absoluteClaim(sentence) != "" {
+			return technicalFinding{"CONTENT_OPINION_AS_FACT", "medium", "Opinion is presented as an unsourced factual claim", map[string]any{"sentence": sentence}}, true
+		}
+	}
+	return technicalFinding{}, false
+}
+
+func splitSentences(sample string) []string {
+	parts := []string{}
+	current := strings.Builder{}
+	for _, char := range sample {
+		current.WriteRune(char)
+		if strings.ContainsRune("。！？.!?；;", char) {
+			if value := strings.TrimSpace(current.String()); value != "" {
+				parts = append(parts, value)
+			}
+			current.Reset()
+		}
+	}
+	if value := strings.TrimSpace(current.String()); value != "" {
+		parts = append(parts, value)
+	}
+	return parts
 }
 
 var absolutePattern = regexp.MustCompile(`(?i)\b(best|always|never|guaranteed|100%)\b`)
