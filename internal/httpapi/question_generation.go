@@ -76,6 +76,48 @@ func (h *questionHandler) competitorCoverage(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, coverage)
 }
 
+func (h *questionHandler) updateQuestion(w http.ResponseWriter, r *http.Request) {
+	questionID := r.PathValue("questionId")
+	if _, err := uuid.Parse(questionID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_QUESTION_ID", "Question ID is invalid", traceID(r))
+		return
+	}
+	var input questions.UpdateInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	question, err := h.store.Update(r.Context(), h.tenantID, questionID, input)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, question)
+}
+
+func (h *questionHandler) diffVersions(w http.ResponseWriter, r *http.Request) {
+	questionSetID := r.PathValue("questionSetId")
+	if _, err := uuid.Parse(questionSetID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_QUESTION_SET_ID", "Question set ID is invalid", traceID(r))
+		return
+	}
+	fromID := r.URL.Query().Get("from")
+	toID := r.URL.Query().Get("to")
+	if _, err := uuid.Parse(fromID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_FROM_VERSION", "From version ID is invalid", traceID(r))
+		return
+	}
+	if _, err := uuid.Parse(toID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_TO_VERSION", "To version ID is invalid", traceID(r))
+		return
+	}
+	diff, err := h.store.DiffVersions(r.Context(), h.tenantID, questionSetID, fromID, toID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, diff)
+}
+
 func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectId")
 	if _, err := uuid.Parse(projectID); err != nil {
@@ -276,6 +318,12 @@ func (h *questionHandler) writeError(w http.ResponseWriter, r *http.Request, err
 		writeProblem(w, http.StatusNotFound, "QUESTION_CLUSTER_NOT_FOUND", "Question cluster was not found", traceID(r))
 	case errors.Is(err, questions.ErrClusterConflict):
 		writeProblem(w, http.StatusConflict, "QUESTION_CLUSTER_CONFLICT", "Question cluster operation conflicts with current membership", traceID(r))
+	case errors.Is(err, questions.ErrQuestionNotFound):
+		writeProblem(w, http.StatusNotFound, "QUESTION_NOT_FOUND", "Question was not found", traceID(r))
+	case errors.Is(err, questions.ErrQuestionLocked):
+		writeProblem(w, http.StatusConflict, "QUESTION_VERSION_LOCKED", "Question version is not editable", traceID(r))
+	case errors.Is(err, questions.ErrInvalidStatus):
+		writeProblem(w, http.StatusUnprocessableEntity, "QUESTION_STATUS_INVALID", "Question status transition is invalid", traceID(r))
 	default:
 		h.logger.Error("question operation failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error", traceID(r))

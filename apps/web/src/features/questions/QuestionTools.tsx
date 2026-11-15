@@ -9,6 +9,7 @@ type Coverage = { total: number; branded: number; nonBranded: number; clusters: 
 type CompetitorCoverage = { total: number; branded: number; competitors: Array<{ id: string; name: string; mentions: number; comparisonCount: number }>; uncovered: string[]; noComparison: string[] }
 type QuestionTrendPoint = { auditId: string; finishedAt: string | null; total: number; eligible: number; recommendations: number; refusals: number }
 type QuestionTrend = { questionId: string; text: string; points: QuestionTrendPoint[] }
+type QuestionItem = { id: string; text: string; status: string; questionType: string; weight: number }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -54,6 +55,15 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const coverage = useQuery({ queryKey: ['question-coverage', projectId], queryFn: () => request<Coverage>(`/api/v1/projects/${projectId}/question-coverage`) })
   const competitorCoverage = useQuery({ queryKey: ['competitor-question-coverage', projectId], queryFn: () => request<CompetitorCoverage>(`/api/v1/projects/${projectId}/competitor-question-coverage`) })
   const questionTrends = useQuery({ queryKey: ['question-trends', projectId], queryFn: () => request<{ items: QuestionTrend[] }>(`/api/v1/projects/${projectId}/question-trends?limit=12`) })
+  const questions = useQuery({ queryKey: ['question-list', projectId], queryFn: () => request<{ items: QuestionItem[] }>(`/api/v1/projects/${projectId}/questions?limit=100`) })
+  const updateQuestion = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => request(`/api/v1/questions/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) }),
+    onSuccess: async () => {
+      onChanged()
+      await queryClient.invalidateQueries({ queryKey: ['question-list', projectId] })
+      await queryClient.invalidateQueries({ queryKey: ['question-coverage', projectId] })
+    },
+  })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
@@ -152,6 +162,19 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
           const latest = trend.points[trend.points.length - 1]
           return <li key={trend.questionId}><span>{trend.text}</span><em>{trend.points.length} 次 · 推荐 {latest?.recommendations ?? 0} · 拒答 {latest?.refusals ?? 0}</em></li>
         })}</ul>
+      </details>}
+      {questions.data && questions.data.items.length > 0 && <details className="question-review">
+        <summary>问题审核 · {questions.data.items.length}</summary>
+        <ul>{questions.data.items.slice(0, 20).map((question) => <li key={question.id}>
+          <span>{question.text}</span>
+          <select value={question.status} onChange={(event) => updateQuestion.mutate({ id: question.id, status: event.target.value })} disabled={updateQuestion.isPending}>
+            <option value="draft">draft</option>
+            <option value="reviewed">reviewed</option>
+            <option value="active">active</option>
+            <option value="retired">retired</option>
+          </select>
+        </li>)}</ul>
+        {updateQuestion.error && <small className="error">{updateQuestion.error.message}</small>}
       </details>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>
