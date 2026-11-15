@@ -100,7 +100,7 @@ func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request
 	if effectiveThreshold == 0 {
 		effectiveThreshold = 0.3
 		if algorithm == questions.ClusterAlgorithmEmbedding {
-			effectiveThreshold = 0.8
+			effectiveThreshold = 0.75
 		}
 	}
 	version := algorithm

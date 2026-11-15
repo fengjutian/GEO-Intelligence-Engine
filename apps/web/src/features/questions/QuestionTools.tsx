@@ -24,7 +24,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({})
   const [algorithm, setAlgorithm] = useState('semantic-v2')
-  const [threshold, setThreshold] = useState('0.8')
+  const [threshold, setThreshold] = useState('0.75')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {

@@ -48,7 +48,7 @@ func (s *Store) RebuildClusters(ctx context.Context, tenantID, projectID, algori
 	if threshold <= 0 {
 		threshold = 0.3
 		if algorithm == ClusterAlgorithmEmbedding {
-			threshold = 0.8
+			threshold = 0.75
 		}
 	}
 	if threshold > 0.99 {
@@ -147,7 +147,7 @@ WHERE qc.tenant_id=UUID_TO_BIN(?) AND qc.question_version_id=UUID_TO_BIN(?) AND 
 		}
 		thresholdLocal := threshold
 		if algorithm == ClusterAlgorithmEmbedding && thresholdLocal == 0 {
-			thresholdLocal = 0.8
+			thresholdLocal = 0.75
 		}
 		if bestIndex >= 0 && bestScore >= thresholdLocal {
 			clusters[bestIndex].members = append(clusters[bestIndex].members, ClusterMember{QuestionID: item.id, Text: item.text, Similarity: bestScore})
