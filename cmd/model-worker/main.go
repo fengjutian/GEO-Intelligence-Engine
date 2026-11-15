@@ -248,17 +248,12 @@ func callWithRetry(ctx context.Context, gateway *modelgateway.Gateway, request m
 }
 
 func buildMessages(claim audits.SampleClaim) []modelgateway.Message {
-	brand := claim.BrandName
-	if brand == "" {
-		brand = "the target brand"
-	}
-	system := "You are a helpful assistant answering buyer questions. "
-	if claim.BrandDomain != "" {
-		system += "The brand is " + brand + " (" + claim.BrandDomain + "). "
-	} else {
-		system += "The brand is " + brand + ". "
-	}
-	system += "Answer in " + claim.Language + " for the " + claim.Region + " market. Be specific and concise about tools, capabilities and evidence; do not invent citations."
+	// The brand is deliberately NOT injected here: priming the model with the
+	// brand inflates mention rate (a fictional brand scored 74.8% when primed).
+	// Brand recall must come from the model's own knowledge or the question text.
+	system := "You are a helpful assistant answering buyer questions. " +
+		"Answer in " + claim.Language + " for the " + claim.Region + " market. " +
+		"Be specific and concise about tools, capabilities and evidence; do not invent citations."
 	return []modelgateway.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: claim.QuestionText},
