@@ -108,6 +108,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-clusters/{clusterId}/members", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.moveClusterMember)))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-clusters/{clusterId}/split", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.splitCluster)))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/question-clusters/{clusterId}/merge", requirePermission("edit_project", projectAccess(deps.DB, questionHandler.mergeClusters)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-coverage", projectAccess(deps.DB, questionHandler.coverage))
 	projectMemberHandler := newProjectMemberHandler(projectmembers.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/members", projectAccess(deps.DB, projectMemberHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/members", requirePermission("edit_project", projectAccess(deps.DB, projectMemberHandler.add)))

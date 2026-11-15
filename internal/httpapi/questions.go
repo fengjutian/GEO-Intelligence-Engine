@@ -29,6 +29,7 @@ type questionStore interface {
 	MoveMember(context.Context, string, string, string, string) error
 	SplitCluster(context.Context, string, string, string, []string, string) (questions.Cluster, error)
 	MergeClusters(context.Context, string, string, string, string) (questions.Cluster, error)
+	Coverage(context.Context, string, string) (questions.Coverage, error)
 }
 
 type questionHandler struct {

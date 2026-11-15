@@ -48,6 +48,20 @@ func (h *questionHandler) importQuestions(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *questionHandler) coverage(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectId")
+	if _, err := uuid.Parse(projectID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_PROJECT_ID", "Project ID is invalid", traceID(r))
+		return
+	}
+	coverage, err := h.store.Coverage(r.Context(), h.tenantID, projectID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, coverage)
+}
+
 func (h *questionHandler) rebuildClusters(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectId")
 	if _, err := uuid.Parse(projectID); err != nil {

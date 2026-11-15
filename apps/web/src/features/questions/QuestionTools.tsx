@@ -5,6 +5,7 @@ type ImportRow = { line: number; text: string; status: string; message?: string 
 type ImportResult = { committed: boolean; total: number; valid: number; invalid: number; rows: ImportRow[] }
 type ClusterMember = { questionId: string; text: string; similarity: number; manuallyLocked: boolean }
 type Cluster = { id: string; name: string; algorithmVersion: string; representativeQuestionId: string; locked: boolean; members: ClusterMember[] }
+type Coverage = { total: number; branded: number; nonBranded: number; clusters: number; byType: Record<string, number>; missingTypes: string[]; missingStages: string[] }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -27,6 +28,7 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [threshold, setThreshold] = useState('0.75')
   const [reviewNote, setReviewNote] = useState('')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
+  const coverage = useQuery({ queryKey: ['question-coverage', projectId], queryFn: () => request<Coverage>(`/api/v1/projects/${projectId}/question-coverage`) })
   const generate = useMutation({
     mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
@@ -100,6 +102,14 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
       </div>}
     </details>
     <div className="cluster-list">
+      {coverage.data && <div className="coverage-strip">
+        <span>问题 {coverage.data.total}</span>
+        <span>品牌型 {coverage.data.branded}</span>
+        <span>非品牌 {coverage.data.nonBranded}</span>
+        <span>聚类 {coverage.data.clusters}</span>
+        {coverage.data.missingTypes.length > 0 && <em>缺类型：{coverage.data.missingTypes.join(' / ')}</em>}
+        {coverage.data.missingStages.length > 0 && <em>缺阶段：{coverage.data.missingStages.join(' / ')}</em>}
+      </div>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>
         <summary>{cluster.name}<small>{cluster.members.length} 条 · {cluster.locked ? '已锁定' : cluster.algorithmVersion}<button type="button" className="cluster-lock" onClick={(event) => { event.preventDefault(); lock.mutate({ id: cluster.id, locked: !cluster.locked }) }}>{cluster.locked ? '解锁' : '锁定'}</button></small></summary>
