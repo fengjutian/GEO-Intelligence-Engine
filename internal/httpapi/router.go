@@ -24,6 +24,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
+	"github.com/fengjutian/geo-intelligence-engine/internal/semantic"
 	"github.com/fengjutian/geo-intelligence-engine/internal/serviceaccounts"
 	"github.com/fengjutian/geo-intelligence-engine/internal/signals"
 	"github.com/fengjutian/geo-intelligence-engine/internal/tasks"
@@ -152,6 +153,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/fact-checks", projectAccess(deps.DB, factCheckHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/fact-checks", requirePermission("edit_project", projectAccess(deps.DB, factCheckHandler.verifyLatest)))
 	mux.HandleFunc("PATCH /api/v1/fact-checks/{checkId}", requirePermission("edit_project", factCheckHandler.update))
+	semanticHandler := newSemanticHandler(semantic.NewStore(deps.DB, deps.ModelGateway, deps.Embeddings), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/audits/{auditId}/semantic-checks", requirePermission("run_audit", semanticHandler.verify))
+	mux.HandleFunc("GET /api/v1/audits/{auditId}/semantic-checks", semanticHandler.listByAudit)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/semantic-checks", projectAccess(deps.DB, semanticHandler.listByProject))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
 	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))
