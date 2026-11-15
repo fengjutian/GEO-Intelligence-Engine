@@ -123,6 +123,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/answers", answerHandler.list)
 	shareHandler := newShareOfVoiceHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
+	questionTrendHandler := newQuestionTrendHandler(audits.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-trends", projectAccess(deps.DB, questionTrendHandler.list))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
 	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))
