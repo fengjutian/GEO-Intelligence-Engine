@@ -24,6 +24,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/notify"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projectmembers"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
+	"github.com/fengjutian/geo-intelligence-engine/internal/publish"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
 	"github.com/fengjutian/geo-intelligence-engine/internal/semantic"
@@ -165,6 +166,12 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/capture-batches/{batchId}", captureHandler.listBatch)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/captures", captureHandler.listByAudit)
 	mux.HandleFunc("POST /api/v1/captures/{captureId}/revoke", requirePermission("edit_project", captureHandler.revoke))
+	publishHandler := newPublishHandler(publish.NewStore(deps.DB, drafts.NewStore(deps.DB)), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("PUT /api/v1/projects/{projectId}/publish-target", requirePermission("manage_keys", projectAccess(deps.DB, publishHandler.setTarget)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/publish-target", projectAccess(deps.DB, publishHandler.getTarget))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/content-drafts/{draftId}/publish", requirePermission("edit_project", projectAccess(deps.DB, publishHandler.publishDraft)))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/publish-events/{eventId}/rollback", requirePermission("edit_project", projectAccess(deps.DB, publishHandler.rollback)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/publish-events", projectAccess(deps.DB, publishHandler.listEvents))
 	mux.HandleFunc("GET /api/v1/capture-surfaces", captureHandler.listSurfaces)
 	mux.HandleFunc("POST /api/v1/capture-surfaces", requirePermission("manage_keys", captureHandler.addSurface))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
