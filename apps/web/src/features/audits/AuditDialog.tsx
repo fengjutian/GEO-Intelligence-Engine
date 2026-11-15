@@ -478,9 +478,39 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
           <button type="button" disabled={reportBusy} onClick={() => void downloadExport('pdf')}>导出 PDF</button>
           <span>{report.status === 'published' ? '已发布' : 'PDF 由 Playwright Chromium 渲染'}</span>
         </div>}
+        {report && <div className="report-sections">
+          {report.sections.map((section) => <span key={section.code}>{reportSectionLabel(section.code)}</span>)}
+        </div>}
+        {report && (() => {
+          const geo = report.sections.find((section) => section.code === 'geo_summary')?.content
+          if (!geo) return null
+          return <div className="report-geo-summary">
+            <div><small>品牌份额</small><strong>{Math.round(Number(geo.brandShare ?? 0) * 100)}%</strong></div>
+            <div><small>提及率</small><strong>{Math.round(Number(geo.mentionRate ?? 0) * 100)}%</strong></div>
+            <div><small>推荐率</small><strong>{Math.round(Number(geo.recommendationRate ?? 0) * 100)}%</strong></div>
+            <div><small>内容高风险</small><strong>{Number(geo.contentQualityHigh ?? 0)}</strong></div>
+          </div>
+        })()}
       </section>}
       {auditId && <button className="audit-clear" type="button" onClick={() => { rememberAudit(null); setMessage('已清除本项目的审计记录引用') }}>清除记录</button>}
       {taskBoardOpen && <TaskBoard projectId={projectId} projectName={projectName} onClose={() => setTaskBoardOpen(false)} />}
     </section>
   </div>
+}
+
+function reportSectionLabel(code: string): string {
+  const labels: Record<string, string> = {
+    geo_summary: 'GEO 总览',
+    competitive_landscape: '竞品格局',
+    content_trust: '内容可信度',
+    summary: '摘要',
+    scope: '范围',
+    metrics: '指标',
+    share_of_voice: '份额',
+    fact_checks: '事实核验',
+    findings: '发现',
+    priorities: '优先级',
+    limitations: '限制',
+  }
+  return labels[code] ?? code
 }

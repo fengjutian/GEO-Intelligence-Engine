@@ -10,6 +10,11 @@ type CompetitorCoverage = { total: number; branded: number; competitors: Array<{
 type QuestionTrendPoint = { auditId: string; finishedAt: string | null; total: number; eligible: number; recommendations: number; refusals: number }
 type QuestionTrend = { questionId: string; text: string; points: QuestionTrendPoint[] }
 type QuestionItem = { id: string; text: string; status: string; questionType: string; weight: number }
+type QuestionSetVersion = { id: string; version: number; questionCount: number }
+type QuestionSet = { id: string; name: string; draftVersionId: string; draftVersion: number; versions: QuestionSetVersion[] }
+type VersionChange = { kind: string; text: string; fromStatus?: string; toStatus?: string; fromWeight?: number; toWeight?: number }
+type VersionDiff = { fromVersion: number; toVersion: number; added: VersionChange[]; removed: VersionChange[]; changed: VersionChange[] }
+type CompetitiveRow = { name: string; type: string; questionMentions: number; comparisonCount: number; questionShare: number; mentionShare: number; gap: number; signal: string }
 
 const TEMPLATE = 'text,language,questionType,intent,topic,funnelStage,weight\n适合中国团队的 GEO 工具有哪些？,zh-CN,category,discovery,GEO,awareness,1'
 
@@ -51,14 +56,31 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [algorithm, setAlgorithm] = useState('semantic-v2')
   const [threshold, setThreshold] = useState('0.75')
   const [reviewNote, setReviewNote] = useState('')
+  const [editingId, setEditingId] = useState('')
+  const [editText, setEditText] = useState('')
+  const [diffSetId, setDiffSetId] = useState('')
+  const [fromVersion, setFromVersion] = useState('')
+  const [toVersion, setToVersion] = useState('')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const coverage = useQuery({ queryKey: ['question-coverage', projectId], queryFn: () => request<Coverage>(`/api/v1/projects/${projectId}/question-coverage`) })
   const competitorCoverage = useQuery({ queryKey: ['competitor-question-coverage', projectId], queryFn: () => request<CompetitorCoverage>(`/api/v1/projects/${projectId}/competitor-question-coverage`) })
+  const competitive = useQuery({ queryKey: ['competitive-insights', projectId], queryFn: () => request<{ hasShareData: boolean; brandShare: number; rows: CompetitiveRow[] }>(`/api/v1/projects/${projectId}/competitive-insights`) })
   const questionTrends = useQuery({ queryKey: ['question-trends', projectId], queryFn: () => request<{ items: QuestionTrend[] }>(`/api/v1/projects/${projectId}/question-trends?limit=12`) })
   const questions = useQuery({ queryKey: ['question-list', projectId], queryFn: () => request<{ items: QuestionItem[] }>(`/api/v1/projects/${projectId}/questions?limit=100`) })
+  const questionSets = useQuery({ queryKey: ['question-sets', projectId], queryFn: () => request<{ items: QuestionSet[] }>(`/api/v1/projects/${projectId}/question-sets`) })
+  const activeSet = questionSets.data?.items.find((item) => item.id === diffSetId) ?? questionSets.data?.items[0]
+  const diffSet = activeSet?.id ?? ''
+  const fromId = fromVersion || activeSet?.versions[activeSet.versions.length - 1]?.id || ''
+  const toId = toVersion || activeSet?.draftVersionId || ''
+  const diff = useQuery({
+    queryKey: ['question-diff', diffSet, fromId, toId],
+    queryFn: () => request<VersionDiff>(`/api/v1/question-sets/${diffSet}/versions/diff?from=${fromId}&to=${toId}`),
+    enabled: Boolean(diffSet && fromId && toId && fromId !== toId),
+  })
   const updateQuestion = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => request(`/api/v1/questions/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) }),
+    mutationFn: ({ id, status, text }: { id: string; status?: string; text?: string }) => request(`/api/v1/questions/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, text }) }),
     onSuccess: async () => {
+      setEditingId('')
       onChanged()
       await queryClient.invalidateQueries({ queryKey: ['question-list', projectId] })
       await queryClient.invalidateQueries({ queryKey: ['question-coverage', projectId] })
@@ -150,6 +172,18 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
         {competitorCoverage.data.competitors.map((item) => <span key={item.name} data-missing={item.mentions === 0}>{item.name} {item.mentions}/{item.comparisonCount}</span>)}
         {competitorCoverage.data.uncovered.length > 0 && <em>未覆盖：{competitorCoverage.data.uncovered.join(' / ')}</em>}
       </div>}
+      {competitive.data && competitive.data.rows.length > 0 && <details className="competitive-insights">
+        <summary>竞品份额 × 问题覆盖 · 品牌 {Math.round(competitive.data.brandShare * 100)}%</summary>
+        <div className="competitive-head"><span>竞品</span><span>问题提及</span><span>问题覆盖</span><span>回答份额</span><span>差值</span><span>信号</span></div>
+        {competitive.data.rows.map((row) => <div className="competitive-row" key={row.name}>
+          <span>{row.name}</span>
+          <span>{row.questionMentions}/{row.comparisonCount}</span>
+          <span>{Math.round(row.questionShare * 100)}%</span>
+          <span>{Math.round(row.mentionShare * 100)}%</span>
+          <span data-gap={row.gap >= 0 ? 'up' : 'down'}>{row.gap >= 0 ? '+' : ''}{(row.gap * 100).toFixed(1)}pp</span>
+          <em data-signal={row.signal}>{row.signal === 'opportunity' ? '机会' : row.signal === 'strength' ? '强势' : '匹配'}</em>
+        </div>)}
+      </details>}
       {competitorCoverage.data && competitorCoverage.data.competitors.length > 0 && <div className="alias-manager">
         {competitorCoverage.data.competitors.map((item) => <details key={item.id}>
           <summary>{item.name} · 别名</summary>
@@ -166,15 +200,42 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
       {questions.data && questions.data.items.length > 0 && <details className="question-review">
         <summary>问题审核 · {questions.data.items.length}</summary>
         <ul>{questions.data.items.slice(0, 20).map((question) => <li key={question.id}>
-          <span>{question.text}</span>
-          <select value={question.status} onChange={(event) => updateQuestion.mutate({ id: question.id, status: event.target.value })} disabled={updateQuestion.isPending}>
-            <option value="draft">draft</option>
-            <option value="reviewed">reviewed</option>
-            <option value="active">active</option>
-            <option value="retired">retired</option>
-          </select>
+          {editingId === question.id ? <>
+            <input className="question-edit-input" value={editText} onChange={(event) => setEditText(event.target.value)} />
+            <div className="question-edit-actions"><button type="button" disabled={updateQuestion.isPending || !editText.trim()} onClick={() => updateQuestion.mutate({ id: question.id, text: editText })}>保存</button><button type="button" onClick={() => setEditingId('')}>取消</button></div>
+          </> : <>
+            <span>{question.text}</span>
+            <div className="question-edit-actions"><button type="button" onClick={() => { setEditingId(question.id); setEditText(question.text) }}>编辑</button>
+              <select value={question.status} onChange={(event) => updateQuestion.mutate({ id: question.id, status: event.target.value })} disabled={updateQuestion.isPending}>
+                <option value="draft">draft</option>
+                <option value="reviewed">reviewed</option>
+                <option value="active">active</option>
+                <option value="retired">retired</option>
+              </select>
+            </div>
+          </>}
         </li>)}</ul>
         {updateQuestion.error && <small className="error">{updateQuestion.error.message}</small>}
+      </details>}
+      {activeSet && <details className="version-diff">
+        <summary>版本 Diff · {activeSet.name}</summary>
+        <div className="version-diff-controls">
+          <select value={diffSet} onChange={(event) => { setDiffSetId(event.target.value); setFromVersion(''); setToVersion('') }}>{questionSets.data?.items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+          <select value={fromId} onChange={(event) => setFromVersion(event.target.value)}>{activeSet.versions.map((version) => <option key={version.id} value={version.id}>v{version.version} · {version.questionCount} 条</option>)}</select>
+          <span>→</span>
+          <select value={toId} onChange={(event) => setToVersion(event.target.value)}><option value={activeSet.draftVersionId}>draft v{activeSet.draftVersion}</option>{activeSet.versions.map((version) => <option key={version.id} value={version.id}>v{version.version}</option>)}</select>
+        </div>
+        {diff.data && <div className="version-diff-result">
+          <span data-kind="added">新增 {diff.data.added.length}</span>
+          <span data-kind="removed">删除 {diff.data.removed.length}</span>
+          <span data-kind="changed">变更 {diff.data.changed.length}</span>
+          <ul>
+            {diff.data.added.slice(0, 5).map((item) => <li data-kind="added" key={`a-${item.text}`}>+ {item.text}</li>)}
+            {diff.data.removed.slice(0, 5).map((item) => <li data-kind="removed" key={`r-${item.text}`}>− {item.text}</li>)}
+            {diff.data.changed.slice(0, 5).map((item) => <li data-kind="changed" key={`c-${item.text}`}>~ {item.text} · 权重 {item.fromWeight} → {item.toWeight} · {item.fromStatus} → {item.toStatus}</li>)}
+          </ul>
+        </div>}
+        {diff.error && <small className="error">{diff.error.message}</small>}
       </details>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>

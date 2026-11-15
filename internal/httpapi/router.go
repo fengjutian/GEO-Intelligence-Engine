@@ -131,6 +131,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
 	questionTrendHandler := newQuestionTrendHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-trends", projectAccess(deps.DB, questionTrendHandler.list))
+	competitiveHandler := newCompetitiveHandler(competitiveStoreAdapter{questions: questions.NewStore(deps.DB), audits: audits.NewStore(deps.DB)}, deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/competitive-insights", projectAccess(deps.DB, competitiveHandler.get))
 	monitoringHandler := newMonitoringHandler(monitoring.NewStore(deps.DB, deps.Notifier), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/monitoring-schedules", projectAccess(deps.DB, monitoringHandler.list))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/monitoring-schedules", requirePermission("run_audit", projectAccess(deps.DB, monitoringHandler.create)))

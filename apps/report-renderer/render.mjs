@@ -95,11 +95,40 @@ function renderPriorities(items) {
     .join('')}</tbody></table>`
 }
 
+function renderCompetitive(entities) {
+  if (!Array.isArray(entities) || entities.length === 0) return '<p class="muted">没有竞品份额数据。</p>'
+  return `<table><thead><tr><th>Entity</th><th>Type</th><th>Share of Voice</th></tr></thead><tbody>${entities
+    .map((entity) => `<tr><td>${escapeHtml(entity.name)}</td><td>${escapeHtml(entity.type)}</td><td>${percent(entity.share)}</td></tr>`)
+    .join('')}</tbody></table>`
+}
+
+function renderGeoSummary(geo) {
+  return `<div class="cards">
+    <div class="card"><span>品牌份额</span><strong>${percent(geo.brandShare)}</strong></div>
+    <div class="card"><span>提及率</span><strong>${percent(geo.mentionRate)}</strong></div>
+    <div class="card"><span>推荐率</span><strong>${percent(geo.recommendationRate)}</strong></div>
+    <div class="card"><span>内容高风险</span><strong>${escapeHtml(geo.contentQualityHigh ?? 0)}</strong></div>
+  </div>`
+}
+
+function renderTrust(trust) {
+  const facts = trust.factChecks ?? {}
+  const quality = trust.contentQuality ?? {}
+  return `<table><tbody>
+    <tr><th>事实核验</th><td>总计 ${escapeHtml(facts.total ?? 0)} · supported ${escapeHtml(facts.supported ?? 0)} · unsupported ${escapeHtml(facts.unsupported ?? 0)} · unknown ${escapeHtml(facts.unknown ?? 0)} · pending ${escapeHtml(facts.pending ?? 0)}</td></tr>
+    <tr><th>内容质量</th><td>页面 ${escapeHtml(quality.total ?? 0)} · 高风险 ${escapeHtml((quality.bySeverity ?? {}).high ?? 0)}</td></tr>
+    <tr><th>口径</th><td>${escapeHtml(trust.scope ?? '')}</td></tr>
+  </tbody></table>`
+}
+
 function renderReport(report) {
   const sections = sectionMap(report)
   const summary = sections.summary ?? {}
   const scope = sections.scope ?? {}
   const metrics = sections.metrics ?? {}
+  const geo = sections.geo_summary ?? {}
+  const competitive = sections.competitive_landscape ?? {}
+  const trust = sections.content_trust ?? {}
   const findings = sections.findings ?? {}
   const priorities = sections.priorities ?? {}
   const limitations = sections.limitations ?? {}
@@ -143,6 +172,15 @@ ul { margin:6px 0; padding-left:18px; }
 
 <h2>数据范围与版本</h2>
 <table>${scopeRows}</table>
+
+<h2>GEO 总览</h2>
+${renderGeoSummary(geo)}
+
+<h2>竞品格局</h2>
+${renderCompetitive(competitive.entities)}
+
+<h2>内容可信度</h2>
+${renderTrust(trust)}
 
 <h2>核心指标</h2>
 ${renderMetrics(metrics.values)}

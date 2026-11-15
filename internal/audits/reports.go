@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -134,10 +136,14 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 	if err != nil {
 		return Report{}, err
 	}
+	geoSummary, competitiveLandscape, contentTrust := buildGeoInsights(metrics, shareValues, factChecks, contentQuality)
 	sections := []struct {
 		code    string
 		content map[string]any
 	}{
+		{"geo_summary", geoSummary},
+		{"competitive_landscape", competitiveLandscape},
+		{"content_trust", contentTrust},
 		{"summary", map[string]any{
 			"auditId": auditID, "projectId": projectID, "status": auditStatus,
 			"plannedCount": planned, "completedCount": completed, "eligibleCount": eligible,
@@ -197,6 +203,83 @@ FROM metric_values WHERE tenant_id=UUID_TO_BIN(?) AND snapshot_id=UUID_TO_BIN(?)
 		})
 	}
 	return items, rows.Err()
+}
+
+func buildGeoInsights(metrics, shares, facts []map[string]any, quality map[string]any) (map[string]any, map[string]any, map[string]any) {
+	brandShare := 0.0
+	entities := []map[string]any{}
+	for _, item := range shares {
+		code, _ := item["metricCode"].(string)
+		if code != "share_of_voice" {
+			continue
+		}
+		dimensions, _ := item["dimensions"].(map[string]any)
+		name, _ := dimensions["entity"].(string)
+		entityType, _ := dimensions["entityType"].(string)
+		value, _ := item["value"].(float64)
+		if name == "" {
+			continue
+		}
+		if entityType == "brand" {
+			brandShare = value
+		}
+		entities = append(entities, map[string]any{"name": name, "type": entityType, "share": value})
+	}
+	sort.SliceStable(entities, func(i, j int) bool {
+		left, _ := entities[i]["share"].(float64)
+		right, _ := entities[j]["share"].(float64)
+		return left > right
+	})
+	if len(entities) > 10 {
+		entities = entities[:10]
+	}
+	factCounts := map[string]int{"total": len(facts), "supported": 0, "unsupported": 0, "unknown": 0, "pending": 0}
+	for _, fact := range facts {
+		verdict, _ := fact["verdict"].(string)
+		status, _ := fact["status"].(string)
+		factCounts[verdict]++
+		if status == "pending" {
+			factCounts["pending"]++
+		}
+	}
+	severity, _ := quality["bySeverity"].(map[string]int)
+	geoSummary := map[string]any{
+		"brandShare":          brandShare,
+		"competitorShare":     math.Max(0, 1-brandShare),
+		"mentionRate":         overallMetric(metrics, "mention_rate"),
+		"recommendationRate":  overallMetric(metrics, "recommendation_rate"),
+		"contentQualityTotal": quality["total"],
+		"contentQualityHigh":  severity["high"],
+		"factChecks":          factCounts,
+		"entityCount":         len(entities),
+	}
+	if len(entities) > 0 {
+		geoSummary["leader"] = entities[0]
+	}
+	competitive := map[string]any{"brandShare": brandShare, "entities": entities}
+	contentTrust := map[string]any{
+		"contentQuality": quality,
+		"factChecks":     factCounts,
+		"scope":          "仅基于已抓取页面文本与模型判定，unknown 与 pending 需人工复核",
+	}
+	return geoSummary, competitive, contentTrust
+}
+
+func overallMetric(metrics []map[string]any, code string) any {
+	var fallback any
+	for _, item := range metrics {
+		if item["metricCode"] != code {
+			continue
+		}
+		dimensions, _ := item["dimensions"].(map[string]any)
+		if engine, _ := dimensions["engine"].(string); engine == "" {
+			return item["value"]
+		}
+		if fallback == nil {
+			fallback = item["value"]
+		}
+	}
+	return fallback
 }
 
 func loadFactChecks(ctx context.Context, tx *sql.Tx, tenantID, projectID string) ([]map[string]any, error) {
@@ -547,6 +630,20 @@ func buildCSV(report Report) []byte {
 		case "summary":
 			for key, value := range section.Content {
 				write("summary", key, csvCell(csvValue(value)))
+			}
+		case "geo_summary":
+			for key, value := range section.Content {
+				write("geo_summary", key, csvCell(csvValue(value)))
+			}
+		case "competitive_landscape":
+			items, _ := section.Content["entities"].([]any)
+			for _, entry := range items {
+				entity, _ := entry.(map[string]any)
+				write("competitive", csvValue(entity["name"]), csvValue(entity["type"]), "", "", csvValue(entity["share"]))
+			}
+		case "content_trust":
+			for key, value := range section.Content {
+				write("content_trust", key, csvCell(csvValue(value)))
 			}
 		case "metrics":
 			values, _ := section.Content["values"].([]any)
