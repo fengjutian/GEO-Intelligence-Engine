@@ -15,6 +15,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/httpapi"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
+	"github.com/fengjutian/geo-intelligence-engine/internal/monitoring"
 )
 
 func main() {
@@ -50,6 +51,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go monitoring.NewStore(db).Start(ctx, logger)
 
 	go func() {
 		logger.Info("api listening", "address", cfg.HTTPAddress)

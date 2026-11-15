@@ -13,8 +13,10 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
+	"github.com/fengjutian/geo-intelligence-engine/internal/factcheck"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
+	"github.com/fengjutian/geo-intelligence-engine/internal/monitoring"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projectmembers"
 	"github.com/fengjutian/geo-intelligence-engine/internal/projects"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
@@ -125,6 +127,18 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
 	questionTrendHandler := newQuestionTrendHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/question-trends", projectAccess(deps.DB, questionTrendHandler.list))
+	monitoringHandler := newMonitoringHandler(monitoring.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/monitoring-schedules", projectAccess(deps.DB, monitoringHandler.list))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/monitoring-schedules", requirePermission("run_audit", projectAccess(deps.DB, monitoringHandler.create)))
+	mux.HandleFunc("PATCH /api/v1/monitoring-schedules/{scheduleId}", requirePermission("run_audit", monitoringHandler.update))
+	mux.HandleFunc("DELETE /api/v1/monitoring-schedules/{scheduleId}", requirePermission("run_audit", monitoringHandler.remove))
+	mux.HandleFunc("POST /api/v1/monitoring-schedules/{scheduleId}/run", requirePermission("run_audit", monitoringHandler.runNow))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/monitoring-alerts", projectAccess(deps.DB, monitoringHandler.alerts))
+	mux.HandleFunc("PATCH /api/v1/monitoring-alerts/{alertId}/resolve", requirePermission("run_audit", monitoringHandler.resolveAlert))
+	factCheckHandler := newFactCheckHandler(factcheck.NewStore(deps.DB, deps.ModelGateway), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/content-analysis-runs/{analysisRunId}/fact-checks", requirePermission("edit_project", factCheckHandler.verify))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/fact-checks", projectAccess(deps.DB, factCheckHandler.list))
+	mux.HandleFunc("PATCH /api/v1/fact-checks/{checkId}", requirePermission("edit_project", factCheckHandler.update))
 	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
 	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))
