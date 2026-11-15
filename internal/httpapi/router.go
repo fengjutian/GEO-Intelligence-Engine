@@ -257,6 +257,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/experiments/{experimentId}", projectAccess(deps.DB, experimentHandler.get))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments/{experimentId}/attach", requirePermission("edit_project", projectAccess(deps.DB, experimentHandler.attach)))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments/{experimentId}/evaluate", requirePermission("run_audit", projectAccess(deps.DB, experimentHandler.evaluate)))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments/plan", requirePermission("edit_project", projectAccess(deps.DB, experimentHandler.plan)))
 	draftHandler := newDraftHandler(drafts.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/content-drafts", requirePermission("edit_project", projectAccess(deps.DB, draftHandler.generate)))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts", projectAccess(deps.DB, draftHandler.list))

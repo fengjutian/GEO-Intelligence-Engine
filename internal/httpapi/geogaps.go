@@ -171,6 +171,24 @@ func (h *experimentHandler) tenant(r *http.Request) string {
 	return h.devTenantID
 }
 
+func (h *experimentHandler) plan(w http.ResponseWriter, r *http.Request) {
+	var input experiments.PlanInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	plan, err := experiments.BuildPlan(input)
+	if err != nil {
+		var planErr *experiments.PlanError
+		if errors.As(err, &planErr) {
+			writeProblem(w, http.StatusUnprocessableEntity, "PLAN_INPUT_INVALID", planErr.Message, traceID(r))
+			return
+		}
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
+}
+
 func (h *experimentHandler) create(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectId")
 	var input experiments.CreateInput
