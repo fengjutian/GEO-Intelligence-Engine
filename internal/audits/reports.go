@@ -120,6 +120,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		limitations = append(limitations, fmt.Sprintf("有效样本仅 %d 条，比例区间较宽，不应据此做趋势结论", eligible))
 	}
 	limitations = append(limitations, "第三方引用按所有非品牌域名统计，尚未配置可信域名白名单")
+	if prompt, ok := protocolConfig["promptTemplateVersion"].(string); ok && prompt != "" {
+		limitations = append(limitations, fmt.Sprintf("指标口径 promptTemplateVersion=%s：不同提示口径的审计结果不可直接比较", prompt))
+	}
 	contentQuality, err := loadContentQuality(ctx, tx, tenantID, projectID)
 	if err != nil {
 		return Report{}, err
@@ -173,7 +176,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 			"contentQualityLow":    severityCounts["low"],
 			"generatedAt":          time.Now().UTC().Format(time.RFC3339),
 		}},
-		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion}},
+		{"scope", map[string]any{"protocolVersion": protocolVersion, "protocol": protocolConfig, "metricVersion": metricVersion, "judgeVersion": judgeVersion, "promptTemplateVersion": protocolConfig["promptTemplateVersion"]}},
 		{"metrics", map[string]any{"metricVersion": metricVersion, "values": metrics}},
 		{"share_of_voice", map[string]any{"metricVersion": metricVersion, "values": shareValues}},
 		{"fact_checks", map[string]any{"items": factChecks}},
