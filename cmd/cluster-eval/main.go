@@ -13,9 +13,19 @@ import (
 )
 
 type pair struct {
-	A    string `json:"a"`
-	B    string `json:"b"`
-	Same bool   `json:"same"`
+	A          string `json:"a"`
+	B          string `json:"b"`
+	Same       bool   `json:"same"`
+	AnnotatorA *bool  `json:"annotatorA,omitempty"`
+	AnnotatorB *bool  `json:"annotatorB,omitempty"`
+}
+
+type agreement struct {
+	Pairs      int     `json:"pairs"`
+	Agreements int     `json:"agreements"`
+	Observed   float64 `json:"observed"`
+	Expected   float64 `json:"expected"`
+	CohenKappa float64 `json:"cohenKappa"`
 }
 
 type thresholdResult struct {
@@ -41,6 +51,7 @@ type report struct {
 	Pairs       int               `json:"pairs"`
 	Best        thresholdResult   `json:"best"`
 	Sweep       []thresholdResult `json:"sweep"`
+	Agreement   agreement         `json:"agreement"`
 	Details     []pairResult      `json:"details"`
 	GeneratedAt time.Time         `json:"generatedAt"`
 }
@@ -115,12 +126,46 @@ func main() {
 		}
 	}
 	sort.Slice(details, func(i, j int) bool { return details[i].Similarity > details[j].Similarity })
-	reportValue := report{Model: os.Getenv("GEO_EMBEDDING_MODEL"), Pairs: len(pairs), Best: best, Sweep: sweep, Details: details, GeneratedAt: time.Now().UTC()}
+	reportValue := report{Model: os.Getenv("GEO_EMBEDDING_MODEL"), Pairs: len(pairs), Best: best, Sweep: sweep, Agreement: computeAgreement(pairs), Details: details, GeneratedAt: time.Now().UTC()}
 	data, _ := json.MarshalIndent(reportValue, "", "  ")
 	if err := os.WriteFile(*output, data, 0o600); err != nil {
 		fail(err)
 	}
 	fmt.Printf("model=%s pairs=%d best_threshold=%.2f precision=%.3f recall=%.3f f1=%.3f\n", reportValue.Model, reportValue.Pairs, best.Threshold, best.Precision, best.Recall, best.F1)
+}
+
+func computeAgreement(pairs []pair) agreement {
+	result := agreement{Pairs: len(pairs)}
+	var aTrue, bTrue int
+	for _, item := range pairs {
+		a, b := item.Same, item.Same
+		if item.AnnotatorA != nil {
+			a = *item.AnnotatorA
+		}
+		if item.AnnotatorB != nil {
+			b = *item.AnnotatorB
+		}
+		if a == b {
+			result.Agreements++
+		}
+		if a {
+			aTrue++
+		}
+		if b {
+			bTrue++
+		}
+	}
+	if result.Pairs == 0 {
+		return result
+	}
+	total := float64(result.Pairs)
+	result.Observed = float64(result.Agreements) / total
+	pA, pB := float64(aTrue)/total, float64(bTrue)/total
+	result.Expected = pA*pB + (1-pA)*(1-pB)
+	if result.Expected < 1 {
+		result.CohenKappa = (result.Observed - result.Expected) / (1 - result.Expected)
+	}
+	return result
 }
 
 func ratio(numerator, denominator int) float64 {

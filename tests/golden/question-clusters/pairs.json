@@ -298,5 +298,327 @@
     "a": "如何重跑内容分析？",
     "b": "如何重建问题聚类？",
     "same": false
+  },
+  {
+    "a": "Acme GEO 支持私有化部署吗？",
+    "b": "Acme GEO 可以本地部署吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 的数据存储在哪里？",
+    "b": "Acme GEO 的数据存放在哪个区域？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 如何收费？",
+    "b": "Acme GEO 的计费方式是怎样的？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 有免费试用吗？",
+    "b": "可以免费试用 Acme GEO 吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 支持哪些模型？",
+    "b": "Acme GEO 可以接入哪些大模型？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何联系 Acme GEO 销售？",
+    "b": "Acme GEO 的销售联系方式是什么？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 是否符合 GDPR？",
+    "b": "Acme GEO 满足 GDPR 合规要求吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 支持单点登录吗？",
+    "b": "Acme GEO 是否支持 SAML SSO？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何导入现有问题库？",
+    "b": "可以把已有问题批量导入吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "报告支持定时发送吗？",
+    "b": "能否定期自动发送审计报告？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何设置预算上限？",
+    "b": "审计预算在哪里配置上限？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何添加项目成员？",
+    "b": "在哪里给项目添加成员？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何撤销 API Token？",
+    "b": "API Token 怎么禁用？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "知识快照可以回滚吗？",
+    "b": "如何恢复到之前的知识快照？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "内容分析支持哪些语言？",
+    "b": "内容质量分析能处理哪些语言？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "审计失败会退款吗？",
+    "b": "审计失败预算会返还吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何查看历史审计？",
+    "b": "在哪里查看过去的审计记录？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 和 Profound 有什么区别？",
+    "b": "Acme GEO 与 Profound 相比有什么优势？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何提升官网引用率？",
+    "b": "怎样提高官网被 AI 引用的比例？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何降低拒答率？",
+    "b": "怎样减少 AI 拒答？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "支持导出原始回答吗？",
+    "b": "可以导出 AI 原始回答内容吗？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "如何配置告警通知？",
+    "b": "审计异常怎么通知？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 支持多因素认证吗？",
+    "b": "Acme GEO 是否支持 MFA？",
+    "same": true,
+    "annotatorA": true,
+    "annotatorB": true
+  },
+  {
+    "a": "Acme GEO 支持私有化部署吗？",
+    "b": "Acme GEO 支持哪些语言？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何导入问题？",
+    "b": "如何导出台账？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何提升提及率？",
+    "b": "如何计算置信区间？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何撤销 API Token？",
+    "b": "如何创建服务账号？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "报告支持 PDF 吗？",
+    "b": "报告支持定时发送吗？",
+    "same": false,
+    "annotatorA": true,
+    "annotatorB": false
+  },
+  {
+    "a": "如何设置预算上限？",
+    "b": "如何设置审计频率？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何添加项目成员？",
+    "b": "如何修改品牌别名？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "知识快照可以回滚吗？",
+    "b": "如何重建问题聚类？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "内容分析支持哪些语言？",
+    "b": "技术审计支持哪些语言？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何查看历史审计？",
+    "b": "如何查看复核队列？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 和 Profound 有什么区别？",
+    "b": "Acme GEO 和 CRM 有什么区别？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何提升官网引用率？",
+    "b": "如何提升推荐率？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何降低拒答率？",
+    "b": "如何降低内容错误率？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "支持导出原始回答吗？",
+    "b": "支持导出报告 PDF 吗？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何配置告警通知？",
+    "b": "如何配置模型供应商？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 支持单点登录吗？",
+    "b": "Acme GEO 支持多因素认证吗？",
+    "same": false,
+    "annotatorA": true,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 的数据存储在哪里？",
+    "b": "Acme GEO 的日志保留多久？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 如何收费？",
+    "b": "Acme GEO 支持哪些支付方式？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 有免费试用吗？",
+    "b": "Acme GEO 有开源版本吗？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 支持哪些模型？",
+    "b": "Acme GEO 支持哪些 embedding 模型？",
+    "same": false,
+    "annotatorA": true,
+    "annotatorB": false
+  },
+  {
+    "a": "如何联系销售？",
+    "b": "如何提交工单？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "Acme GEO 是否符合 GDPR？",
+    "b": "Acme GEO 是否符合 SOC 2？",
+    "same": false,
+    "annotatorA": false,
+    "annotatorB": false
+  },
+  {
+    "a": "如何导入现有问题库？",
+    "b": "如何导入品牌实体？",
+    "same": false,
+    "annotatorA": true,
+    "annotatorB": false
   }
 ]
