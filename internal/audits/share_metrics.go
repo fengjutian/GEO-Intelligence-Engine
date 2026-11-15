@@ -34,25 +34,44 @@ func generateShareMetrics(ctx context.Context, tx *sql.Tx, tenantID, auditID, sn
 		}
 		targets = append(targets, target{name: brandName, kind: "brand", terms: terms})
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT name,COALESCE(domain,'') FROM competitors WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND status='active' ORDER BY name`, tenantID, projectID)
+	type competitorRow struct {
+		id     string
+		name   string
+		domain string
+	}
+	competitors := []competitorRow{}
+	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(id),name,COALESCE(domain,'') FROM competitors WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND status='active' ORDER BY name`, tenantID, projectID)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
-		var name, domain string
-		if err := rows.Scan(&name, &domain); err != nil {
+		var item competitorRow
+		if err := rows.Scan(&item.id, &item.name, &item.domain); err != nil {
 			rows.Close()
 			return err
 		}
-		terms := []string{name}
-		if domain != "" {
-			terms = append(terms, strings.TrimPrefix(domain, "www."))
-		}
-		targets = append(targets, target{name: name, kind: "competitor", terms: terms})
+		competitors = append(competitors, item)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	for _, competitor := range competitors {
+		terms := []string{competitor.name}
+		if competitor.domain != "" {
+			terms = append(terms, strings.TrimPrefix(competitor.domain, "www."))
+		}
+		aliasRows, err := tx.QueryContext(ctx, `SELECT alias FROM competitor_aliases WHERE tenant_id=UUID_TO_BIN(?) AND competitor_id=UUID_TO_BIN(?) AND enabled=TRUE`, tenantID, competitor.id)
+		if err == nil {
+			for aliasRows.Next() {
+				var alias string
+				if aliasRows.Scan(&alias) == nil && alias != "" {
+					terms = append(terms, alias)
+				}
+			}
+			aliasRows.Close()
+		}
+		targets = append(targets, target{name: competitor.name, kind: "competitor", terms: terms})
 	}
 	answerRows, err := tx.QueryContext(ctx, `SELECT COALESCE(r.content_text,'') FROM ai_responses r
 JOIN audit_samples s ON s.id=r.sample_id WHERE r.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?)`, tenantID, auditID)

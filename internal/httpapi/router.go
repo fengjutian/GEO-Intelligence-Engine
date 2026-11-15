@@ -9,6 +9,7 @@ import (
 
 	"github.com/fengjutian/geo-intelligence-engine/internal/audits"
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
+	"github.com/fengjutian/geo-intelligence-engine/internal/competitoraliases"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
 	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
@@ -122,6 +123,10 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/answers", answerHandler.list)
 	shareHandler := newShareOfVoiceHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
+	aliasHandler := newCompetitorAliasHandler(competitoraliases.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/competitors/{competitorId}/aliases", aliasHandler.list)
+	mux.HandleFunc("POST /api/v1/competitors/{competitorId}/aliases", requirePermission("edit_project", aliasHandler.create))
+	mux.HandleFunc("DELETE /api/v1/competitors/{competitorId}/aliases/{aliasId}", requirePermission("edit_project", aliasHandler.remove))
 	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ReportDir)
 	mux.HandleFunc("GET /api/v1/engine-configs", auditHandler.listEngineConfigs)
 	mux.HandleFunc("POST /api/v1/engine-configs", auditHandler.createEngineConfig)
