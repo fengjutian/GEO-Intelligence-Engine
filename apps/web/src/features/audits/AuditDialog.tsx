@@ -43,6 +43,8 @@ const METRIC_LABELS: Record<string, string> = {
   third_party_citation_rate: '第三方引用率',
   eligible_response_rate: '有效回答率',
   mention_frequency: '平均提及次数',
+  share_of_voice: '回答覆盖率',
+  mention_share: '提及份额',
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

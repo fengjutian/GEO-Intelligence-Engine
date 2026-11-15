@@ -242,6 +242,9 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 			}
 		}
 	}
+	if err := generateShareMetrics(ctx, tx, tenantID, auditID, snapshotID); err != nil {
+		return err
+	}
 	return nil
 }
 
