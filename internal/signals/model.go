@@ -7,10 +7,10 @@ import (
 
 // BotLogEvent is one crawler hit imported from a web server log.
 type BotLogEvent struct {
-	ID        string    `json:"id"`
-	BotName   string    `json:"botName"`
-	Path      string    `json:"path"`
-	Status    int       `json:"httpStatus"`
+	ID         string    `json:"id"`
+	BotName    string    `json:"botName"`
+	Path       string    `json:"path"`
+	Status     int       `json:"httpStatus"`
 	OccurredAt time.Time `json:"occurredAt"`
 }
 
@@ -24,11 +24,11 @@ type BotLogInput struct {
 
 // BotStat aggregates one bot over a window.
 type BotStat struct {
-	BotName     string    `json:"botName"`
-	Hits        int       `json:"hits"`
-	Pages       int       `json:"pages"`
-	LastSeenAt  time.Time `json:"lastSeenAt"`
-	IsAIBot     bool      `json:"isAIBot"`
+	BotName    string    `json:"botName"`
+	Hits       int       `json:"hits"`
+	Pages      int       `json:"pages"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	IsAIBot    bool      `json:"isAIBot"`
 }
 
 // aiBots is the set of user-agent markers that matter for GEO.

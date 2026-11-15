@@ -13,14 +13,14 @@ type Counts struct {
 
 // Result is the statistical comparison of baseline and treatment.
 type Result struct {
-	BaselineRate float64 `json:"baselineRate"`
+	BaselineRate  float64 `json:"baselineRate"`
 	TreatmentRate float64 `json:"treatmentRate"`
-	Uplift       float64 `json:"uplift"`
-	Z            float64 `json:"z"`
-	PValue       float64 `json:"pValue"`
-	Significant  bool    `json:"significant"`
-	Insufficient bool    `json:"insufficient"`
-	Direction    string  `json:"direction"`
+	Uplift        float64 `json:"uplift"`
+	Z             float64 `json:"z"`
+	PValue        float64 `json:"pValue"`
+	Significant   bool    `json:"significant"`
+	Insufficient  bool    `json:"insufficient"`
+	Direction     string  `json:"direction"`
 }
 
 // MinPerGroup keeps under-powered audits from declaring a winner.
@@ -80,18 +80,18 @@ func Conclusion(result Result) string {
 
 // Experiment is one controlled before/after comparison.
 type Experiment struct {
-	ID                string     `json:"id"`
-	ProjectID         string     `json:"projectId"`
-	Name              string     `json:"name"`
-	Hypothesis        string     `json:"hypothesis"`
-	MetricCode        string     `json:"metricCode"`
-	BaselineAuditID   *string    `json:"baselineAuditId"`
-	TreatmentAuditID  *string    `json:"treatmentAuditId"`
-	Status            string     `json:"status"`
-	Conclusion        *string    `json:"conclusion"`
-	Stats             any        `json:"stats"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	ID               string    `json:"id"`
+	ProjectID        string    `json:"projectId"`
+	Name             string    `json:"name"`
+	Hypothesis       string    `json:"hypothesis"`
+	MetricCode       string    `json:"metricCode"`
+	BaselineAuditID  *string   `json:"baselineAuditId"`
+	TreatmentAuditID *string   `json:"treatmentAuditId"`
+	Status           string    `json:"status"`
+	Conclusion       *string   `json:"conclusion"`
+	Stats            any       `json:"stats"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // CreateInput declares an experiment before any audit is attached.

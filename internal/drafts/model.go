@@ -47,11 +47,11 @@ func BuildJSONLD(brand Brand) map[string]any {
 	graph := []any{organization}
 	if brand.Name != "" {
 		graph = append(graph, map[string]any{
-			"@type":         "Product",
-			"name":          brand.Name,
-			"brand":         map[string]any{"@type": "Brand", "name": brand.Name},
-			"url":           brand.OfficialURL,
-			"description":   brand.Description,
+			"@type":       "Product",
+			"name":        brand.Name,
+			"brand":       map[string]any{"@type": "Brand", "name": brand.Name},
+			"url":         brand.OfficialURL,
+			"description": brand.Description,
 		})
 	}
 	return map[string]any{"@context": "https://schema.org", "@graph": graph}
@@ -96,9 +96,9 @@ func BuildMeta(brand Brand, pageURL, pageTitle string) map[string]any {
 		description = fmt.Sprintf("%s 官方网站", brand.Name)
 	}
 	return map[string]any{
-		"canonical":   pageURL,
-		"title":       title,
-		"description": description,
+		"canonical":    pageURL,
+		"title":        title,
+		"description":  description,
 		"og:site_name": brand.Name,
 	}
 }

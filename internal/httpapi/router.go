@@ -11,8 +11,10 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/auth"
 	"github.com/fengjutian/geo-intelligence-engine/internal/competitoraliases"
 	"github.com/fengjutian/geo-intelligence-engine/internal/crawls"
+	"github.com/fengjutian/geo-intelligence-engine/internal/drafts"
 	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
+	"github.com/fengjutian/geo-intelligence-engine/internal/experiments"
 	"github.com/fengjutian/geo-intelligence-engine/internal/factcheck"
 	"github.com/fengjutian/geo-intelligence-engine/internal/members"
 	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
@@ -23,6 +25,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/fengjutian/geo-intelligence-engine/internal/reviews"
 	"github.com/fengjutian/geo-intelligence-engine/internal/serviceaccounts"
+	"github.com/fengjutian/geo-intelligence-engine/internal/signals"
 	"github.com/fengjutian/geo-intelligence-engine/internal/tasks"
 )
 
@@ -224,6 +227,24 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("PATCH /api/v1/entities/{entityId}", requirePermission("edit_project", entityHandler.update))
 	mux.HandleFunc("POST /api/v1/entities:merge", requirePermission("edit_project", entityHandler.merge))
 	mux.HandleFunc("POST /api/v1/entity-merges/{mergeAction}", requirePermission("edit_project", entityHandler.undoMerge))
+	signalHandler := newSignalHandler(signals.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/bot-logs", requirePermission("edit_project", projectAccess(deps.DB, signalHandler.ingestBotLogs)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/bot-logs/summary", projectAccess(deps.DB, signalHandler.botSummary))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/source-mentions", requirePermission("edit_project", projectAccess(deps.DB, signalHandler.ingestMentions)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/source-mentions", projectAccess(deps.DB, signalHandler.listMentions))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/source-mentions/summary", projectAccess(deps.DB, signalHandler.mentionSummary))
+	experimentHandler := newExperimentHandler(experiments.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments", requirePermission("edit_project", projectAccess(deps.DB, experimentHandler.create)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/experiments", projectAccess(deps.DB, experimentHandler.list))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/experiments/{experimentId}", projectAccess(deps.DB, experimentHandler.get))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments/{experimentId}/attach", requirePermission("edit_project", projectAccess(deps.DB, experimentHandler.attach)))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/experiments/{experimentId}/evaluate", requirePermission("run_audit", projectAccess(deps.DB, experimentHandler.evaluate)))
+	draftHandler := newDraftHandler(drafts.NewStore(deps.DB), deps.DevTenantID, deps.Logger)
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/content-drafts", requirePermission("edit_project", projectAccess(deps.DB, draftHandler.generate)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts", projectAccess(deps.DB, draftHandler.list))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts/{draftId}", projectAccess(deps.DB, draftHandler.get))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/content-drafts/{draftId}/status", requirePermission("edit_project", projectAccess(deps.DB, draftHandler.setStatus)))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/content-drafts/{draftId}/diff", projectAccess(deps.DB, draftHandler.diff))
 
 	var oidcVerifier *auth.OIDCVerifier
 	if strings.EqualFold(deps.AuthMode, "oidc") {
