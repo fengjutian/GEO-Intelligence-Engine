@@ -75,6 +75,10 @@ func (s *Store) deliverFilesystem(ctx context.Context, tenantID, projectID, draf
 	if err != nil {
 		return Event{}, err
 	}
+	var previous []byte
+	if existing, readErr := os.ReadFile(path); readErr == nil {
+		previous = existing
+	}
 	event := Event{DraftID: draftID, Action: "publish", Status: "delivered"}
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		event.Status = "failed"
@@ -82,10 +86,10 @@ func (s *Store) deliverFilesystem(ctx context.Context, tenantID, projectID, draf
 		event.ResponseSnippet = truncateString(err.Error(), 500)
 	}
 	hash := sha256.Sum256(body)
-	return s.recordEvent(ctx, tenantID, projectID, draftID, event, path, hash[:])
+	return s.recordEvent(ctx, tenantID, projectID, draftID, event, path, hash[:], previous)
 }
 
-func (s *Store) rollbackFilesystem(ctx context.Context, tenantID, projectID, draftID string) (Event, error) {
+func (s *Store) rollbackFilesystem(ctx context.Context, tenantID, projectID, draftID, eventID string) (Event, error) {
 	root := PublishRoot()
 	event := Event{DraftID: draftID, Action: "rollback", Status: "delivered"}
 	var kind string
@@ -93,18 +97,28 @@ func (s *Store) rollbackFilesystem(ctx context.Context, tenantID, projectID, dra
 		tenantID, projectID, draftID).Scan(&kind); err != nil {
 		event.Status = "failed"
 		event.ErrorCode = "DRAFT_LOOKUP_FAILED"
-		return s.recordEvent(ctx, tenantID, projectID, draftID, event, "", nil)
+		return s.recordEvent(ctx, tenantID, projectID, draftID, event, "", nil, nil)
 	}
 	path := filepath.Join(root, projectID, kind+"."+connectorExtension(kind))
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	var previous []byte
+	_ = s.db.QueryRowContext(ctx, `SELECT previous_content FROM publish_events WHERE id=UUID_TO_BIN(?)`, eventID).Scan(&previous)
+	if len(previous) > 0 {
+		if err := os.WriteFile(path, previous, 0o644); err != nil {
+			event.Status = "failed"
+			event.ErrorCode = "RESTORE_FAILED"
+			event.ResponseSnippet = truncateString(err.Error(), 500)
+		} else {
+			event.ResponseSnippet = "restored previous content"
+		}
+	} else if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		event.Status = "failed"
 		event.ErrorCode = "REMOVE_FAILED"
 		event.ResponseSnippet = truncateString(err.Error(), 500)
 	}
-	return s.recordEvent(ctx, tenantID, projectID, draftID, event, path, nil)
+	return s.recordEvent(ctx, tenantID, projectID, draftID, event, path, nil, nil)
 }
 
-func (s *Store) recordEvent(ctx context.Context, tenantID, projectID, draftID string, event Event, path string, payloadHash []byte) (Event, error) {
+func (s *Store) recordEvent(ctx context.Context, tenantID, projectID, draftID string, event Event, path string, payloadHash, previous []byte) (Event, error) {
 	targetID, err := s.targetID(ctx, tenantID, projectID)
 	if err != nil {
 		return Event{}, err
@@ -112,10 +126,10 @@ func (s *Store) recordEvent(ctx context.Context, tenantID, projectID, draftID st
 	event.ID = uuid.NewString()
 	event.CreatedAt = time.Now().UTC()
 	event.ResponseSnippet = truncateString(strings.TrimSpace(event.ResponseSnippet+" written:"+path), 500)
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO publish_events (id,tenant_id,project_id,draft_id,target_id,action,status,http_status,error_code,payload_hash,response_snippet,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,UTC_TIMESTAMP(6))`,
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO publish_events (id,tenant_id,project_id,draft_id,target_id,action,status,http_status,error_code,payload_hash,previous_content,response_snippet,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,?,UTC_TIMESTAMP(6))`,
 		event.ID, tenantID, projectID, draftID, targetID, event.Action, event.Status,
-		nullInt(event.HTTPStatus), nullString(event.ErrorCode), payloadHash, nullString(event.ResponseSnippet)); err != nil {
+		nullInt(event.HTTPStatus), nullString(event.ErrorCode), payloadHash, previous, nullString(event.ResponseSnippet)); err != nil {
 		return Event{}, err
 	}
 	return event, nil

@@ -151,7 +151,7 @@ WHERE e.tenant_id=UUID_TO_BIN(?) AND e.project_id=UUID_TO_BIN(?) AND e.id=UUID_T
 		return Event{}, ErrNotDelivered
 	}
 	if targetKind == KindFilesystem {
-		return s.rollbackFilesystem(ctx, tenantID, projectID, draftID)
+		return s.rollbackFilesystem(ctx, tenantID, projectID, draftID, eventID)
 	}
 	secret := strings.TrimSpace(os.Getenv("GEO_PUBLISH_SECRET"))
 	if secret == "" {
