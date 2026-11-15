@@ -46,6 +46,13 @@ func (s *Store) Create(ctx context.Context, tenantID, projectID string, input Cr
 	if err != nil {
 		return Question{}, err
 	}
+	existing, err := existingQuestionTexts(ctx, tx, versionID)
+	if err != nil {
+		return Question{}, err
+	}
+	if existing[NormalizeText(input.Text)] {
+		return Question{}, ErrDuplicate
+	}
 	questionID, err := uuid.NewV7()
 	if err != nil {
 		return Question{}, err
@@ -70,6 +77,23 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,?,?,'draft',CAS
 		return Question{}, fmt.Errorf("commit question: %w", err)
 	}
 	return s.get(ctx, tenantID, questionID.String())
+}
+
+func existingQuestionTexts(ctx context.Context, tx *sql.Tx, versionID string) (map[string]bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT text_value FROM questions WHERE version_id=UUID_TO_BIN(?)`, versionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	existing := map[string]bool{}
+	for rows.Next() {
+		var text string
+		if err := rows.Scan(&text); err != nil {
+			return nil, err
+		}
+		existing[NormalizeText(text)] = true
+	}
+	return existing, rows.Err()
 }
 
 func ensureDraftVersion(ctx context.Context, tx *sql.Tx, tenantID, projectID string) (string, error) {

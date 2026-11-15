@@ -18,6 +18,9 @@ var ErrNoKnowledgeSnapshot = errors.New("no knowledge snapshot is available")
 type GenerateInput struct {
 	KnowledgeSnapshotID string `json:"knowledgeSnapshotId"`
 	Language            string `json:"language"`
+	Mode                string `json:"mode,omitempty"`
+	Provider            string `json:"provider,omitempty"`
+	Model               string `json:"model,omitempty"`
 }
 
 type snapshot struct {
@@ -95,7 +98,15 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'template-v1
 	}
 	created := []string{}
 	skipped := 0
+	existing, err := existingQuestionTexts(ctx, tx, versionID)
+	if err != nil {
+		return GenerationRun{}, nil, err
+	}
 	for _, item := range candidates {
+		if existing[NormalizeText(item.text)] {
+			skipped++
+			continue
+		}
 		hash := sha256.Sum256([]byte(NormalizeText(item.text)))
 		attributes, _ := json.Marshal(map[string]any{"source": "generated", "brandType": brandedLabel(item.branded), "generationRunId": runID, "basis": item.basis})
 		id := uuid.NewString()
@@ -110,6 +121,7 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,?,1,'draft',CAS
 			return GenerationRun{}, nil, fmt.Errorf("insert generated question: %w", err)
 		}
 		created = append(created, id)
+		existing[NormalizeText(item.text)] = true
 	}
 	if err := tx.Commit(); err != nil {
 		return GenerationRun{}, nil, err

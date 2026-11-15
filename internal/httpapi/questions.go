@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/modelgateway"
 	"github.com/fengjutian/geo-intelligence-engine/internal/questions"
 	"github.com/google/uuid"
 )
@@ -17,6 +18,8 @@ type questionStore interface {
 	Create(context.Context, string, string, questions.CreateInput) (questions.Question, error)
 	List(context.Context, string, string, int) (questions.Page, error)
 	Generate(context.Context, string, string, questions.GenerateInput) (questions.GenerationRun, []questions.Question, error)
+	LoadGenerationContext(context.Context, string, string, string) (questions.GenerationContext, error)
+	GenerateFromCandidates(context.Context, string, string, string, string, string, string, []questions.Candidate) (questions.GenerationRun, []questions.Question, error)
 	Import(context.Context, string, string, string, bool) (questions.ImportResult, error)
 	RebuildClusters(context.Context, string, string, string) ([]questions.Cluster, error)
 	ListClusters(context.Context, string, string) ([]questions.Cluster, error)
@@ -30,10 +33,11 @@ type questionHandler struct {
 	store    questionStore
 	tenantID string
 	logger   *slog.Logger
+	gateway  *modelgateway.Gateway
 }
 
-func newQuestionHandler(store questionStore, tenantID string, logger *slog.Logger) *questionHandler {
-	return &questionHandler{store: store, tenantID: tenantID, logger: logger}
+func newQuestionHandler(store questionStore, tenantID string, logger *slog.Logger, gateway *modelgateway.Gateway) *questionHandler {
+	return &questionHandler{store: store, tenantID: tenantID, logger: logger, gateway: gateway}
 }
 
 func (h *questionHandler) list(w http.ResponseWriter, r *http.Request) {

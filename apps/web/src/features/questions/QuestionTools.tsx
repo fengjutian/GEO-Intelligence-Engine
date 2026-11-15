@@ -26,10 +26,10 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   const [algorithm, setAlgorithm] = useState('semantic-v2')
   const clusters = useQuery({ queryKey: ['question-clusters', projectId], queryFn: () => request<{ items: Cluster[] }>(`/api/v1/projects/${projectId}/question-clusters`) })
   const generate = useMutation({
-    mutationFn: () => request<{ run: { generated: number; skipped: number } }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
+    mutationFn: (mode: 'template' | 'llm') => request<{ run: { generated: number; skipped: number }; mode: string; warning?: string }>(`/api/v1/projects/${projectId}/question-generation-runs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ language: locale }),
+      body: JSON.stringify({ language: locale, mode, provider: mode === 'llm' ? 'deepseek' : undefined }),
     }),
     onSuccess: async () => { onChanged(); await queryClient.invalidateQueries({ queryKey: ['question-clusters', projectId] }) },
   })
@@ -71,10 +71,11 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
   })
   return <div className="question-tools">
     <div className="question-toolbar">
-      <button type="button" onClick={() => generate.mutate()} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成建议问题'}</button>
+      <button type="button" onClick={() => generate.mutate('template')} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成建议问题'}</button>
+      <button type="button" onClick={() => generate.mutate('llm')} disabled={generate.isPending}>LLM 生成</button>
       <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} aria-label="聚类算法"><option value="semantic-v2">语义 v2</option><option value="jaccard-v1">基础 v1</option></select>
       <button type="button" onClick={() => rebuild.mutate()} disabled={rebuild.isPending}>{rebuild.isPending ? '聚类中…' : '重建聚类'}</button>
-      {generate.data && <span>生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条</span>}
+      {generate.data && <span>{generate.data.mode === 'llm' ? 'LLM' : '模板'}生成 {generate.data.run.generated} 条，跳过 {generate.data.run.skipped} 条{generate.data.warning ? `（${generate.data.warning}）` : ''}</span>}
     </div>
     {(generate.error || rebuild.error) && <p className="error" role="alert">{(generate.error ?? rebuild.error)?.message}</p>}
     {(lock.error || split.error || merge.error) && <p className="error" role="alert">{(lock.error ?? split.error ?? merge.error)?.message}</p>}

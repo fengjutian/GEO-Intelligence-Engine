@@ -324,7 +324,7 @@ paths:
       tags: [Questions]
       operationId: generateQuestions
       parameters: [{$ref: '#/components/parameters/ProjectId'}]
-      requestBody: {content: {application/json: {schema: {type: object, properties: {knowledgeSnapshotId: {$ref: '#/components/schemas/Id'}, language: {type: string}}}}}}
+      requestBody: {content: {application/json: {schema: {type: object, properties: {knowledgeSnapshotId: {$ref: '#/components/schemas/Id'}, language: {type: string}, mode: {type: string, enum: [template, llm]}, provider: {type: string}, model: {type: string}}}}}}
       responses:
         '201': {description: Generated draft questions, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
         '422': {$ref: '#/components/responses/UnprocessableEntity'}

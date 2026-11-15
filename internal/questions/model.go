@@ -41,8 +41,30 @@ type GenerationRun struct {
 	ID               string     `json:"id"`
 	Status           string     `json:"status"`
 	GeneratorVersion string     `json:"generatorVersion"`
+	Model            string     `json:"model,omitempty"`
 	Generated        int        `json:"generated"`
 	Skipped          int        `json:"skipped"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	FinishedAt       *time.Time `json:"finishedAt"`
+}
+
+// Candidate is one question proposed by a template or LLM generator.
+type Candidate struct {
+	Text         string `json:"text"`
+	QuestionType string `json:"questionType"`
+	Intent       string `json:"intent"`
+	Topic        string `json:"topic"`
+	FunnelStage  string `json:"funnelStage"`
+	Basis        string `json:"basis"`
+	Branded      bool   `json:"branded"`
+}
+
+// GenerationContext is the frozen knowledge used to build a prompt.
+type GenerationContext struct {
+	SnapshotID  string
+	Brand       string
+	Products    []string
+	Competitors []string
+	Entities    []string
+	Language    string
 }
