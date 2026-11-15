@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/fengjutian/geo-intelligence-engine/internal/notify"
 	"github.com/fengjutian/geo-intelligence-engine/internal/signals"
 	"github.com/google/uuid"
 )
@@ -169,6 +170,9 @@ WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) AND kind=? AND stat
 VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,'open',CAST(? AS JSON),UTC_TIMESTAMP(6))`,
 		id, tenantID, projectID, kind, severity, message, payload); err != nil {
 		return nil, err
+	}
+	if s.notifier != nil && s.notifier.Enabled() {
+		s.notifier.Send(ctx, notify.Alert{ID: id, ProjectID: projectID, Kind: kind, Message: message})
 	}
 	return &SignalAlert{ID: id, Kind: kind, Severity: severity, Message: message, Status: "open", Details: details, CreatedAt: time.Now().UTC()}, nil
 }

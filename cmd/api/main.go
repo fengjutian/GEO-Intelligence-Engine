@@ -53,7 +53,9 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go monitoring.NewStore(db, notifier).Start(ctx, logger)
+	monitoringStore := monitoring.NewStore(db, notifier)
+	go monitoringStore.Start(ctx, logger)
+	go monitoringStore.StartSignalLoop(ctx, logger)
 
 	go func() {
 		logger.Info("api listening", "address", cfg.HTTPAddress)
