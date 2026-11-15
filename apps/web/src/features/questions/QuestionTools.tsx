@@ -107,8 +107,8 @@ export function QuestionTools({ projectId, locale, onChanged }: { projectId: str
         <span>品牌型 {coverage.data.branded}</span>
         <span>非品牌 {coverage.data.nonBranded}</span>
         <span>聚类 {coverage.data.clusters}</span>
-        {coverage.data.missingTypes.length > 0 && <em>缺类型：{coverage.data.missingTypes.join(' / ')}</em>}
-        {coverage.data.missingStages.length > 0 && <em>缺阶段：{coverage.data.missingStages.join(' / ')}</em>}
+        {coverage.data.missingTypes?.length > 0 && <em>缺类型：{coverage.data.missingTypes.join(' / ')}</em>}
+        {coverage.data.missingStages?.length > 0 && <em>缺阶段：{coverage.data.missingStages.join(' / ')}</em>}
       </div>}
       <h4>问题聚类 · {clusters.data?.items.length ?? 0}</h4>
       {clusters.data?.items.map((cluster) => <details key={cluster.id}>

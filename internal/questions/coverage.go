@@ -37,7 +37,7 @@ ORDER BY qsv.version DESC LIMIT 1`, tenantID, projectID).Scan(&versionID)
 	if err != nil {
 		return Coverage{}, err
 	}
-	result := Coverage{ByType: map[string]int{}, ByFunnel: map[string]int{}, ByLanguage: map[string]int{}, BySource: map[string]int{}}
+	result := Coverage{ByType: map[string]int{}, ByFunnel: map[string]int{}, ByLanguage: map[string]int{}, BySource: map[string]int{}, MissingTypes: []string{}, MissingStages: []string{}}
 	rows, err := s.db.QueryContext(ctx, `SELECT question_type,COALESCE(funnel_stage,''),language,attributes_json
 FROM questions WHERE tenant_id=UUID_TO_BIN(?) AND version_id=UUID_TO_BIN(?)`, tenantID, versionID)
 	if err != nil {
