@@ -120,6 +120,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/comparison", auditCompareHandler.get)
 	answerHandler := newAnswerHandler(audits.NewStore(deps.DB), deps.DevTenantID)
 	mux.HandleFunc("GET /api/v1/audits/{auditId}/answers", answerHandler.list)
+	shareHandler := newShareOfVoiceHandler(audits.NewStore(deps.DB), deps.DevTenantID)
+	mux.HandleFunc("GET /api/v1/audits/{auditId}/share-of-voice", shareHandler.get)
 	auditHandler := newAuditHandler(audits.NewStore(deps.DB), deps.DevTenantID, deps.Logger, deps.ReportDir)
 	mux.HandleFunc("GET /api/v1/engine-configs", auditHandler.listEngineConfigs)
 	mux.HandleFunc("POST /api/v1/engine-configs", auditHandler.createEngineConfig)

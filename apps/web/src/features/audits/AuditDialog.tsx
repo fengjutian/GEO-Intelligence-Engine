@@ -28,6 +28,8 @@ type AuditComparison = { baseAuditId: string; targetAuditId: string; baseCounts:
 type EngineSeries = { engineConfigId: string; provider: string; modelSelector: string; metrics: Record<string, TrendValue>; delta: Record<string, number | null> }
 type EngineTrendPoint = { auditId: string; finishedAt: string | null; engines: EngineSeries[] }
 type EngineTrend = { metrics: string[]; points: EngineTrendPoint[] }
+type ShareEntity = { name: string; type: string; mentions: number; answers: number; share: number; mentionShare: number }
+type ShareOfVoice = { totalAnswers: number; brandShare: number; entities: ShareEntity[] }
 
 type Props = { projectId: string; projectName: string; onClose: () => void }
 
@@ -99,6 +101,11 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
   const engineTrend = useQuery({
     queryKey: ['audit-engine-trends', projectId],
     queryFn: () => request<EngineTrend>(`/api/v1/projects/${projectId}/audit-trends?limit=12&dimension=engine`),
+  })
+  const shareOfVoice = useQuery({
+    queryKey: ['share-of-voice', auditId],
+    queryFn: () => request<ShareOfVoice>(`/api/v1/audits/${auditId}/share-of-voice`),
+    enabled: Boolean(auditId),
   })
   const metrics = useQuery({
     queryKey: ['audit-metrics', auditId],
@@ -361,6 +368,20 @@ export function AuditDialog({ projectId, projectName, onClose }: Props) {
             <span>{formatPercent(engine.metrics.recommendation_rate?.value ?? null)}</span>
             <span>{formatPercent(engine.metrics.official_citation_rate?.value ?? null)}</span>
             <span data-direction={(engine.delta.mention_rate ?? 0) > 0 ? 'up' : (engine.delta.mention_rate ?? 0) < 0 ? 'down' : 'flat'}>{engine.delta.mention_rate == null ? '—' : `${engine.delta.mention_rate >= 0 ? '+' : ''}${(engine.delta.mention_rate * 100).toFixed(1)}pp`}</span>
+          </div>)}
+        </div>
+      </section>}
+      {shareOfVoice.data && shareOfVoice.data.totalAnswers > 0 && <section className="audit-metrics audit-share">
+        <h3>Share of Voice · 品牌覆盖 {Math.round(shareOfVoice.data.brandShare * 100)}%</h3>
+        <div className="metric-table">
+          <div className="metric-row metric-head"><span>实体</span><span>类型</span><span>出现回答</span><span>提及次数</span><span>回答覆盖</span><span>提及份额</span></div>
+          {shareOfVoice.data.entities.map((entity) => <div className="metric-row" key={`${entity.type}-${entity.name}`}>
+            <span>{entity.name}</span>
+            <span>{entity.type === 'brand' ? '品牌' : '竞品'}</span>
+            <span>{entity.answers} / {shareOfVoice.data.totalAnswers}</span>
+            <span>{entity.mentions}</span>
+            <span>{Math.round(entity.share * 100)}%</span>
+            <span>{Math.round(entity.mentionShare * 100)}%</span>
           </div>)}
         </div>
       </section>}
