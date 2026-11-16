@@ -94,6 +94,11 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,'todo',?
 		linkID.String(), tenantID, taskID.String(), findingID); err != nil {
 		return Task{}, fmt.Errorf("link finding evidence: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE finding_evidence_chains
+SET task_id=UUID_TO_BIN(?),updated_by=UUID_TO_BIN(?),updated_at=UTC_TIMESTAMP(6)
+WHERE tenant_id=UUID_TO_BIN(?) AND finding_id=UUID_TO_BIN(?)`, taskID.String(), actorID, tenantID, findingID); err != nil {
+		return Task{}, fmt.Errorf("attach task to evidence chain: %w", err)
+	}
 	payload, _ := json.Marshal(map[string]any{"findingId": findingID, "severity": severity, "findingStatus": findingStatus})
 	if err := appendEvent(ctx, tx, tenantID, taskID.String(), actorID, "created", "", "todo", "", payload); err != nil {
 		return Task{}, err

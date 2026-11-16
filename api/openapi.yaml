@@ -289,6 +289,23 @@ paths:
       responses:
         '200': {description: Updated finding, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
         '409': {$ref: '#/components/responses/Conflict'}
+  /findings/{findingId}/evidence-chain:
+    get:
+      tags: [Crawls]
+      operationId: getFindingEvidenceChain
+      parameters: [{name: findingId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      responses:
+        '200': {description: End-to-end evidence chain from finding through retest, content: {application/json: {schema: {$ref: '#/components/schemas/FindingEvidenceChain'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      tags: [Crawls]
+      operationId: upsertFindingEvidenceChain
+      parameters: [{name: findingId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FindingEvidenceChainInput'}}}}
+      responses:
+        '200': {description: Saved evidence chain, content: {application/json: {schema: {$ref: '#/components/schemas/FindingEvidenceChain'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
   /crawl-runs/{crawlRunId}/robots:
     get:
       tags: [Crawls]
@@ -981,6 +998,35 @@ components:
     PageSummary: {type: object, required: [pageId, contentId, finalUrl, httpStatus, title, contentHash, parserVersion, createdAt], properties: {pageId: {$ref: '#/components/schemas/Id'}, contentId: {$ref: '#/components/schemas/Id'}, canonicalUrl: {type: [string, 'null'], format: uri}, finalUrl: {type: string, format: uri}, httpStatus: {type: integer}, title: {type: string}, language: {type: [string, 'null']}, contentHash: {type: string, pattern: '^[0-9a-f]{64}$'}, parserVersion: {type: string}, createdAt: {type: string, format: date-time}}}
     PageDetail: {allOf: [{$ref: '#/components/schemas/PageSummary'}, {type: object, required: [links], properties: {links: {type: array, maxItems: 100, items: {type: string, format: uri}}}}]}
     TechnicalFinding: {type: object, required: [id, ruleCode, severity, status, summary, evidence, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, ruleCode: {type: string}, severity: {type: string, enum: [critical, high, medium, low]}, status: {type: string, enum: [open, accepted, resolved, dismissed]}, summary: {type: string}, evidence: {type: object, additionalProperties: true}, createdAt: {type: string, format: date-time}}}
+    FindingEvidenceChainInput:
+      type: object
+      required: [questionId, responseId, changeSummary, expectedOutcome, verificationPlan]
+      properties:
+        questionId: {$ref: '#/components/schemas/Id'}
+        responseId: {$ref: '#/components/schemas/Id'}
+        pageContentId: {$ref: '#/components/schemas/Id'}
+        taskId: {$ref: '#/components/schemas/Id'}
+        retestAuditId: {$ref: '#/components/schemas/Id'}
+        changeSummary: {type: string, minLength: 1}
+        expectedOutcome: {type: string, minLength: 1}
+        verificationPlan: {type: string, minLength: 1}
+        retestOutcome: {type: string, enum: [pending, improved, unchanged, regressed, inconclusive], default: pending}
+    FindingEvidenceChain:
+      type: object
+      required: [findingId, projectId, question, answer, page, changeSummary, expectedOutcome, verificationPlan, createdAt, updatedAt]
+      properties:
+        findingId: {$ref: '#/components/schemas/Id'}
+        projectId: {$ref: '#/components/schemas/Id'}
+        question: {type: object, required: [id, text], properties: {id: {$ref: '#/components/schemas/Id'}, text: {type: string}}}
+        answer: {type: object, required: [id, auditId, provider, model, content], properties: {id: {$ref: '#/components/schemas/Id'}, auditId: {$ref: '#/components/schemas/Id'}, provider: {type: string}, model: {type: string}, content: {type: string}}}
+        page: {type: object, required: [contentId, url, title, contentHash], properties: {contentId: {$ref: '#/components/schemas/Id'}, url: {type: string}, title: {type: string}, contentHash: {type: string}}}
+        task: {type: object, required: [id, title, status], properties: {id: {$ref: '#/components/schemas/Id'}, title: {type: string}, status: {type: string}}}
+        changeSummary: {type: string}
+        expectedOutcome: {type: string}
+        verificationPlan: {type: string}
+        retest: {type: object, required: [auditId, status, outcome], properties: {auditId: {$ref: '#/components/schemas/Id'}, status: {type: string}, outcome: {type: string, enum: [pending, improved, unchanged, regressed, inconclusive]}}}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     QuestionCreate: {type: object, required: [text, language, questionType], properties: {text: {type: string, maxLength: 2000}, language: {type: string, maxLength: 35}, questionType: {type: string, enum: [brand, category, comparison, scenario, decision]}, intent: {type: string, maxLength: 64}, weight: {type: number, minimum: 0, maximum: 1000, default: 1}}}
     Question: {allOf: [{$ref: '#/components/schemas/QuestionCreate'}, {type: object, required: [id, status, createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, status: {type: string, enum: [draft, reviewed, active, retired]}, createdAt: {type: string, format: date-time}}}]}
     QuestionPage: {type: object, required: [items, page], properties: {items: {type: array, items: {$ref: '#/components/schemas/Question'}}, page: {$ref: '#/components/schemas/PageMeta'}}}

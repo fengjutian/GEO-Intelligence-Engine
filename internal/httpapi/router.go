@@ -15,6 +15,7 @@ import (
 	"github.com/fengjutian/geo-intelligence-engine/internal/drafts"
 	"github.com/fengjutian/geo-intelligence-engine/internal/embeddings"
 	"github.com/fengjutian/geo-intelligence-engine/internal/entities"
+	"github.com/fengjutian/geo-intelligence-engine/internal/evidencechain"
 	"github.com/fengjutian/geo-intelligence-engine/internal/experiments"
 	"github.com/fengjutian/geo-intelligence-engine/internal/factcheck"
 	"github.com/fengjutian/geo-intelligence-engine/internal/judge"
@@ -87,6 +88,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/products", projectAccess(deps.DB, projectHandler.createProduct))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/competitors", projectAccess(deps.DB, projectHandler.createCompetitor))
 	crawlHandler := newCrawlHandler(crawls.NewStore(deps.DB), deps.DevTenantID, deps.WorkerToken, deps.Logger)
+	evidenceChainHandler := newEvidenceChainHandler(evidencechain.NewStore(deps.DB), deps.DevTenantID, deps.DevActorID, deps.Logger)
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/crawl-runs", requirePermission("manage_crawl", projectAccess(deps.DB, crawlHandler.create)))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/crawl-runs", projectAccess(deps.DB, crawlHandler.listProjectRuns))
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}", crawlHandler.get)
@@ -96,6 +98,8 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/findings", crawlHandler.listFindings)
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/findings", projectAccess(deps.DB, crawlHandler.listProjectFindings))
 	mux.HandleFunc("PATCH /api/v1/findings/{findingId}", requirePermission("edit_project", crawlHandler.updateFinding))
+	mux.HandleFunc("GET /api/v1/findings/{findingId}/evidence-chain", evidenceChainHandler.get)
+	mux.HandleFunc("PUT /api/v1/findings/{findingId}/evidence-chain", requirePermission("edit_project", evidenceChainHandler.upsert))
 	mux.HandleFunc("POST /api/v1/crawl-runs/{crawlRunId}/content-analysis-runs", requirePermission("edit_project", crawlHandler.runContentAnalysis))
 	mux.HandleFunc("GET /api/v1/content-analysis-runs/{analysisRunId}", crawlHandler.getContentAnalysisRun)
 	mux.HandleFunc("GET /api/v1/crawl-runs/{crawlRunId}/robots", crawlHandler.listRobotsEvidence)
