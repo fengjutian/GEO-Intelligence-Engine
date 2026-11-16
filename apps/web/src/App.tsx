@@ -306,17 +306,23 @@ export function App() {
       {!['overview', 'models', 'entities', 'reviews', 'settings', 'monitoring'].includes(activePage) && <section className="workspace module-workspace" id="projects" aria-labelledby="projects-title">
         <div className="section-heading">
           <div><p className="eyebrow">{activePage.toUpperCase()}</p><h2 id="projects-title">{workspaceTitle}</h2><p>{workspaceDescription}</p></div>
-          <button className="primary-button" type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? '取消' : '创建项目'}</button>
+          <button className="primary-button" type="button" onClick={() => { create.reset(); setFormOpen(true) }}>创建项目</button>
         </div>
-        {formOpen && <form className="project-form" onSubmit={submitProject}>
-          <label>项目名称<input name="name" required maxLength={200} placeholder="中国区 GEO 基线" /></label>
-          <label>品牌正式名<input name="brandName" required maxLength={300} placeholder="Acme" /></label>
-          <label className="wide">官方网站<input name="officialUrl" required type="url" placeholder="https://example.com" /></label>
-          <label>默认语言<input name="locale" required defaultValue="zh-CN" /></label>
-          <label>地区<input name="region" required defaultValue="CN" /></label>
-          <label>时区<input name="timezone" required defaultValue="Asia/Shanghai" /></label>
-          <div className="form-actions"><button className="primary-button" disabled={create.isPending}>{create.isPending ? '创建中…' : '确认创建'}</button>{create.error && <span role="alert">{create.error.message}</span>}</div>
-        </form>}
+        {formOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => { if (!create.isPending) setFormOpen(false) }}>
+          <section className="project-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-project-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="profile-header"><div><p className="eyebrow">NEW PROJECT</p><h2 id="create-project-title">创建项目</h2><p>建立品牌测量空间，并关联需要审计的官方网站。</p></div><button type="button" aria-label="关闭" disabled={create.isPending} onClick={() => setFormOpen(false)}>×</button></div>
+            <form className="project-form" onSubmit={submitProject}>
+              <label>项目名称<input name="name" required maxLength={200} autoFocus placeholder="中国区 GEO 基线" /></label>
+              <label>品牌正式名<input name="brandName" required maxLength={300} placeholder="Acme" /></label>
+              <label className="wide">官方网站<input name="officialUrl" required type="url" placeholder="https://example.com" /></label>
+              <label>默认语言<input name="locale" required defaultValue="zh-CN" /></label>
+              <label>地区<input name="region" required defaultValue="CN" /></label>
+              <label>时区<input name="timezone" required defaultValue="Asia/Shanghai" /></label>
+              {create.error && <p className="error create-project-error" role="alert">{create.error.message}</p>}
+              <div className="form-actions"><button type="button" className="secondary-button" disabled={create.isPending} onClick={() => setFormOpen(false)}>取消</button><button className="primary-button" disabled={create.isPending}>{create.isPending ? '创建中…' : '确认创建'}</button></div>
+            </form>
+          </section>
+        </div>}
         {projects.isLoading && <p className="empty-state">正在加载项目…</p>}
         {projects.isError && <p className="empty-state error" role="alert">项目列表加载失败，请确认 API 与数据库状态。</p>}
         {projects.data?.items.length === 0 && <p className="empty-state">暂无项目。创建第一个品牌测量空间。</p>}
