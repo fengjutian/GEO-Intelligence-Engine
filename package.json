@@ -3,6 +3,8 @@
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "scripts": {
+    "dev:site": "pnpm --filter @geo/project-site dev",
+    "build:site": "pnpm --filter @geo/project-site build",
     "dev:web": "pnpm --filter @geo/web dev",
     "dev:crawler": "pnpm --filter @geo/crawler-worker build && pnpm --filter @geo/crawler-worker exec node dist/index.js",
     "build": "pnpm -r build",

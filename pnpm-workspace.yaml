@@ -1,7 +1,9 @@
 packages:
+  - site
   - apps/web
   - apps/crawler-worker
   - apps/report-renderer
   - packages/*
 allowBuilds:
   esbuild: true
+  sharp: true

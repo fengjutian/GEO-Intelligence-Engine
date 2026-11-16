@@ -192,7 +192,27 @@ uv run pytest
 Pop-Location
 ```
 
-## 8. 常见问题
+## 8. 项目介绍站
+
+仓库在 `site/` 提供 Astro 静态项目介绍站，与 `apps/web` 管理端相互独立。
+
+本地开发：
+
+```powershell
+pnpm dev:site
+```
+
+访问 <http://localhost:4321>。
+
+生成静态文件：
+
+```powershell
+pnpm build:site
+```
+
+构建结果位于 `site/dist/`，可以部署到任意静态网站托管服务。
+
+## 9. 常见问题
 
 ### API 报数据库连接失败
 

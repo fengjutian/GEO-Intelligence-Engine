@@ -1,0 +1,121 @@
+---
+import '../styles/global.css'
+
+const capabilities = [
+  ['01', '官网抓取与技术审计', '受控抓取、robots 与 sitemap 证据、页面不可变版本、结构化数据和内容质量规则。'],
+  ['02', '问题与测量协议', '管理买家问题、发布问题集版本，并冻结渠道、模型、地区、语言、Judge 与指标口径。'],
+  ['03', '多模型审计', '通过 DeepSeek 或 MiniMax 执行确定性采样，记录请求、回答、成本、延迟和资格判定。'],
+  ['04', 'GEO 指标与置信区间', '计算提及率、推荐率、正向提及率和引用率，并提供 Wilson 置信区间。'],
+  ['05', '可复核证据链', '把 Finding 升级为“问题—回答—页面—修改—复测”，锁定快照并自动计算复测结论。'],
+  ['06', '报告与优化任务', '生成版本化报告，将优先级建议转成任务，通过状态机、验收项和事件历史推动闭环。'],
+]
+
+const commands = {
+  start: `<span class="comment"># 首次安装并启动全部服务</span>\n<span class="cmd">Copy-Item .env.example .env</span>\n<span class="cmd">python scripts/dev.py start --install</span>\n\n<span class="comment"># 查看服务状态</span>\n<span class="cmd">python scripts/dev.py status</span>`,
+  manual: `<span class="comment"># 数据库迁移</span>\n<span class="cmd">go run ./cmd/migrate up</span>\n\n<span class="comment"># 分别在终端启动</span>\n<span class="cmd">go run ./cmd/api</span>\n<span class="cmd">pnpm dev:web</span>\n<span class="cmd">pnpm dev:crawler</span>\n<span class="cmd">go run ./cmd/model-worker</span>`,
+  test: `<span class="comment"># 全量质量检查</span>\n<span class="cmd">go test ./...</span>\n<span class="cmd">go vet ./...</span>\n<span class="cmd">pnpm typecheck && pnpm test</span>\n\n<span class="comment"># 证据链真实审计 E2E</span>\n<span class="cmd">$env:GEO_TEST_DATABASE_DSN=$env:GEO_DATABASE_DSN</span>\n<span class="cmd">go test ./internal/httpapi -run TestEvidenceChainRealAuditE2E -v</span>`,
+}
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="GEO Intelligence Engine：面向生成式搜索优化的可测量、可复核、可复测工程平台。" />
+    <meta name="theme-color" content="#07150f" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GEO Intelligence Engine · 项目与使用指南</title>
+    <script type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'GEO Intelligence Engine', applicationCategory: 'BusinessApplication', operatingSystem: 'Windows, Linux, macOS', description: '面向生成式搜索优化的可测量、可复核、可复测工程平台。' })}></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="shell nav" aria-label="主导航">
+        <a class="brand" href="#top"><span class="brand-mark">G</span><span>GEO Intelligence</span></a>
+        <div class="nav-links">
+          <a href="#capabilities">能力</a><a href="#evidence">证据链</a><a href="#start">开始使用</a><a href="#architecture">架构</a>
+          <a class="nav-cta" href="http://localhost:5174">打开管理端 ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="shell hero-grid">
+          <div>
+            <p class="eyebrow">Generative Engine Optimization</p>
+            <h1>让 GEO 从发现问题，<span>走向可信复测。</span></h1>
+            <p class="hero-copy">GEO Intelligence Engine 将官网证据、买家问题、模型回答、页面修改与同协议复测串成一条可审计链路，让每一次优化都有上下文、基线和结论。</p>
+            <div class="hero-actions"><a class="button primary" href="#start">5 分钟启动</a><a class="button" href="#evidence">查看证据链</a></div>
+          </div>
+          <aside class="hero-proof" aria-label="复测指标示例">
+            <div class="proof-label"><span>RETEST / MENTION RATE</span><span>COMPARABLE ✓</span></div>
+            <div class="metric"><strong>+40%</strong><span>IMPROVED</span></div>
+            <div class="meter"><i></i></div>
+            <div class="proof-foot"><span>BASELINE 0.20</span><span>RETEST 0.60</span></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="capabilities">
+        <div class="shell">
+          <div class="section-head"><span class="kicker">01 / CAPABILITIES</span><div><h2>不是一张分数表，而是一套优化操作系统。</h2><p class="lead">从抓取官网到生成报告，所有关键输入都版本化，所有结论都能回到原始回答与页面证据。</p></div></div>
+          <div class="capability-grid">{capabilities.map(([num, title, text]) => <article class="capability"><span class="num">{num}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+        </div>
+      </section>
+
+      <section class="section" id="evidence">
+        <div class="shell">
+          <div class="section-head"><span class="kicker">02 / EVIDENCE CHAIN</span><div><h2>一次 GEO 修改，必须留下完整证据。</h2><p class="lead">系统冻结问题版本、回答内容哈希、页面内容哈希、测量协议和基线指标；复测只有在协议可比时才会产生有效结论。</p></div></div>
+          <div class="chain">
+            <article class="chain-step"><small>01 / FINDING</small><strong>问题</strong><span>规则、严重性与结构化证据</span></article>
+            <article class="chain-step"><small>02 / ANSWER</small><strong>回答</strong><span>问题、模型、渠道与内容哈希</span></article>
+            <article class="chain-step"><small>03 / PAGE</small><strong>页面</strong><span>URL、页面版本与内容哈希</span></article>
+            <article class="chain-step"><small>04 / CHANGE</small><strong>修改</strong><span>任务、预期结果与验收计划</span></article>
+            <article class="chain-step"><small>05 / RETEST</small><strong>复测</strong><span>同协议指标、置信区间与结论</span></article>
+          </div>
+          <div class="chain-note"><article class="note"><strong>可比性门禁</strong><p>问题、指标、Judge、Prompt、渠道、模型、地区和语言任一漂移，结论自动标记为 inconclusive。</p></article><article class="note"><strong>自动结论</strong><p>结合目标提升量、样本量和 Wilson 置信区间，输出 improved、unchanged、regressed 或 inconclusive。</p></article></div>
+        </div>
+      </section>
+
+      <section class="section" id="start">
+        <div class="shell quickstart">
+          <div>
+            <span class="kicker">03 / QUICK START</span><h2>从本地环境开始。</h2>
+            <div class="steps">
+              <article><h3>准备 MySQL</h3><p>创建 `geo` 数据库与账号，将 `.env.example` 复制为 `.env`。</p></article>
+              <article><h3>配置模型</h3><p>如需真实审计，填写 DeepSeek 或 MiniMax API Key。</p></article>
+              <article><h3>启动服务</h3><p>开发脚本会安装依赖、迁移数据库并启动五个服务。</p></article>
+              <article><h3>打开工作台</h3><p>访问 localhost:5174，创建项目并开始抓取与审计。</p></article>
+            </div>
+          </div>
+          <div class="terminal">
+            <div class="terminal-head"><span class="dots"><i></i><i></i><i></i></span><span>PowerShell · GEO</span></div>
+            <pre id="terminal-code" set:html={commands.start}></pre>
+            <div class="terminal-tabs" role="tablist"><button type="button" data-command="start" aria-selected="true">一键启动</button><button type="button" data-command="manual" aria-selected="false">手动启动</button><button type="button" data-command="test" aria-selected="false">测试</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="architecture">
+        <div class="shell">
+          <div class="section-head"><span class="kicker">04 / ARCHITECTURE</span><div><h2>五个服务，一条测量链路。</h2><p class="lead">默认本地运行只强依赖 MySQL；管理端、抓取、模型采样和判定服务可分别开发与调试。</p></div></div>
+          <div class="architecture"><article class="service"><b>React Web</b><code>:5174 / 管理端</code></article><article class="service"><b>Go API</b><code>:8080 / 业务 API</code></article><article class="service"><b>Crawler</b><code>:8082 / 抓取与解析</code></article><article class="service"><b>Model Worker</b><code>:8083 / 模型采样</code></article><article class="service"><b>Python Judge</b><code>:8081 / 回答判定</code></article></div>
+        </div>
+      </section>
+
+      <section class="cta"><div class="shell cta-grid"><div><span class="kicker">READY TO MEASURE</span><h2>先建立可信基线，再开始优化。</h2><p>运行项目、发布测量协议，并用第一条完整证据链验证你的 GEO 工作流。</p></div><a class="button primary" href="#start">查看启动命令 ↑</a></div></section>
+    </main>
+    <footer><div class="shell footer-row"><span>GEO INTELLIGENCE ENGINE · P0-V1.103</span><span>MEASURE · CHANGE · RETEST</span></div></footer>
+
+    <script define:vars={{ commands }}>
+      const output = document.querySelector('#terminal-code')
+      document.querySelectorAll('[data-command]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const key = button.getAttribute('data-command')
+          if (output && key && commands[key]) output.innerHTML = commands[key]
+          document.querySelectorAll('[data-command]').forEach((item) => item.setAttribute('aria-selected', String(item === button)))
+        })
+      })
+    </script>
+  </body>
+</html>
