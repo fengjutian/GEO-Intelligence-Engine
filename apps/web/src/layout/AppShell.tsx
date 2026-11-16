@@ -1,5 +1,8 @@
 import { Activity, BarChart3, Bot, ClipboardCheck, FolderKanban, Gauge, Globe2, LogOut, Network, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Button } from '../components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 
 export type PageId = 'overview' | 'projects' | 'audits' | 'entities' | 'questions' | 'reviews' | 'models' | 'monitoring' | 'settings'
 
@@ -29,17 +32,17 @@ type Props = {
 }
 
 export function AppShell({ activePage, onNavigate, apiVersion, baseline, connected, error, onLogout, children }: Props) {
-  return <main className="app-shell">
+  return <TooltipProvider><main className="app-shell">
     <aside className="app-sidebar">
       <div className="brand-mark"><span>G</span><div><strong>GEO</strong><small>Intelligence</small></div></div>
       <nav aria-label="主导航">
-        {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={activePage === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon />{label}</button>)}
+        {navItems.map(({ id, label, icon: Icon }) => <Tooltip key={id}><TooltipTrigger asChild><Button variant="ghost" className={activePage === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon />{label}</Button></TooltipTrigger><TooltipContent side="right">{label}</TooltipContent></Tooltip>)}
       </nav>
-      <div className="sidebar-footer"><Settings /><span>系统设置</span><small>{baseline ?? 'P0-V1.0'}</small>{onLogout && <button type="button" className="logout-button" onClick={onLogout}><LogOut />退出登录</button>}</div>
+      <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="sidebar-footer" aria-label="打开账户菜单"><Settings /><span>系统设置</span><small>{baseline ?? 'P0-V1.0'}</small></Button></DropdownMenuTrigger><DropdownMenuContent side="top" align="start"><DropdownMenuLabel>GEO Intelligence</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onNavigate('settings')}><Settings />成员与系统设置</DropdownMenuItem>{onLogout && <DropdownMenuItem onSelect={onLogout}><LogOut />退出登录</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
     </aside>
     <div className="app-page">
       <header className="app-topbar"><div><p>GEO Intelligence Engine</p><h1>{titles[activePage]}</h1></div><div className="status" data-state={connected ? 'ready' : 'loading'}><span />{connected ? `服务正常 · API ${apiVersion}` : error ? 'API 连接异常' : '正在连接'}</div></header>
       <div className="app-content">{children}</div>
     </div>
-  </main>
+  </main></TooltipProvider>
 }

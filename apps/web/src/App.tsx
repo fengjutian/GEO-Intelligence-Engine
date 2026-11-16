@@ -13,6 +13,8 @@ import { MonitoringPage } from './features/monitoring/MonitoringPage'
 import { AppShell, type PageId } from './layout/AppShell'
 import { useAuth } from './features/auth/AuthGate'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/Dialog'
+import { Badge } from './components/ui/badge'
+import { Button } from './components/ui/button'
 
 type Version = { apiVersion: string; baseline: string }
 type Project = {
@@ -308,7 +310,7 @@ export function App() {
         <div className="section-heading">
           <div><p className="eyebrow">{activePage.toUpperCase()}</p><h2 id="projects-title">{workspaceTitle}</h2><p>{workspaceDescription}</p></div>
           {activePage === 'projects' && <Dialog open={formOpen} onOpenChange={(open) => { if (!create.isPending) setFormOpen(open) }}>
-            <DialogTrigger asChild><button className="primary-button" type="button" onClick={() => create.reset()}>创建项目</button></DialogTrigger>
+            <DialogTrigger asChild><Button type="button" onClick={() => create.reset()}>创建项目</Button></DialogTrigger>
             <DialogContent className="project-create-dialog" showClose={!create.isPending}>
               <DialogHeader>
                 <p className="eyebrow">NEW PROJECT</p>
@@ -324,8 +326,8 @@ export function App() {
                 <label>时区<input name="timezone" required defaultValue="Asia/Shanghai" /></label>
                 {create.error && <p className="error create-project-error" role="alert">{create.error.message}</p>}
                 <DialogFooter className="form-actions">
-                  <DialogClose asChild><button type="button" className="secondary-button" disabled={create.isPending}>取消</button></DialogClose>
-                  <button className="primary-button" disabled={create.isPending}>{create.isPending ? '创建中…' : '确认创建'}</button>
+                  <DialogClose asChild><Button type="button" variant="outline" disabled={create.isPending}>取消</Button></DialogClose>
+                  <Button disabled={create.isPending}>{create.isPending ? '创建中…' : '确认创建'}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -336,7 +338,7 @@ export function App() {
         {projects.data?.items.length === 0 && <p className="empty-state">暂无项目。创建第一个品牌测量空间。</p>}
         <div className="project-grid">
           {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
-            <div><span className="project-status">{project.status}</span><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
+            <div><Badge>{project.status}</Badge><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
             <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
             <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setAuditProject(project)} disabled={project.status === 'archived'}>发起审计</button><button type="button" onClick={() => setHistoryProject(project)}>抓取记录</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => setQuestionProject(project)}>问题空间</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
           </article>)}
