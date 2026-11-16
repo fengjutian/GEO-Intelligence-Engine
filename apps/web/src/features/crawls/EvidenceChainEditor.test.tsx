@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EvidenceChainEditor } from './EvidenceChainEditor'
 
@@ -26,7 +26,10 @@ function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }))
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('EvidenceChainEditor end-to-end contract', () => {
   it('selects real audit evidence and saves the immutable baseline snapshot', async () => {
@@ -44,6 +47,7 @@ describe('EvidenceChainEditor end-to-end contract', () => {
     fireEvent.change(screen.getByLabelText('修改说明'), { target: { value: 'Add verifiable facts' } })
     fireEvent.change(screen.getByLabelText('预期结果'), { target: { value: 'Increase mention rate' } })
     fireEvent.change(screen.getByLabelText('复测计划'), { target: { value: 'Repeat the same protocol' } })
+    fireEvent.change(screen.getByLabelText('目标提升'), { target: { value: '0.1' } })
     fireEvent.click(screen.getByRole('button', { name: '保存证据快照' }))
 
     expect(await screen.findByText('证据快照已保存')).toBeTruthy()
@@ -72,7 +76,7 @@ describe('EvidenceChainEditor end-to-end contract', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '自动计算结论' }))
     expect(await screen.findByText('复测结论：improved')).toBeTruthy()
-    expect(screen.getByText('Retest confidence interval is above baseline')).toBeTruthy()
+    expect(screen.getAllByText('Retest confidence interval is above baseline')).toHaveLength(2)
     expect(screen.getByText('Δ 0.4000')).toBeTruthy()
   })
 })
