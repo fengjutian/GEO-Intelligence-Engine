@@ -14,6 +14,9 @@ import (
 type evidenceChainStore interface {
 	Get(ctx context.Context, tenantID, findingID string) (evidencechain.Chain, error)
 	Upsert(ctx context.Context, tenantID, actorID, findingID string, input evidencechain.UpsertInput) (evidencechain.Chain, error)
+	Candidates(ctx context.Context, tenantID, findingID string, limit int) (evidencechain.Candidates, error)
+	Transition(ctx context.Context, tenantID, actorID, findingID string, input evidencechain.TransitionInput) (evidencechain.Chain, error)
+	Evaluate(ctx context.Context, tenantID, actorID, findingID string) (evidencechain.Chain, error)
 }
 
 type evidenceChainHandler struct {
@@ -68,6 +71,58 @@ func (h *evidenceChainHandler) upsert(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, chain)
 }
 
+func (h *evidenceChainHandler) candidates(w http.ResponseWriter, r *http.Request) {
+	findingID := r.PathValue("findingId")
+	if _, err := uuid.Parse(findingID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_FINDING_ID", "Finding ID is invalid", traceID(r))
+		return
+	}
+	items, err := h.store.Candidates(r.Context(), h.tenant(r), findingID, 20)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *evidenceChainHandler) transition(w http.ResponseWriter, r *http.Request) {
+	findingID := r.PathValue("findingId")
+	if _, err := uuid.Parse(findingID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_FINDING_ID", "Finding ID is invalid", traceID(r))
+		return
+	}
+	var input evidencechain.TransitionInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if strings.TrimSpace(input.RetestAuditID) != "" {
+		if _, err := uuid.Parse(strings.TrimSpace(input.RetestAuditID)); err != nil {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVALID_RETEST_AUDIT_ID", "Retest audit ID must be a valid ID", traceID(r))
+			return
+		}
+	}
+	chain, err := h.store.Transition(r.Context(), h.tenant(r), h.actor(r), findingID, input)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, chain)
+}
+
+func (h *evidenceChainHandler) evaluate(w http.ResponseWriter, r *http.Request) {
+	findingID := r.PathValue("findingId")
+	if _, err := uuid.Parse(findingID); err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_FINDING_ID", "Finding ID is invalid", traceID(r))
+		return
+	}
+	chain, err := h.store.Evaluate(r.Context(), h.tenant(r), h.actor(r), findingID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, chain)
+}
+
 func (h *evidenceChainHandler) tenant(r *http.Request) string {
 	if value := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); value != "" {
 		return value
@@ -90,6 +145,8 @@ func (h *evidenceChainHandler) writeError(w http.ResponseWriter, r *http.Request
 		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_EVIDENCE_CHAIN", "Question, answer, change, expected outcome and verification plan are required", traceID(r))
 	case errors.Is(err, evidencechain.ErrInvalidReference):
 		writeProblem(w, http.StatusConflict, "EVIDENCE_REFERENCE_MISMATCH", "Evidence must belong to the same tenant, project and question", traceID(r))
+	case errors.Is(err, evidencechain.ErrConflict):
+		writeProblem(w, http.StatusConflict, "EVIDENCE_CHAIN_STATE_CONFLICT", "Evidence chain state or retest protocol does not allow this operation", traceID(r))
 	default:
 		h.logger.Error("evidence chain request failed", "error", err, "trace_id", traceID(r))
 		writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Evidence chain request failed", traceID(r))

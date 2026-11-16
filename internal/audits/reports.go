@@ -85,6 +85,10 @@ FROM audits WHERE tenant_id=UUID_TO_BIN(?) AND id=UUID_TO_BIN(?) FOR UPDATE`, te
 	if err != nil {
 		return Report{}, err
 	}
+	evidenceChains, err := loadReportEvidenceChains(ctx, tx, tenantID, projectID)
+	if err != nil {
+		return Report{}, err
+	}
 	priorities, err := generatePriorities(ctx, tx, tenantID, projectID)
 	if err != nil {
 		return Report{}, err
@@ -181,11 +185,12 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,CAST(? AS 
 		{"share_of_voice", map[string]any{"metricVersion": metricVersion, "values": shareValues}},
 		{"fact_checks", map[string]any{"items": factChecks}},
 		{"findings", map[string]any{"items": findings}},
+		{"evidence_chains", map[string]any{"items": evidenceChains}},
 		{"priorities", map[string]any{"items": priorities, "version": PriorityVersion}},
 		{"limitations", map[string]any{"items": limitations}},
 	}
 	if templateVersion == "report-v2" {
-		allowed := map[string]bool{"geo_summary": true, "competitive_landscape": true, "content_trust": true, "metrics": true}
+		allowed := map[string]bool{"geo_summary": true, "competitive_landscape": true, "content_trust": true, "metrics": true, "evidence_chains": true}
 		filtered := sections[:0]
 		for _, section := range sections {
 			if allowed[section.code] {
@@ -441,18 +446,47 @@ func (s *Store) ContentQuality(ctx context.Context, tenantID, projectID string) 
 }
 
 func loadReportFindings(ctx context.Context, tx *sql.Tx, tenantID, projectID string) ([]map[string]any, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT rule_code,severity,status,summary FROM findings WHERE tenant_id=UUID_TO_BIN(?) AND project_id=UUID_TO_BIN(?) ORDER BY FIELD(severity,'critical','high','medium','low'),created_at DESC LIMIT 50`, tenantID, projectID)
+	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(f.id),f.rule_code,f.severity,f.status,f.summary,COALESCE(c.status,''),COALESCE(c.retest_outcome,'')
+FROM findings f LEFT JOIN finding_evidence_chains c ON c.finding_id=f.id
+WHERE f.tenant_id=UUID_TO_BIN(?) AND f.project_id=UUID_TO_BIN(?)
+ORDER BY FIELD(f.severity,'critical','high','medium','low'),f.created_at DESC LIMIT 50`, tenantID, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var code, severity, status, summary string
-		if err := rows.Scan(&code, &severity, &status, &summary); err != nil {
+		var id, code, severity, status, summary, chainStatus, outcome string
+		if err := rows.Scan(&id, &code, &severity, &status, &summary, &chainStatus, &outcome); err != nil {
 			return nil, err
 		}
-		items = append(items, map[string]any{"ruleCode": code, "severity": severity, "status": status, "summary": summary})
+		items = append(items, map[string]any{"findingId": id, "ruleCode": code, "severity": severity, "status": status, "summary": summary, "evidenceChainStatus": chainStatus, "retestOutcome": outcome})
+	}
+	return items, rows.Err()
+}
+
+func loadReportEvidenceChains(ctx context.Context, tx *sql.Tx, tenantID, projectID string) ([]map[string]any, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT BIN_TO_UUID(c.finding_id),f.rule_code,c.status,c.change_summary,c.expected_outcome,c.verification_plan,c.metric_code,c.target_delta,c.retest_outcome,c.evidence_snapshot_json,c.comparison_json
+FROM finding_evidence_chains c JOIN findings f ON f.id=c.finding_id
+WHERE c.tenant_id=UUID_TO_BIN(?) AND c.project_id=UUID_TO_BIN(?) ORDER BY c.updated_at DESC`, tenantID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var findingID, ruleCode, status, changeSummary, expectedOutcome, verificationPlan, metricCode, retestOutcome string
+		var targetDelta float64
+		var snapshotJSON, comparisonJSON []byte
+		if err := rows.Scan(&findingID, &ruleCode, &status, &changeSummary, &expectedOutcome, &verificationPlan, &metricCode, &targetDelta, &retestOutcome, &snapshotJSON, &comparisonJSON); err != nil {
+			return nil, err
+		}
+		var snapshot, comparison any
+		_ = json.Unmarshal(snapshotJSON, &snapshot)
+		if len(comparisonJSON) > 0 && string(comparisonJSON) != "null" {
+			_ = json.Unmarshal(comparisonJSON, &comparison)
+		}
+		items = append(items, map[string]any{"findingId": findingID, "ruleCode": ruleCode, "status": status, "changeSummary": changeSummary, "expectedOutcome": expectedOutcome, "verificationPlan": verificationPlan, "metricCode": metricCode, "targetDelta": targetDelta, "retestOutcome": retestOutcome, "snapshot": snapshot, "comparison": comparison})
 	}
 	return items, rows.Err()
 }

@@ -25,6 +25,18 @@ func (s fakeEvidenceChainStore) Upsert(context.Context, string, string, string, 
 	return s.chain, s.err
 }
 
+func (s fakeEvidenceChainStore) Candidates(context.Context, string, string, int) (evidencechain.Candidates, error) {
+	return evidencechain.Candidates{}, s.err
+}
+
+func (s fakeEvidenceChainStore) Transition(context.Context, string, string, string, evidencechain.TransitionInput) (evidencechain.Chain, error) {
+	return s.chain, s.err
+}
+
+func (s fakeEvidenceChainStore) Evaluate(context.Context, string, string, string) (evidencechain.Chain, error) {
+	return s.chain, s.err
+}
+
 func TestEvidenceChainGetNotFound(t *testing.T) {
 	handler := newEvidenceChainHandler(fakeEvidenceChainStore{err: evidencechain.ErrNotFound}, testTenantID, testTenantID, testLogger())
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/findings/019a0000-0000-7000-8000-000000000001/evidence-chain", nil)
