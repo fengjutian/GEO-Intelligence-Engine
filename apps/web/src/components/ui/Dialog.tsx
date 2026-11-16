@@ -11,7 +11,7 @@ export const DialogPortal = DialogPrimitive.Portal
 export function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return <DialogPrimitive.Overlay data-slot="dialog-overlay" className={cn('ui-dialog-overlay', className)} {...props} />
 }
-export function DialogContent({ className, children, showCloseButton = true, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+export function DialogContent({ className, children, showClose, showCloseButton = showClose ?? true, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean; showCloseButton?: boolean }) {
   return <DialogPortal><DialogOverlay /><DialogPrimitive.Content data-slot="dialog-content" className={cn('ui-dialog-content', className)} {...props}>{children}{showCloseButton && <DialogPrimitive.Close className="ui-dialog-close" aria-label="关闭"><X /></DialogPrimitive.Close>}</DialogPrimitive.Content></DialogPortal>
 }
 export function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) { return <div data-slot="dialog-header" className={cn('ui-dialog-header', className)} {...props} /> }
