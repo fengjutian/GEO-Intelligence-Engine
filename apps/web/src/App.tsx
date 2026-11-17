@@ -361,13 +361,31 @@ export function App() {
               </DropdownMenuContent></DropdownMenu></div></TableCell>
             </TableRow>)}</TableBody>
           </Table>
-        </> : <div className="project-grid">
-          {projects.data?.items.map((project) => <article className="project-card" key={project.id}>
-            <div><Badge>{project.status}</Badge><h3>{project.name}</h3><p>{project.brandName} · {project.officialUrl}</p></div>
-            <dl><div><dt>区域语言</dt><dd>{project.region} / {project.locale}</dd></div><div><dt>时区</dt><dd>{project.timezone}</dd></div><div><dt>版本</dt><dd>v{project.version}</dd></div></dl>
-            <div className="project-actions"><button type="button" onClick={() => crawlCreate.mutate(project.id)} disabled={project.status === 'archived' || crawlCreate.isPending}>抓取官网</button><button type="button" onClick={() => setAuditProject(project)} disabled={project.status === 'archived'}>发起审计</button><button type="button" onClick={() => setHistoryProject(project)}>抓取记录</button><button type="button" onClick={() => setProfileProject(project)}>品牌档案</button><button type="button" onClick={() => setQuestionProject(project)}>问题空间</button><button type="button" onClick={() => publish.mutate(project)} disabled={project.status === 'archived' || publish.isPending}>发布配置</button><button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑</button><button className="danger" type="button" onClick={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }} disabled={project.status === 'archived' || archive.isPending}>归档</button></div>
-          </article>)}
-        </div>}
+        </> : <Table className="project-management-table">
+          <TableHeader><TableRow><TableHead>项目</TableHead><TableHead>区域语言</TableHead><TableHead>时区</TableHead><TableHead>版本</TableHead><TableHead>状态</TableHead><TableHead className="project-actions-head">操作</TableHead></TableRow></TableHeader>
+          <TableBody>{projects.data?.items.map((project) => <TableRow key={project.id}>
+            <TableCell><div className="audit-project-identity"><span>{project.name.slice(0, 1).toUpperCase()}</span><div><strong>{project.name}</strong><small>{project.brandName} · {project.officialUrl}</small></div></div></TableCell>
+            <TableCell><strong className="audit-table-value">{project.region} / {project.locale}</strong></TableCell>
+            <TableCell><strong className="audit-table-value">{project.timezone}</strong></TableCell>
+            <TableCell><strong className="audit-table-value">v{project.version}</strong></TableCell>
+            <TableCell><Badge>{project.status}</Badge></TableCell>
+            <TableCell><div className="project-table-actions">
+              {activePage === 'questions' ? <Button type="button" onClick={() => setQuestionProject(project)}>打开问题空间</Button> : <Button type="button" onClick={() => setEditing(project)} disabled={project.status === 'archived'}>编辑项目</Button>}
+              <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" aria-label={`${project.name} 更多操作`}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={project.status === 'archived' || crawlCreate.isPending} onSelect={() => crawlCreate.mutate(project.id)}>抓取官网</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setHistoryProject(project)}>查看抓取记录</DropdownMenuItem>
+                <DropdownMenuItem disabled={project.status === 'archived'} onSelect={() => setAuditProject(project)}>发起审计</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setProfileProject(project)}>品牌档案</DropdownMenuItem>
+                {activePage !== 'questions' && <DropdownMenuItem onSelect={() => setQuestionProject(project)}>问题空间</DropdownMenuItem>}
+                <DropdownMenuItem disabled={project.status === 'archived' || publish.isPending} onSelect={() => publish.mutate(project)}>发布配置</DropdownMenuItem>
+                {activePage === 'questions' && <DropdownMenuItem disabled={project.status === 'archived'} onSelect={() => setEditing(project)}>编辑项目</DropdownMenuItem>}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="danger-menu-item" disabled={project.status === 'archived' || archive.isPending} onSelect={() => { if (window.confirm(`确认归档“${project.name}”？历史数据仍可查看。`)) archive.mutate(project) }}>归档项目</DropdownMenuItem>
+              </DropdownMenuContent></DropdownMenu>
+            </div></TableCell>
+          </TableRow>)}</TableBody>
+        </Table>}
         {editing && <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditing(null)}><form className="edit-dialog" aria-labelledby="edit-title" onSubmit={submitEdit} onMouseDown={(event) => event.stopPropagation()}>
           <div><p className="eyebrow">PROJECT SETTINGS</p><h2 id="edit-title">编辑项目</h2></div>
           <label>项目名称<input name="name" required defaultValue={editing.name} /></label>

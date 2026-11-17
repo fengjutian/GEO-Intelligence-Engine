@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 
 type Member = { id: string; userId: string; email: string; subject: string; role: string; status: string }
 type Invitation = { id: string; email: string; role: string; status: string; expiresAt: string; token?: string }
@@ -147,14 +148,9 @@ export function SettingsPage() {
         <div className="settings-panel-header"><div><h3>当前成员</h3><p>{members.data?.items.length ?? 0} 位成员拥有租户访问权限</p></div></div>
         {members.isLoading && <p>正在加载…</p>}
         {members.error && <p className="error">{members.error.message}</p>}
-        <div className="member-table">
-          <div className="member-row member-head"><span>成员</span><span>角色</span><span>状态</span></div>
-          {members.data?.items.map((member) => <div className="member-row" key={member.id}>
-            <div><strong>{member.email}</strong><small>{member.subject}</small></div>
-            <select value={member.role} onChange={(event) => updateRole.mutate({ id: member.id, role: event.target.value })} disabled={updateRole.isPending}>{ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select>
-            <span data-status={member.status}>{member.status}</span>
-          </div>)}
-        </div>
+        <Table className="settings-member-table"><TableHeader><TableRow><TableHead>成员</TableHead><TableHead>角色</TableHead><TableHead>状态</TableHead></TableRow></TableHeader><TableBody>
+          {members.data?.items.map((member) => <TableRow key={member.id}><TableCell><div className="settings-member-identity"><strong>{member.email}</strong><small>{member.subject}</small></div></TableCell><TableCell><select value={member.role} onChange={(event) => updateRole.mutate({ id: member.id, role: event.target.value })} disabled={updateRole.isPending}>{ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select></TableCell><TableCell><span className="settings-status" data-status={member.status}>{member.status}</span></TableCell></TableRow>)}
+        </TableBody></Table>
       </section>
       <section className="settings-panel">
         <div className="settings-panel-header"><div><h3>发送邀请</h3><p>选择初始角色，创建一次性邀请链接。</p></div></div>
@@ -217,15 +213,10 @@ export function SettingsPage() {
         <label>角色覆盖<select value={projectRole} onChange={(event) => setProjectRole(event.target.value)}><option value="">继承租户角色</option>{ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
         <button className="settings-primary-button" type="button" disabled={!projectId || !projectUserId || addProjectMember.isPending} onClick={() => addProjectMember.mutate()}>添加成员</button>
       </div>
-      {projectId && <div className="member-table">
-        <div className="member-row member-head"><span>成员</span><span>角色覆盖</span><span>操作</span></div>
-        {projectMembers.data?.items.length === 0 && <p className="empty-state">该项目暂无成员记录，当前成员按租户权限访问。</p>}
-        {projectMembers.data?.items.map((member) => <div className="member-row" key={member.id}>
-          <div><strong>{member.email}</strong><small>{member.userId}</small></div>
-          <span>{member.roleOverride ?? '继承'}</span>
-          <button type="button" className="danger-link" disabled={removeProjectMember.isPending} onClick={() => removeProjectMember.mutate(member.userId)}>移除</button>
-        </div>)}
-      </div>}
+      {projectId && <Table className="settings-member-table"><TableHeader><TableRow><TableHead>成员</TableHead><TableHead>角色覆盖</TableHead><TableHead className="settings-actions-head">操作</TableHead></TableRow></TableHeader><TableBody>
+        {projectMembers.data?.items.length === 0 && <TableRow><TableCell colSpan={3}><p className="settings-table-empty">该项目暂无成员记录，当前成员按租户权限访问。</p></TableCell></TableRow>}
+        {projectMembers.data?.items.map((member) => <TableRow key={member.id}><TableCell><div className="settings-member-identity"><strong>{member.email}</strong><small>{member.userId}</small></div></TableCell><TableCell>{member.roleOverride ?? '继承'}</TableCell><TableCell className="settings-actions-cell"><button type="button" className="danger-link" disabled={removeProjectMember.isPending} onClick={() => removeProjectMember.mutate(member.userId)}>移除</button></TableCell></TableRow>)}
+      </TableBody></Table>}
     </section>
       </TabsContent>
     </Tabs>
