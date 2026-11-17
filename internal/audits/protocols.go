@@ -35,10 +35,10 @@ func (s *Store) CreateProtocol(ctx context.Context, tenantID, projectID string, 
 		return Protocol{}, ErrInvalidInput
 	}
 	if input.JudgeVersion == "" {
-		input.JudgeVersion = "judge-v1"
+		input.JudgeVersion = "judge-rules-v1.1"
 	}
 	if input.MetricVersion == "" {
-		input.MetricVersion = "metrics-v1"
+		input.MetricVersion = MetricVersion
 	}
 	if input.PromptTemplateVersion == "" {
 		input.PromptTemplateVersion = "prompt-v1"

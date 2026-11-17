@@ -115,7 +115,7 @@ export function ReviewPage() {
   })
   const recompute = useMutation({
     mutationFn: (auditId: string) => request(`/api/v1/audits/${auditId}/metrics/recompute`, { method: 'POST' }),
-    onSuccess: () => setMessage('已按仲裁结果重算指标（metrics-v1h）'),
+    onSuccess: () => setMessage('已按仲裁结果重算指标（metrics-v2h）'),
     onError: (error) => setMessage(error.message),
   })
   const selected = queue.data?.items.find((item) => item.id === selectedId)

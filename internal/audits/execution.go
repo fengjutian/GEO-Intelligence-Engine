@@ -76,11 +76,17 @@ type EvaluationMention struct {
 
 // EvaluationCitation is one URL cited by the answer.
 type EvaluationCitation struct {
-	RawURL        string
-	NormalizedURL string
-	Domain        string
-	SourceType    string
-	Confidence    float64
+	RawURL                     string
+	NormalizedURL              string
+	Domain                     string
+	SourceType                 string
+	Confidence                 float64
+	FirstCitationSentenceIndex int
+	SentenceCount              int
+	CitationWordCount          float64
+	AnswerWordCount            int
+	CitationWordShare          float64
+	PositionAdjustedWordShare  float64
 }
 
 // SampleFailure records an execution error and retries once before failing the sample.

@@ -14,10 +14,10 @@ import (
 
 const (
 	// MetricVersion is the immutable snapshot computed from Judge output.
-	MetricVersion = "metrics-v1"
+	MetricVersion = "metrics-v2"
 	// HumanMetricVersion is the snapshot recomputed after adjudications rewrite
 	// the effective Judge decision for some answers.
-	HumanMetricVersion = "metrics-v1h"
+	HumanMetricVersion = "metrics-v2h"
 )
 
 // MetricValue is one aggregated rate with its numerator, denominator and interval.
@@ -35,16 +35,21 @@ type MetricValue struct {
 }
 
 type metricGroup struct {
-	dimensions          map[string]any
-	eligible            int
-	mentions            int
-	recommendations     int
-	refusals            int
-	positiveMentions    int
-	mentionFrequency    int
-	officialCitations   int
-	thirdPartyCitations int
-	members             []map[string]any
+	dimensions                        map[string]any
+	eligible                          int
+	mentions                          int
+	recommendations                   int
+	refusals                          int
+	positiveMentions                  int
+	mentionFrequency                  int
+	officialCitations                 int
+	thirdPartyCitations               int
+	officialCitationWordCount         float64
+	officialCitationWordShare         float64
+	officialPositionAdjustedWordShare float64
+	officialFirstSentenceIndexTotal   int
+	officialFirstSentenceIndexCount   int
+	members                           []map[string]any
 }
 
 func (s *Store) GetMetrics(ctx context.Context, tenantID, auditID, aggregationMethod, channel string) ([]MetricValue, error) {
@@ -140,7 +145,11 @@ SELECT BIN_TO_UUID(s.engine_config_id),ec.provider,s.channel,s.model_selector,BI
        COALESCE(JSON_UNQUOTE(ae.human_decision_json->'$.sentiment'), COALESCE(ae.sentiment,'')),
        COALESCE(JSON_LENGTH(ae.evidence_json->'$.mentions'),0),
        (SELECT COUNT(*) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official'),
-       (SELECT COUNT(*) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='third_party')
+       (SELECT COUNT(*) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='third_party'),
+       COALESCE((SELECT SUM(c.citation_word_count) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official'),0),
+       COALESCE((SELECT SUM(c.citation_word_share) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official'),0),
+       COALESCE((SELECT SUM(c.position_adjusted_word_share) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official'),0),
+       (SELECT MIN(c.first_citation_sentence_index) FROM citations c WHERE c.evaluation_id=ae.id AND c.source_type='official')
 FROM answer_evaluations ae
 JOIN ai_responses resp ON resp.id=ae.response_id
 JOIN audit_samples s ON s.id=resp.sample_id
@@ -170,13 +179,17 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 	for rows.Next() {
 		var engineID, provider, channel, modelSelector, evaluationID, responseID, questionID, sampleID, outcome, recommendation, sentiment string
 		var mentions, officialCitations, thirdPartyCitations int
-		if err := rows.Scan(&engineID, &provider, &channel, &modelSelector, &evaluationID, &responseID, &questionID, &sampleID, &outcome, &recommendation, &sentiment, &mentions, &officialCitations, &thirdPartyCitations); err != nil {
+		var officialCitationWordCount, officialCitationWordShare, officialPositionAdjustedWordShare float64
+		var officialFirstSentenceIndex sql.NullInt64
+		if err := rows.Scan(&engineID, &provider, &channel, &modelSelector, &evaluationID, &responseID, &questionID, &sampleID, &outcome, &recommendation, &sentiment, &mentions, &officialCitations, &thirdPartyCitations, &officialCitationWordCount, &officialCitationWordShare, &officialPositionAdjustedWordShare, &officialFirstSentenceIndex); err != nil {
 			return err
 		}
 		member := map[string]any{
 			"evaluationId": evaluationID, "responseId": responseID, "questionId": questionID, "sampleId": sampleID,
 			"answerOutcome": outcome, "recommendationLabel": recommendation, "sentiment": sentiment, "mentionCount": mentions,
 			"officialCitationCount": officialCitations, "thirdPartyCitationCount": thirdPartyCitations,
+			"officialCitationWordCount": officialCitationWordCount, "officialCitationWordShare": officialCitationWordShare,
+			"officialPositionAdjustedWordShare": officialPositionAdjustedWordShare,
 		}
 		targets := []*metricGroup{
 			group(map[string]any{"channel": channel}),
@@ -185,6 +198,13 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 		for _, target := range targets {
 			target.eligible++
 			target.mentionFrequency += mentions
+			target.officialCitationWordCount += officialCitationWordCount
+			target.officialCitationWordShare += officialCitationWordShare
+			target.officialPositionAdjustedWordShare += officialPositionAdjustedWordShare
+			if officialFirstSentenceIndex.Valid {
+				target.officialFirstSentenceIndexTotal += int(officialFirstSentenceIndex.Int64)
+				target.officialFirstSentenceIndexCount++
+			}
 			if officialCitations > 0 {
 				target.officialCitations++
 			}
@@ -240,6 +260,24 @@ WHERE s.tenant_id=UUID_TO_BIN(?) AND s.audit_id=UUID_TO_BIN(?) AND ae.evaluation
 			if err := insertMetricEvidence(ctx, tx, tenantID, metricValueID, group.members); err != nil {
 				return err
 			}
+			for _, metric := range []struct {
+				code        string
+				numerator   float64
+				denominator int
+			}{
+				{"official_citation_word_count", group.officialCitationWordCount, group.eligible},
+				{"official_citation_word_share", group.officialCitationWordShare, group.eligible},
+				{"official_position_adjusted_word_share", group.officialPositionAdjustedWordShare, group.eligible},
+				{"official_first_citation_sentence_index", float64(group.officialFirstSentenceIndexTotal), group.officialFirstSentenceIndexCount},
+			} {
+				metricValueID, err := insertMetricAverage(ctx, tx, tenantID, snapshotID, metric.code, group.dimensions, metric.numerator, metric.denominator)
+				if err != nil {
+					return err
+				}
+				if err := insertMetricEvidence(ctx, tx, tenantID, metricValueID, group.members); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	if err := generateShareMetrics(ctx, tx, tenantID, auditID, snapshotID); err != nil {
@@ -265,7 +303,7 @@ func clearMetricSnapshot(ctx context.Context, tx *sql.Tx, snapshotID string) err
 
 // RecomputeMetrics rebuilds the human-adjusted snapshot from the effective
 // Judge decisions, including adjudication write-backs. The immutable Judge
-// snapshot (metrics-v1) is left untouched.
+// snapshot (metrics-v2) is left untouched.
 func (s *Store) RecomputeMetrics(ctx context.Context, tenantID, auditID string) ([]MetricValue, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -335,6 +373,25 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),'mention_frequency','answer
 		id.String(), tenantID, snapshotID, hash[:], dimensionsJSON, numerator, denominator, value)
 	if err != nil {
 		return "", fmt.Errorf("insert mention frequency: %w", err)
+	}
+	return id.String(), nil
+}
+
+func insertMetricAverage(ctx context.Context, tx *sql.Tx, tenantID, snapshotID, code string, dimensions map[string]any, numerator float64, denominator int) (string, error) {
+	id, _ := uuid.NewV7()
+	dimensionsJSON, _ := json.Marshal(dimensions)
+	hash := sha256.Sum256(dimensionsJSON)
+	var numeratorValue, denominatorValue, value any
+	if denominator > 0 {
+		numeratorValue = numerator
+		denominatorValue = denominator
+		value = numerator / float64(denominator)
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO metric_values (id,tenant_id,snapshot_id,metric_code,aggregation_method,dimension_hash,dimensions_json,numerator,denominator,value_decimal,interval_method,interval_metadata,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,'answer_equal',?,CAST(? AS JSON),?,?,?,'none',JSON_OBJECT(),UTC_TIMESTAMP(6))`,
+		id.String(), tenantID, snapshotID, code, hash[:], dimensionsJSON, numeratorValue, denominatorValue, value)
+	if err != nil {
+		return "", fmt.Errorf("insert average metric: %w", err)
 	}
 	return id.String(), nil
 }

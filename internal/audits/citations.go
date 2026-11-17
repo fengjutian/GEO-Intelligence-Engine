@@ -15,12 +15,18 @@ type CitationDomain struct {
 }
 
 type CitationItem struct {
-	URL        string  `json:"url"`
-	Domain     string  `json:"domain"`
-	SourceType string  `json:"sourceType"`
-	Support    string  `json:"supportLabel"`
-	Question   string  `json:"question"`
-	Confidence float64 `json:"confidence"`
+	URL                        string  `json:"url"`
+	Domain                     string  `json:"domain"`
+	SourceType                 string  `json:"sourceType"`
+	Support                    string  `json:"supportLabel"`
+	Question                   string  `json:"question"`
+	Confidence                 float64 `json:"confidence"`
+	FirstCitationSentenceIndex *int    `json:"firstCitationSentenceIndex"`
+	SentenceCount              *int    `json:"sentenceCount"`
+	CitationWordCount          float64 `json:"citationWordCount"`
+	AnswerWordCount            int     `json:"answerWordCount"`
+	CitationWordShare          float64 `json:"citationWordShare"`
+	PositionAdjustedWordShare  float64 `json:"positionAdjustedWordShare"`
 }
 
 type CitationSlice struct {
@@ -125,7 +131,7 @@ GROUP BY q.id,q.text_value ORDER BY COUNT(*) DESC LIMIT 30`, args...)
 		result.ByQuestion = append(result.ByQuestion, item)
 	}
 	questionRows.Close()
-	itemRows, err := s.db.QueryContext(ctx, `SELECT COALESCE(c.normalized_url,c.raw_url),COALESCE(c.domain,''),c.source_type,COALESCE(c.support_label,''),q.text_value,COALESCE(c.confidence,0)`+base+`
+	itemRows, err := s.db.QueryContext(ctx, `SELECT COALESCE(c.normalized_url,c.raw_url),COALESCE(c.domain,''),c.source_type,COALESCE(c.support_label,''),q.text_value,COALESCE(c.confidence,0),c.first_citation_sentence_index,c.sentence_count,c.citation_word_count,c.answer_word_count,c.citation_word_share,c.position_adjusted_word_share`+base+`
 ORDER BY c.created_at DESC,c.id DESC LIMIT 50`, args...)
 	if err != nil {
 		return result, err
@@ -134,11 +140,20 @@ ORDER BY c.created_at DESC,c.id DESC LIMIT 50`, args...)
 	for itemRows.Next() {
 		var item CitationItem
 		var confidence sql.NullFloat64
-		if err := itemRows.Scan(&item.URL, &item.Domain, &item.SourceType, &item.Support, &item.Question, &confidence); err != nil {
+		var firstSentence, sentenceCount sql.NullInt64
+		if err := itemRows.Scan(&item.URL, &item.Domain, &item.SourceType, &item.Support, &item.Question, &confidence, &firstSentence, &sentenceCount, &item.CitationWordCount, &item.AnswerWordCount, &item.CitationWordShare, &item.PositionAdjustedWordShare); err != nil {
 			return result, err
 		}
 		if confidence.Valid {
 			item.Confidence = confidence.Float64
+		}
+		if firstSentence.Valid {
+			value := int(firstSentence.Int64)
+			item.FirstCitationSentenceIndex = &value
+		}
+		if sentenceCount.Valid {
+			value := int(sentenceCount.Int64)
+			item.SentenceCount = &value
 		}
 		result.Items = append(result.Items, item)
 	}

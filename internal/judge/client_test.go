@@ -14,7 +14,7 @@ func TestEvaluateDecodesJudgeResult(t *testing.T) {
 			return
 		}
 		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"content_validity":"valid","answer_outcome":"recommendation","recommendation_label":"mentioned","sentiment":"positive","confidence":1.0,"eligible_for_core_metrics":true,"judge_version":"judge-rules-v1.0","eligibility_rule_version":"eligibility-v1.0","mentions":[{"text":"Acme GEO","start":0,"end":8}],"citations":[{"raw_url":"https://example.com/guide","normalized_url":"https://example.com/guide","domain":"example.com","source_type":"official","confidence":1.0}]}`))
+		_, _ = w.Write([]byte(`{"content_validity":"valid","answer_outcome":"recommendation","recommendation_label":"mentioned","sentiment":"positive","confidence":1.0,"eligible_for_core_metrics":true,"judge_version":"judge-rules-v1.1","eligibility_rule_version":"eligibility-v1.0","mentions":[{"text":"Acme GEO","start":0,"end":8}],"citations":[{"raw_url":"https://example.com/guide","normalized_url":"https://example.com/guide","domain":"example.com","source_type":"official","confidence":1.0,"first_citation_sentence_index":1,"sentence_count":3,"citation_word_count":12.5,"answer_word_count":50,"citation_word_share":0.25,"position_adjusted_word_share":0.18}]}`))
 	}))
 	defer server.Close()
 
@@ -30,6 +30,9 @@ func TestEvaluateDecodesJudgeResult(t *testing.T) {
 	}
 	if len(result.Citations) != 1 || result.Citations[0].SourceType != "official" {
 		t.Fatalf("unexpected citations: %+v", result.Citations)
+	}
+	if result.Citations[0].FirstCitationSentenceIndex != 1 || result.Citations[0].CitationWordShare != 0.25 || result.Citations[0].PositionAdjustedWordShare != 0.18 {
+		t.Fatalf("unexpected citation visibility: %+v", result.Citations[0])
 	}
 }
 

@@ -56,9 +56,9 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,?,
 	for _, citation := range evaluation.Citations {
 		normalizedHash := sha256.Sum256([]byte(citation.NormalizedURL))
 		citationID, _ := uuid.NewV7()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO citations (id,tenant_id,evaluation_id,raw_url,normalized_url,normalized_url_hash,domain,source_type,support_label,confidence,created_at)
-VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,NULL,?,UTC_TIMESTAMP(6))`,
-			citationID.String(), tenantID, evaluationID.String(), citation.RawURL, citation.NormalizedURL, normalizedHash[:], citation.Domain, citation.SourceType, citation.Confidence); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO citations (id,tenant_id,evaluation_id,raw_url,normalized_url,normalized_url_hash,domain,source_type,support_label,confidence,first_citation_sentence_index,sentence_count,citation_word_count,answer_word_count,citation_word_share,position_adjusted_word_share,created_at)
+VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,NULL,?,?,?,?,?,?,?,UTC_TIMESTAMP(6))`,
+			citationID.String(), tenantID, evaluationID.String(), citation.RawURL, citation.NormalizedURL, normalizedHash[:], citation.Domain, citation.SourceType, citation.Confidence, nullableCitationSentenceIndex(citation), nullablePositiveInt(citation.SentenceCount), citation.CitationWordCount, citation.AnswerWordCount, citation.CitationWordShare, citation.PositionAdjustedWordShare); err != nil {
 			return fmt.Errorf("persist citation: %w", err)
 		}
 	}
@@ -83,6 +83,20 @@ VALUES (UUID_TO_BIN(?),UUID_TO_BIN(?),UUID_TO_BIN(?),?,?,?,?,?,NULL,?,UTC_TIMEST
 
 func nullableString(value string) any {
 	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func nullableCitationSentenceIndex(citation EvaluationCitation) any {
+	if citation.SentenceCount <= 0 {
+		return nil
+	}
+	return citation.FirstCitationSentenceIndex
+}
+
+func nullablePositiveInt(value int) any {
+	if value <= 0 {
 		return nil
 	}
 	return value

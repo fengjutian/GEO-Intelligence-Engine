@@ -42,11 +42,17 @@ type Mention struct {
 
 // Citation is one URL referenced by the answer, classified as official or third-party.
 type Citation struct {
-	RawURL        string  `json:"raw_url"`
-	NormalizedURL string  `json:"normalized_url"`
-	Domain        string  `json:"domain"`
-	SourceType    string  `json:"source_type"`
-	Confidence    float64 `json:"confidence"`
+	RawURL                     string  `json:"raw_url"`
+	NormalizedURL              string  `json:"normalized_url"`
+	Domain                     string  `json:"domain"`
+	SourceType                 string  `json:"source_type"`
+	Confidence                 float64 `json:"confidence"`
+	FirstCitationSentenceIndex int     `json:"first_citation_sentence_index"`
+	SentenceCount              int     `json:"sentence_count"`
+	CitationWordCount          float64 `json:"citation_word_count"`
+	AnswerWordCount            int     `json:"answer_word_count"`
+	CitationWordShare          float64 `json:"citation_word_share"`
+	PositionAdjustedWordShare  float64 `json:"position_adjusted_word_share"`
 }
 
 // Result is the deterministic judge output persisted for metrics eligibility.

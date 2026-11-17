@@ -62,6 +62,12 @@ class Citation(BaseModel):
     domain: str
     source_type: str
     confidence: float
+    first_citation_sentence_index: int
+    sentence_count: int
+    citation_word_count: float
+    answer_word_count: int
+    citation_word_share: float
+    position_adjusted_word_share: float
 
 
 class JudgeResult(BaseModel):

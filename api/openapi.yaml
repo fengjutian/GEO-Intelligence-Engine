@@ -806,7 +806,7 @@ paths:
     post:
       tags: [Metrics]
       operationId: recomputeAuditMetrics
-      description: Rebuilds the metrics-v1h snapshot from adjudication write-backs. The Judge snapshot metrics-v1 is never modified.
+      description: Rebuilds the metrics-v2h snapshot from adjudication write-backs. The Judge snapshot metrics-v2 is never modified.
       parameters: [{$ref: '#/components/parameters/AuditId'}]
       responses:
         '200': {description: Recomputed human-adjusted metrics, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MetricValue'}}}}}

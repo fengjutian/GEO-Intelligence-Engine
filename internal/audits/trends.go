@@ -38,6 +38,7 @@ type AuditTrend struct {
 var trendMetricCodes = []string{
 	"mention_rate", "recommendation_rate", "refusal_rate", "positive_mention_rate",
 	"official_citation_rate", "third_party_citation_rate", "eligible_response_rate",
+	"official_citation_word_count", "official_citation_word_share", "official_position_adjusted_word_share", "official_first_citation_sentence_index",
 }
 
 // AuditTrends returns chronological metric points across finished audits.

@@ -1,3 +1,4 @@
+import math
 import re
 from urllib.parse import urlparse, urlunparse
 
@@ -17,7 +18,7 @@ from .models import (
 
 app = FastAPI(title="GEO Answer Judge", version="1.0.0")
 
-JUDGE_VERSION = "judge-rules-v1.0"
+JUDGE_VERSION = "judge-rules-v1.1"
 ELIGIBILITY_RULE_VERSION = "eligibility-v1.0"
 
 REFUSAL_MARKERS = (
@@ -32,6 +33,7 @@ REFUSAL_MARKERS = (
 )
 POSITIVE_MARKERS = ("推荐", "最佳", "领先", "recommend", "best", "leading")
 URL_PATTERN = re.compile(r"https?://[^\s<>\"')\]}]+", re.IGNORECASE)
+TEXT_UNIT_PATTERN = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*|[\u3400-\u4dbf\u4e00-\u9fff]")
 TRAILING_PUNCTUATION = ".,;:!?。，、；：！？）】》"
 
 
@@ -120,8 +122,9 @@ def _netloc(domain: str, port: int | None) -> str:
 
 def extract_citations(answer: str, brand_domain: str) -> list[Citation]:
     brand = brand_domain.strip().lower().removeprefix("www.")
-    citations: list[Citation] = []
-    seen: set[str] = set()
+    sentence_spans = _sentence_spans(answer)
+    answer_word_count = _word_count(URL_PATTERN.sub(" ", answer))
+    occurrences: list[dict[str, object]] = []
     for match in URL_PATTERN.finditer(answer):
         raw = match.group(0).rstrip(TRAILING_PUNCTUATION)
         parsed = urlparse(raw)
@@ -129,17 +132,93 @@ def extract_citations(answer: str, brand_domain: str) -> list[Citation]:
         if not domain:
             continue
         normalized = urlunparse((parsed.scheme.lower(), _netloc(domain, parsed.port), parsed.path or "/", "", parsed.query, ""))
-        if normalized in seen:
+        sentence_index = next(
+            (index for index, (start, end, _) in enumerate(sentence_spans) if start <= match.start() < end),
+            max(len(sentence_spans) - 1, 0),
+        )
+        occurrences.append({"raw": raw, "normalized": normalized, "domain": domain, "sentence_index": sentence_index})
+
+    unique_per_sentence: dict[int, int] = {}
+    for sentence_index in range(len(sentence_spans)):
+        unique_per_sentence[sentence_index] = len(
+            {item["normalized"] for item in occurrences if item["sentence_index"] == sentence_index}
+        )
+    grouped: dict[str, dict[str, object]] = {}
+    for item in occurrences:
+        normalized = str(item["normalized"])
+        sentence_index = int(item["sentence_index"])
+        sentence_text = sentence_spans[sentence_index][2]
+        sentence_words = _word_count(URL_PATTERN.sub(" ", sentence_text))
+        credited_words = sentence_words / max(unique_per_sentence[sentence_index], 1)
+        entry = grouped.setdefault(
+            normalized,
+            {
+                **item,
+                "first_sentence_index": sentence_index,
+                "citation_word_count": 0.0,
+                "position_adjusted_word_count": 0.0,
+                "credited_sentences": set(),
+            },
+        )
+        credited_sentences = entry["credited_sentences"]
+        if sentence_index in credited_sentences:
             continue
-        seen.add(normalized)
+        credited_sentences.add(sentence_index)
+        entry["first_sentence_index"] = min(int(entry["first_sentence_index"]), sentence_index)
+        entry["citation_word_count"] = float(entry["citation_word_count"]) + credited_words
+        position_weight = math.exp(-sentence_index / max(len(sentence_spans), 1))
+        entry["position_adjusted_word_count"] = float(entry["position_adjusted_word_count"]) + credited_words * position_weight
+
+    citations: list[Citation] = []
+    for entry in grouped.values():
+        domain = str(entry["domain"])
         official = bool(brand) and (domain == brand or domain.endswith("." + brand))
+        citation_words = float(entry["citation_word_count"])
+        adjusted_words = float(entry["position_adjusted_word_count"])
         citations.append(
             Citation(
-                raw_url=raw,
-                normalized_url=normalized,
+                raw_url=str(entry["raw"]),
+                normalized_url=str(entry["normalized"]),
                 domain=domain,
                 source_type="official" if official else "third_party",
                 confidence=1.0,
+                first_citation_sentence_index=int(entry["first_sentence_index"]),
+                sentence_count=len(sentence_spans),
+                citation_word_count=citation_words,
+                answer_word_count=answer_word_count,
+                citation_word_share=citation_words / answer_word_count if answer_word_count else 0.0,
+                position_adjusted_word_share=adjusted_words / answer_word_count if answer_word_count else 0.0,
             )
         )
     return citations
+
+
+def _word_count(text: str) -> int:
+    """Count Latin word groups and individual CJK characters as comparable text units."""
+    return len(TEXT_UNIT_PATTERN.findall(text))
+
+
+def _sentence_spans(text: str) -> list[tuple[int, int, str]]:
+    """Split sentences without treating punctuation inside URLs as boundaries."""
+    url_ranges = [
+        (match.start(), match.start() + len(match.group(0).rstrip(TRAILING_PUNCTUATION)))
+        for match in URL_PATTERN.finditer(text)
+    ]
+    spans: list[tuple[int, int, str]] = []
+    start = 0
+    index = 0
+    while index < len(text):
+        in_url = any(url_start <= index < url_end for url_start, url_end in url_ranges)
+        if not in_url and text[index] in ".!?。！？\r\n":
+            end = index + 1
+            while end < len(text) and text[end] in ".!?。！？\r\n":
+                end += 1
+            if text[start:end].strip():
+                spans.append((start, end, text[start:end]))
+            start = end
+            index = end
+            continue
+        index += 1
+    if text[start:].strip():
+        spans.append((start, len(text), text[start:]))
+    return spans

@@ -176,7 +176,7 @@ func processOne(ctx context.Context, store *audits.Store, gateway *modelgateway.
 		}
 		citations := make([]audits.EvaluationCitation, 0, len(judgeResult.Citations))
 		for _, citation := range judgeResult.Citations {
-			citations = append(citations, audits.EvaluationCitation{RawURL: citation.RawURL, NormalizedURL: citation.NormalizedURL, Domain: citation.Domain, SourceType: citation.SourceType, Confidence: citation.Confidence})
+			citations = append(citations, audits.EvaluationCitation{RawURL: citation.RawURL, NormalizedURL: citation.NormalizedURL, Domain: citation.Domain, SourceType: citation.SourceType, Confidence: citation.Confidence, FirstCitationSentenceIndex: citation.FirstCitationSentenceIndex, SentenceCount: citation.SentenceCount, CitationWordCount: citation.CitationWordCount, AnswerWordCount: citation.AnswerWordCount, CitationWordShare: citation.CitationWordShare, PositionAdjustedWordShare: citation.PositionAdjustedWordShare})
 		}
 		evaluation = &audits.Evaluation{
 			ContentValidity:        judgeResult.ContentValidity,

@@ -39,7 +39,7 @@ func NormalizeInput(input UpsertInput) (UpsertInput, error) {
 		return UpsertInput{}, ErrInvalidInput
 	}
 	switch input.MetricCode {
-	case "mention_rate", "recommendation_rate", "positive_mention_rate", "official_citation_rate", "third_party_citation_rate", "eligible_response_rate":
+	case "mention_rate", "recommendation_rate", "positive_mention_rate", "official_citation_rate", "third_party_citation_rate", "eligible_response_rate", "official_citation_word_count", "official_citation_word_share", "official_position_adjusted_word_share", "official_first_citation_sentence_index":
 	default:
 		return UpsertInput{}, ErrInvalidInput
 	}

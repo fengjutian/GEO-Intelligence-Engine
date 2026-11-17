@@ -171,7 +171,7 @@ def main() -> int:
         "budgetMicrounits": 100000,
         "currency": "USD",
         "judgeVersion": "judge-rules-v1.0",
-        "metricVersion": "metrics-v1",
+        "metricVersion": "metrics-v2",
         "promptTemplateVersion": "audit-prompt-v1",
         "estimatedCostPerSample": 1000,
     })
