@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 
 type Member = { id: string; userId: string; email: string; subject: string; role: string; status: string }
 type Invitation = { id: string; email: string; role: string; status: string; expiresAt: string; token?: string }
@@ -133,16 +134,14 @@ export function SettingsPage() {
   return <section className="workspace module-workspace settings-page">
     <div className="module-heading"><div><p className="eyebrow">TENANT SETTINGS</p><h2>成员与权限</h2><p>管理当前租户成员、邀请与角色；最后一名 Owner 不可降级或停用。</p></div><span>{members.data?.items.length ?? 0} 成员</span></div>
     {message && <p className="audit-message" role="status">{message}</p>}
-    <div className="settings-layout">
-      <aside className="settings-index" aria-label="设置分区">
-        <p>设置目录</p>
-        <a href="#tenant-access"><span>01</span>成员与邀请</a>
-        <a href="#machine-access"><span>02</span>机器身份</a>
-        <a href="#project-access"><span>03</span>项目授权</a>
-        <small>权限变更即时生效。Token 明文仅在创建时显示一次。</small>
-      </aside>
-      <div className="settings-content">
-    <div className="settings-section-heading" id="tenant-access"><span>01</span><div><h3>成员与邀请</h3><p>维护租户成员及其默认权限。</p></div></div>
+    <Tabs defaultValue="members" className="settings-tabs">
+      <TabsList aria-label="权限设置分类">
+        <TabsTrigger value="members">成员与邀请</TabsTrigger>
+        <TabsTrigger value="machine">服务账号与 Token</TabsTrigger>
+        <TabsTrigger value="projects">项目授权</TabsTrigger>
+      </TabsList>
+      <TabsContent value="members">
+        <div className="settings-tab-heading"><h3>成员与邀请</h3><p>维护租户成员、默认角色和待发送邀请。</p></div>
     <div className="settings-grid">
       <section className="settings-panel">
         <div className="settings-panel-header"><div><h3>当前成员</h3><p>{members.data?.items.length ?? 0} 位成员拥有租户访问权限</p></div></div>
@@ -171,7 +170,9 @@ export function SettingsPage() {
         </div>}
       </section>
     </div>
-    <div className="settings-section-heading" id="machine-access"><span>02</span><div><h3>机器身份</h3><p>为自动化程序配置独立身份和凭据。</p></div></div>
+      </TabsContent>
+      <TabsContent value="machine">
+        <div className="settings-tab-heading"><h3>服务账号与 Token</h3><p>为 CI、自动化程序和外部集成配置机器身份。</p></div>
     <div className="settings-grid">
       <section className="settings-panel">
         <div className="settings-panel-header"><div><h3>服务账号</h3><p>用于 CI、自动化任务和外部集成。</p></div></div>
@@ -205,7 +206,9 @@ export function SettingsPage() {
         </div>
       </section>
     </div>
-    <div className="settings-section-heading" id="project-access"><span>03</span><div><h3>项目授权</h3><p>将成员访问范围收窄到指定项目。</p></div></div>
+      </TabsContent>
+      <TabsContent value="projects">
+        <div className="settings-tab-heading"><h3>项目授权</h3><p>将成员访问范围收窄到指定项目，并按需覆盖其租户角色。</p></div>
     <section className="settings-panel project-members-panel">
       <div className="settings-panel-header"><div><h3>授权规则</h3><p>可选地覆盖成员的租户默认角色。</p></div></div>
       <div className="project-member-form">
@@ -224,7 +227,7 @@ export function SettingsPage() {
         </div>)}
       </div>}
     </section>
-      </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   </section>
 }
