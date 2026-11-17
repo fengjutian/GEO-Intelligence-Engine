@@ -293,14 +293,13 @@ export function App() {
     questionCreate.mutate({ projectId: questionProject.id, input: { text: String(data.get('text')), language: String(data.get('language')), questionType: String(data.get('questionType')), intent: String(data.get('intent')), weight: Number(data.get('weight')) } }, { onSuccess: () => form.reset() })
   }
 
-  const activeProjects = projects.data?.items.filter((project) => project.status !== 'archived').length ?? 0
   const configuredProviders = modelProviders.data?.items.filter((provider) => provider.configured).length ?? 0
 
   const workspaceTitle = activePage === 'audits' ? '网站审计' : activePage === 'questions' ? '问题空间' : '项目空间'
   const workspaceDescription = activePage === 'audits' ? '选择项目发起官网抓取或查看历史证据。' : activePage === 'questions' ? '选择项目维护买家问题和测量问题集。' : '管理品牌基础资料、抓取任务和配置版本。'
 
   return <AppShell activePage={activePage} onNavigate={setActivePage} apiVersion={version.data?.apiVersion} baseline={version.data?.baseline} connected={version.isSuccess} error={version.isError} onLogout={mode === 'oidc' ? logout : undefined}>
-      {activePage === 'overview' && <OverviewPage activeProjects={activeProjects} websiteCount={projects.data?.items.length ?? 0} configuredProviders={configuredProviders} onCreateProject={() => { setActivePage('projects'); setFormOpen(true) }} />}
+      {activePage === 'overview' && <OverviewPage projects={projects.data?.items ?? []} configuredProviders={configuredProviders} onCreateProject={() => { setActivePage('projects'); setFormOpen(true) }} onNavigate={setActivePage} />}
       {activePage === 'models' && <ModelServicesPage providers={modelProviders.data?.items} checking={providerHealth.isPending} message={providerHealth.data} error={providerHealth.error?.message} onCheck={(provider) => providerHealth.mutate(provider)} />}
       {activePage === 'entities' && <EntitiesPage projects={projects.data?.items ?? []} />}
       {activePage === 'reviews' && <ReviewPage />}
