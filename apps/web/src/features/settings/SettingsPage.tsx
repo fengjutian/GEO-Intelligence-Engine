@@ -130,12 +130,22 @@ export function SettingsPage() {
     onError: (error) => setMessage(error.message),
   })
 
-  return <section className="workspace module-workspace">
+  return <section className="workspace module-workspace settings-page">
     <div className="module-heading"><div><p className="eyebrow">TENANT SETTINGS</p><h2>成员与权限</h2><p>管理当前租户成员、邀请与角色；最后一名 Owner 不可降级或停用。</p></div><span>{members.data?.items.length ?? 0} 成员</span></div>
     {message && <p className="audit-message" role="status">{message}</p>}
+    <div className="settings-layout">
+      <aside className="settings-index" aria-label="设置分区">
+        <p>设置目录</p>
+        <a href="#tenant-access"><span>01</span>成员与邀请</a>
+        <a href="#machine-access"><span>02</span>机器身份</a>
+        <a href="#project-access"><span>03</span>项目授权</a>
+        <small>权限变更即时生效。Token 明文仅在创建时显示一次。</small>
+      </aside>
+      <div className="settings-content">
+    <div className="settings-section-heading" id="tenant-access"><span>01</span><div><h3>成员与邀请</h3><p>维护租户成员及其默认权限。</p></div></div>
     <div className="settings-grid">
       <section className="settings-panel">
-        <h3>成员</h3>
+        <div className="settings-panel-header"><div><h3>当前成员</h3><p>{members.data?.items.length ?? 0} 位成员拥有租户访问权限</p></div></div>
         {members.isLoading && <p>正在加载…</p>}
         {members.error && <p className="error">{members.error.message}</p>}
         <div className="member-table">
@@ -148,11 +158,11 @@ export function SettingsPage() {
         </div>
       </section>
       <section className="settings-panel">
-        <h3>邀请成员</h3>
+        <div className="settings-panel-header"><div><h3>发送邀请</h3><p>选择初始角色，创建一次性邀请链接。</p></div></div>
         <form className="invite-form" onSubmit={(event) => { event.preventDefault(); if (email.trim()) createInvite.mutate() }}>
           <label>邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required /></label>
           <label>角色<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>{ROLES.filter((role) => role !== 'Owner').map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
-          <button type="submit" disabled={createInvite.isPending}>创建邀请</button>
+          <button className="settings-primary-button" type="submit" disabled={createInvite.isPending}>{createInvite.isPending ? '正在创建…' : '创建邀请'}</button>
         </form>
         {invite && <div className="invite-result">
           <p>邀请已创建：{invite.email} · {invite.role}</p>
@@ -161,12 +171,13 @@ export function SettingsPage() {
         </div>}
       </section>
     </div>
+    <div className="settings-section-heading" id="machine-access"><span>02</span><div><h3>机器身份</h3><p>为自动化程序配置独立身份和凭据。</p></div></div>
     <div className="settings-grid">
       <section className="settings-panel">
-        <h3>服务账号</h3>
+        <div className="settings-panel-header"><div><h3>服务账号</h3><p>用于 CI、自动化任务和外部集成。</p></div></div>
         <form className="invite-form" onSubmit={(event) => { event.preventDefault(); if (accountName.trim()) createAccount.mutate() }}>
           <label>名称<input value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="ci-pipeline" maxLength={120} required /></label>
-          <button type="submit" disabled={createAccount.isPending}>创建服务账号</button>
+          <button className="settings-primary-button" type="submit" disabled={createAccount.isPending}>{createAccount.isPending ? '正在创建…' : '创建服务账号'}</button>
         </form>
         <div className="account-list">
           {accounts.data?.items.length === 0 && <p className="empty-state">暂无服务账号。</p>}
@@ -174,12 +185,12 @@ export function SettingsPage() {
         </div>
       </section>
       <section className="settings-panel">
-        <h3>API Token</h3>
+        <div className="settings-panel-header"><div><h3>访问 Token</h3><p>按服务账号签发最小权限凭据。</p></div></div>
         <form className="invite-form" onSubmit={(event) => { event.preventDefault(); if (tokenAccountId) createToken.mutate() }}>
           <label>服务账号<select value={tokenAccountId} onChange={(event) => setTokenAccountId(event.target.value)} required><option value="">选择服务账号…</option>{accounts.data?.items.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           <label>Scopes（逗号分隔）<input value={tokenScopes} onChange={(event) => setTokenScopes(event.target.value)} placeholder="read,write" /></label>
           <label>有效期（天）<input type="number" min={1} max={365} value={expiresDays} onChange={(event) => setExpiresDays(Number(event.target.value))} /></label>
-          <button type="submit" disabled={createToken.isPending || !tokenAccountId}>创建 Token</button>
+          <button className="settings-primary-button" type="submit" disabled={createToken.isPending || !tokenAccountId}>{createToken.isPending ? '正在创建…' : '创建 Token'}</button>
         </form>
         {newToken?.token && <div className="invite-result">
           <p>Token 已创建，仅显示一次：</p>
@@ -194,14 +205,14 @@ export function SettingsPage() {
         </div>
       </section>
     </div>
+    <div className="settings-section-heading" id="project-access"><span>03</span><div><h3>项目授权</h3><p>将成员访问范围收窄到指定项目。</p></div></div>
     <section className="settings-panel project-members-panel">
-      <h3>项目成员</h3>
-      <p className="settings-hint">项目成员用于项目级授权：存在项目成员记录的用户只能访问被授权项目。</p>
+      <div className="settings-panel-header"><div><h3>授权规则</h3><p>可选地覆盖成员的租户默认角色。</p></div></div>
       <div className="project-member-form">
         <label>项目<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">选择项目…</option>{projects.data?.items.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
         <label>用户 ID<input value={projectUserId} onChange={(event) => setProjectUserId(event.target.value)} placeholder="用户 UUID" /></label>
         <label>角色覆盖<select value={projectRole} onChange={(event) => setProjectRole(event.target.value)}><option value="">继承租户角色</option>{ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
-        <button type="button" disabled={!projectId || !projectUserId || addProjectMember.isPending} onClick={() => addProjectMember.mutate()}>添加</button>
+        <button className="settings-primary-button" type="button" disabled={!projectId || !projectUserId || addProjectMember.isPending} onClick={() => addProjectMember.mutate()}>添加成员</button>
       </div>
       {projectId && <div className="member-table">
         <div className="member-row member-head"><span>成员</span><span>角色覆盖</span><span>操作</span></div>
@@ -213,5 +224,7 @@ export function SettingsPage() {
         </div>)}
       </div>}
     </section>
+      </div>
+    </div>
   </section>
 }
